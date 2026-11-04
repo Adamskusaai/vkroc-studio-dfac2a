@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
+import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {detectWalls} from './cv.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
@@ -14,7 +15,7 @@ let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=nul
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
 function save(){if(!PID)return;const L=idx().filter(p=>p.id!==PID);L.unshift({id:PID,name:H.name,date:Date.now()});try{localStorage.setItem('vks_p_'+PID,JSON.stringify(H));localStorage.setItem(IDX,JSON.stringify(L));}catch(e){alert('Úložisko prehliadača je plné – stiahnite projekt ako súbor.');}}
 function setBg(){bg=null;bgW=H.underlay?H.underlay.w:12;$('imw').value=bgW;if(H.underlay){bg=new Image();bg.onload=draw;bg.src=H.underlay.src;}}
-function openP(id,data){PID=id;H=data||JSON.parse(localStorage.getItem('vks_p_'+id));if(!H.levels)H.levels=JSON.parse(JSON.stringify(DEMO.levels));undo=[];setBg();save();show('ed');}
+function openP(id,data){PID=id;H=data||JSON.parse(localStorage.getItem('vks_p_'+id));if(!H.levels)H.levels=JSON.parse(JSON.stringify(DEMO.levels));lvl=H.levels[0].name;lvUI();undo=[];setBg();save();show('ed');}
 const newP=(name,walls=[],ul=null)=>openP('p'+Date.now(),{...JSON.parse(JSON.stringify(DEMO)),name,walls,underlay:ul});
 function load(){const L=idx();if(L.length){try{openP(L[0].id);return;}catch(e){}}newP('Ukážkový dom',JSON.parse(JSON.stringify(DEMO.walls)));}
 const snap=()=>{undo.push(JSON.stringify(H));if(undo.length>80)undo.shift();};
@@ -22,7 +23,7 @@ const snap=()=>{undo.push(JSON.stringify(H));if(undo.length>80)undo.shift();};
 const cv=$('cv'),cx=cv.getContext('2d');
 const TCH=matchMedia('(pointer:coarse)').matches;
 const HINT0={wall:'Ťahaj myšou = nová stena (prichytáva sa ku koncom stien). Koliesko/2 prsty = zoom a posun.',move:'Ťahaj koniec steny (bodku) alebo celú stenu. Dvere/okno ťahaj po stene.',door:'Klikni na stenu = vložia sa dvere.',window:'Klikni na stenu = vloží sa okno.',del:'Klikni na stenu, dvere alebo okno = zmaže sa.'};
-const HINT=Object.fromEntries(Object.entries(HINT0).map(([k,v])=>[k,TCH?v.replace('Ťahaj myšou','Ťahaj prstom').replace('Koliesko/2 prsty','2 prsty').replace(/Klikni/g,'Ťukni'):v]));HINT.cal='Ťukni/klikni na začiatok a koniec známej dĺžky (napr. kótovaná stena).';
+const HINT=Object.fromEntries(Object.entries(HINT0).map(([k,v])=>[k,TCH?v.replace('Ťahaj myšou','Ťahaj prstom').replace('Koliesko/2 prsty','2 prsty').replace(/Klikni/g,'Ťukni'):v]));HINT.stair=(TCH?'Ťukni':'Klikni')+' = schody (1 × 3,6 m) z tohto podlažia na vyššie. Zmažeš ich nástrojom 🗑.';HINT.cal='Ťukni/klikni na začiatok a koniec známej dĺžky (napr. kótovaná stena).';
 function fit(){const r=cv.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;
  let xs=[0,10],zs=[0,8];if(bg&&bg.width){xs.push(0,bgW);zs.push(0,bgW*bg.height/bg.width);}H.walls.forEach(w=>{xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);});
  const x0=Math.min(...xs)-.3,x1=Math.max(...xs)+.3,z0=Math.min(...zs)-.3,z1=Math.max(...zs)+.3;view.s=Math.min(cv.width/(x1-x0),cv.height/(z1-z0));view.x=x0;view.y=z0;draw();}
@@ -30,10 +31,10 @@ const toS=p=>[(p[0]-view.x)*view.s,(p[1]-view.y)*view.s],toW=e=>{const r=cv.getB
 const r2=v=>Math.round(v*20)/20;
 function geo(w){const[x0,z0]=w.start,[x1,z1]=w.end,L=Math.hypot(x1-x0,z1-z0)||1e-9;return{x0,z0,L,u:[(x1-x0)/L,(z1-z0)/L]};}
 function proj(w,p){const g=geo(w),s=(p[0]-g.x0)*g.u[0]+(p[1]-g.z0)*g.u[1],t=-(p[0]-g.x0)*g.u[1]+(p[1]-g.z0)*g.u[0];return{s,t,g};}
-function hitWall(p){let b=null,bd=.35;H.walls.forEach(w=>{const q=proj(w,p);if(q.s>=-.1&&q.s<=q.g.L+.1&&Math.abs(q.t)<Math.max(bd,w.thickness/2+.05)){const d=Math.abs(q.t);if(d<bd||!b){bd=d;b={w,s:q.s};}}});return b;}
-function hitOp(p){for(const w of H.walls){const q=proj(w,p);if(Math.abs(q.t)>w.thickness/2+.15)continue;for(const o of w.openings||[])if(q.s>=o.offset&&q.s<=o.offset+o.width)return{w,o,ds:q.s-o.offset};}return null;}
-let TOUCH=false;
-function hitEnd(p){let b=null,bd=(TOUCH?30:12)*devicePixelRatio/view.s;H.walls.forEach(w=>['start','end'].forEach(k=>{const d=Math.hypot(w[k][0]-p[0],w[k][1]-p[1]);if(d<bd){bd=d;b={w,k};}}));return b;}
+function hitWall(p){let b=null,bd=.35;WL().forEach(w=>{const q=proj(w,p);if(q.s>=-.1&&q.s<=q.g.L+.1&&Math.abs(q.t)<Math.max(bd,w.thickness/2+.05)){const d=Math.abs(q.t);if(d<bd||!b){bd=d;b={w,s:q.s};}}});return b;}
+function hitOp(p){for(const w of WL()){const q=proj(w,p);if(Math.abs(q.t)>w.thickness/2+.15)continue;for(const o of w.openings||[])if(q.s>=o.offset&&q.s<=o.offset+o.width)return{w,o,ds:q.s-o.offset};}return null;}
+let TOUCH=false,lvl=null;const WL=()=>H.walls.filter(w=>w.level===lvl),LV=()=>H.levels.find(l=>l.name===lvl)||H.levels[0];
+function hitEnd(p){let b=null,bd=(TOUCH?30:12)*devicePixelRatio/view.s;WL().forEach(w=>['start','end'].forEach(k=>{const d=Math.hypot(w[k][0]-p[0],w[k][1]-p[1]);if(d<bd){bd=d;b={w,k};}}));return b;}
 function snapPt(p,skip){let b=[r2(p[0]),r2(p[1])],bd=(TOUCH?28:15)*devicePixelRatio/view.s;H.walls.forEach(w=>{if(w===skip)return;['start','end'].forEach(k=>{const d=Math.hypot(w[k][0]-p[0],w[k][1]-p[1]);if(d<bd){bd=d;b=[...w[k]];}});});return b;}
 function ortho(a,b){if(obl)return b;return Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1])?[b[0],a[1]]:[a[0],b[1]];}
 function quad(w,s0,s1,t0,t1){const g=geo(w),v=[-g.u[1],g.u[0]];cx.beginPath();[[s0,t0],[s1,t0],[s1,t1],[s0,t1]].forEach(([s,t],i)=>{const P=toS([g.x0+g.u[0]*s+v[0]*t,g.z0+g.u[1]*s+v[1]*t]);i?cx.lineTo(...P):cx.moveTo(...P);});cx.closePath();cx.fill();}
@@ -41,7 +42,9 @@ function draw(){cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#f7f8fa';cx.fillRect(
  if(bg){const P=toS([0,0]),w=bgW*view.s;cx.globalAlpha=.6;cx.drawImage(bg,P[0],P[1],w,w*bg.height/bg.width);cx.globalAlpha=1;}
  cx.strokeStyle='#e3e7ee';cx.lineWidth=1;const x0=Math.floor(view.x),y0=Math.floor(view.y);for(let i=x0;i<x0+cv.width/view.s+1;i++){const a=toS([i,0])[0];cx.beginPath();cx.moveTo(a,0);cx.lineTo(a,cv.height);cx.stroke();}
  for(let i=y0;i<y0+cv.height/view.s+1;i++){const a=toS([0,i])[1];cx.beginPath();cx.moveTo(0,a);cx.lineTo(cv.width,a);cx.stroke();}
- H.walls.forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='#374151';quad(w,0,g.L,-t,t);
+ H.walls.filter(w=>w.level!==lvl).forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='#9ca3af55';quad(w,0,g.L,-t,t);});
+ (H.stairs||[]).filter(st=>st.level===lvl||H.levels[H.levels.indexOf(LV())-1]?.name===st.level).forEach(st=>{const r=stairRect(st),a=toS([r[0],r[1]]),b=toS([r[2],r[3]]);cx.fillStyle=st.level===lvl?'#9c7a55':'#9c7a5555';cx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);cx.fillStyle='#fff';cx.textAlign='center';cx.fillText('🪜 schody',(a[0]+b[0])/2,(a[1]+b[1])/2);});
+ WL().forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='#374151';quad(w,0,g.L,-t,t);
   (w.openings||[]).forEach(o=>{cx.fillStyle=o.type==='door'?'#d97706':'#38bdf8';quad(w,o.offset,o.offset+o.width,-t-.03,t+.03);});
   cx.fillStyle='#1e6fd9';cx.font=`${12*devicePixelRatio}px system-ui`;const m=toS([g.x0+g.u[0]*g.L/2-g.u[1]*(t+.25),g.z0+g.u[1]*g.L/2+g.u[0]*(t+.25)]);cx.textAlign='center';cx.fillText(g.L.toFixed(2)+' m',...m);
   if(tool==='move')['start','end'].forEach(k=>{const P=toS(w[k]);cx.fillStyle='#fff';cx.strokeStyle='#1e6fd9';cx.lineWidth=2;cx.beginPath();cx.arc(...P,6*devicePixelRatio,0,7);cx.fill();cx.stroke();});});
@@ -55,14 +58,15 @@ cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set
  if(ptrs.size===2){if(drag&&['end','wall','op'].includes(drag.k)&&undo.length)H=JSON.parse(undo.pop());else if(Date.now()-lastAct<400&&undo.length)H=JSON.parse(undo.pop());
   const t=two();pinch={...t,v0:{...view},w0:toW({clientX:t.c[0],clientY:t.c[1]})};drag=null;draw();return;}
  if(ptrs.size>2)return;const p=toW(e);
- if(['door','window','del'].includes(tool))lastAct=Date.now();
+ if(['door','window','del','stair'].includes(tool))lastAct=Date.now();
  if(e.button===2){drag={k:'pan',e0:[e.clientX,e.clientY],v0:{...view}};return;}
  if(tool==='cal'){calPts.push(p);draw();if(calPts.length===2)calDone();return;}
  if(tool==='wall'){drag={k:'new',a:snapPt(p),b:snapPt(p)};}
  else if(tool==='move'){const en=hitEnd(p);if(en){snap();drag={k:'end',w:en.w,key:en.k};return;}const op=hitOp(p);if(op){snap();drag={k:'op',...op};return;}const h=hitWall(p);if(h){snap();drag={k:'wall',w:h.w,p0:p,a:[...h.w.start],b:[...h.w.end]};return;}drag={k:'pan',e0:[e.clientX,e.clientY],v0:{...view}};}
  else if(tool==='door'||tool==='window'){const h=hitWall(p);if(!h)return;const d=tool==='door',wd=d?.9:1.2,g=geo(h.w);if(g.L<wd+.1)return;snap();
   (h.w.openings=h.w.openings||[]).push(d?{type:'door',offset:Math.max(.05,Math.min(g.L-wd-.05,r2(h.s-wd/2))),width:wd,sill:0,height:2.05}:{type:'window',offset:Math.max(.05,Math.min(g.L-wd-.05,r2(h.s-wd/2))),width:wd,sill:.9,height:1.4});save();draw();}
- else if(tool==='del'){const op=hitOp(p);if(op){snap();op.w.openings.splice(op.w.openings.indexOf(op.o),1);}else{const h=hitWall(p);if(!h)return;snap();H.walls.splice(H.walls.indexOf(h.w),1);}save();draw();}});
+ else if(tool==='stair'){snap();(H.stairs=H.stairs||[]).push({level:lvl,pos:[r2(p[0]),r2(p[1])],dir:0,width:1,length:3.6});save();draw();}
+ else if(tool==='del'){const si=(H.stairs||[]).findIndex(st=>{const r=stairRect(st);return st.level===lvl&&p[0]>r[0]&&p[0]<r[2]&&p[1]>r[1]&&p[1]<r[3];});if(si>=0){snap();H.stairs.splice(si,1);save();draw();return;}const op=hitOp(p);if(op){snap();op.w.openings.splice(op.w.openings.indexOf(op.o),1);}else{const h=hitWall(p);if(!h)return;snap();H.walls.splice(H.walls.indexOf(h.w),1);}save();draw();}});
 cv.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,e);
  if(pinch&&ptrs.size>=2){const t=two(),k=t.d/pinch.d,r=cv.getBoundingClientRect();view.s=pinch.v0.s*k;view.x=pinch.w0[0]-(t.c[0]-r.left)*devicePixelRatio/view.s;view.y=pinch.w0[1]-(t.c[1]-r.top)*devicePixelRatio/view.s;draw();return;}
  if(!drag)return;const p=toW(e);
@@ -76,12 +80,12 @@ cv.addEventListener('pointermove',e=>{if(!drag)return;const p=toW(e);
  if(drag.k==='op'){const q=proj(drag.w,p);drag.o.offset=Math.max(.05,Math.min(q.g.L-drag.o.width-.05,r2(q.s-drag.ds)));}
  draw();});
 const pu=e=>{ptrs.delete(e.pointerId);if(pinch){if(!ptrs.size)pinch=null;return;}if(!drag)return;if(e.type==='pointercancel'){drag=null;draw();return;}
- if(drag.k==='new'&&Math.hypot(drag.b[0]-drag.a[0],drag.b[1]-drag.a[1])>.2){snap();H.walls.push({id:'w'+Date.now(),level:H.levels[0].name,start:drag.a,end:drag.b,thickness:+$('th').value/100,base:0,height:H.levels[0].height,openings:[]});}
+ if(drag.k==='new'&&Math.hypot(drag.b[0]-drag.a[0],drag.b[1]-drag.a[1])>.2){snap();H.walls.push({id:'w'+Date.now(),level:lvl,start:drag.a,end:drag.b,thickness:+$('th').value/100,base:0,height:LV().height,openings:[]});}
  drag=null;save();draw();};
 cv.addEventListener('pointerup',pu);cv.addEventListener('pointercancel',pu);
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
 $('hint').textContent=HINT.wall;
-$('undo').onclick=()=>{if(undo.length){H=JSON.parse(undo.pop());save();draw();}};
+$('undo').onclick=()=>{if(undo.length){H=JSON.parse(undo.pop());if(!H.levels.find(l=>l.name===lvl))lvl=H.levels[0].name;lvUI();save();draw();}};
 addEventListener('keydown',e=>{if(e.target.tagName!=='INPUT'&&(e.ctrlKey||e.metaKey)&&e.key==='z')$('undo').onclick();});
 $('th').oninput=()=>{$('thv').textContent=$('th').value+' cm';};
 $('th').onchange=()=>{snap();const t=+$('th').value/100;H.walls.forEach(w=>{if(w.thickness>=.2||t<.2)w.thickness=t;});save();draw();};
@@ -90,10 +94,18 @@ $('obl').onclick=()=>{obl=!obl;$('obl').textContent='📐 Šikmé steny: '+(obl?
 function dlg(title,body,btns){return new Promise(res=>{$('ovb').innerHTML='<h3>'+title+'</h3>'+(body||'')+'<div class="bs"></div>';const bs=$('ovb').querySelector('.bs');
  btns.forEach(([t,v,c])=>{const b=document.createElement('button');b.textContent=t;if(c)b.className=c;b.onclick=()=>{const i=$('ovb').querySelector('input');$('ov').classList.remove('on');res(v===null?null:{v,name:i&&i.value.trim()});};bs.appendChild(b);});
  $('ov').classList.add('on');const i=$('ovb').querySelector('input');if(i){i.focus();i.onkeydown=e=>{if(e.key==='Enter')bs.lastChild.click();};}});}
-const esc=t=>String(t).replace(/[<>&"]/g,c=>'&#'+c.charCodeAt(0)+';');
+var esc=t=>String(t).replace(/[<>&"]/g,c=>'&#'+c.charCodeAt(0)+';');
 async function askName(def){const r=await dlg('Názov projektu','<input type="text" value="'+esc(def)+'" placeholder="napr. Rodinný dom Kováč">',[['Zrušiť',null],['Vytvoriť',1,'go']]);return r?(r.name||def):null;}
 function readImg(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,2000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.8));};im.src=r.result;};r.readAsDataURL(f);});}
 let imgMode='ask',calPts=[];
+function lvUI(){const sel=$('lvl');sel.innerHTML=H.levels.map(l=>'<option'+(l.name===lvl?' selected':'')+'>'+esc(l.name)+'</option>').join('')+'<option value="+">➕ Pridať podlažie</option>';$('stb').hidden=H.levels.length<2;}
+$('lvl').onchange=async e=>{const v=e.target.value;if(v!=='+'){lvl=v;draw();return;}
+ const top=H.levels[H.levels.length-1],ws=H.walls.filter(w=>w.level===top.name),nm=(H.levels.length+1)+'NP';
+ const r=await dlg('Pridať podlažie '+nm,'<p>Obvodové steny sa skopírujú z podlažia '+esc(top.name)+' a pridajú sa predvolené schody (môžete ich presunúť zmazaním a novým vložením 🪜).</p>',[['Zrušiť',null],['Pridať prázdne','e'],['Pridať s kópiou stien','c','go']]);
+ if(!r){lvUI();return;}snap();const L={name:nm,elevation:Math.round((top.elevation+top.height+.25)*100)/100,height:2.7};H.levels.push(L);
+ if(r.v==='c')ws.forEach((w,i)=>H.walls.push({...JSON.parse(JSON.stringify(w)),id:'c'+Date.now()+i,level:nm,height:L.height,openings:(w.openings||[]).filter(o=>o.type==='window')}));
+ let xs=ws.flatMap(w=>[w.start[0],w.end[0]]),zs=ws.flatMap(w=>[w.start[1],w.end[1]]);if(!xs.length){xs=[0];zs=[0];}
+ (H.stairs=H.stairs||[]).push({level:top.name,pos:[r2(Math.min(...xs)+.5),r2(Math.min(...zs)+.5)],dir:0,width:1,length:3.6});lvl=nm;lvUI();save();draw();};
 function setTool(t){const b=document.querySelector('[data-t='+t+']');tool=t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));$('hint').textContent=HINT[t];calPts=[];draw();}
 $('cal').onclick=()=>{if(!H.underlay){dlg('Najprv nahrajte výkres','',[['OK',1]]);return;}setTool('cal');};
 async function calDone(){const d=Math.hypot(calPts[1][0]-calPts[0][0],calPts[1][1]-calPts[0][1]);
@@ -104,7 +116,7 @@ async function calDone(){const d=Math.hypot(calPts[1][0]-calPts[0][0],calPts[1][
 async function recog(){if(!bg||!bg.complete||!bg.width){dlg('Najprv nahrajte výkres','',[['OK',1]]);return;}$('hint').textContent='Rozpoznávam steny…';await new Promise(r=>setTimeout(r,30));
  let ws=[];try{ws=detectWalls(bg,bgW);}catch(e){console.warn(e);}
  if(!ws.length){$('hint').textContent=HINT[tool];dlg('Steny sa nepodarilo rozpoznať','<p>Na výkrese sme nenašli hrubé čiary stien (napr. ide o situáciu, fotku alebo slabý sken). Steny nakreslite ručne nástrojom ✏️ Stena – výkres zostane ako podklad.</p>',[['OK',1,'go']]);return;}
- snap();const lv=H.levels[0];H.walls=H.walls.concat(ws.map((w,i)=>({id:'a'+Date.now()+i,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:[]})));save();fit();
+ snap();const lv=LV();H.walls=H.walls.concat(ws.map((w,i)=>({id:'a'+Date.now()+i,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:[]})));save();fit();
  $('hint').textContent='Rozpoznaných '+ws.length+' stien. Skontrolujte ich: ✋ Posunúť opraví polohu, 🗑 Zmazať odstráni chybné, ↶ Späť vráti. Mierku nastavte cez 📏.';}
 $('rec').onclick=()=>{if(H.walls.length)dlg('Rozpoznať steny znova?','<p>Nové steny sa pridajú k existujúcim.</p>',[['Zrušiť',null],['Rozpoznať',1,'go']]).then(r=>r&&recog());else recog();};
 function afterImg(){const go=()=>{fit();recog().then(()=>{if(H.walls.length)dlg('Nastavte mierku','<p>Pre správne rozmery označte na výkrese známu dĺžku: 📏 Mierka → ťuknite na 2 body → zadajte metre.</p>',[['Neskôr',null],['📏 Označiť teraz',1,'go']]).then(r=>r&&$('cal').click());});};bg.complete&&bg.width?go():bg.onload=()=>{draw();go();};}
@@ -193,11 +205,21 @@ function gen(){if(!inited)init3();if(world)scene.remove(world);world=build();if(
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  setWalk(walk);}
+const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
+$('glb').onclick=()=>{if(!world)return;new GLTFExporter().parse(world,b=>dl(new Blob([b],{type:'model/gltf-binary'}),(H.name||'dom')+'.glb'),e=>alert('Export zlyhal: '+e),{binary:true});};
+async function packH(){const j={...H,underlay:undefined,roof};const st=new Blob([JSON.stringify(j)]).stream().pipeThrough(new CompressionStream('gzip'));const b=new Uint8Array(await new Response(st).arrayBuffer());let t='';b.forEach(c=>t+=String.fromCharCode(c));return btoa(t).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+async function unpackH(t){const b=Uint8Array.from(atob(t.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));return JSON.parse(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).text());}
+$('share').onclick=async()=>{const url=location.href.split('#')[0]+'#t='+await packH();
+ const r=await dlg('Zdieľať prehliadku','<p>Odkaz otvorí iba 3D prehliadku (bez editora). Pošlite ho klientovi.</p><input type="text" readonly value="'+esc(url)+'">',[['Zavrieť',null],['⬇ Stiahnuť ako súbor','f'],['📋 Kopírovať odkaz','c','go']]);
+ if(r&&r.v==='c'){try{await navigator.clipboard.writeText(url);}catch(e){}}
+ if(r&&r.v==='f')dl(new Blob(['<!doctype html><meta charset="utf-8"><title>'+esc(H.name)+' – prehliadka</title><meta http-equiv="refresh" content="0;url='+esc(url)+'"><a href="'+esc(url)+'">Otvoriť prehliadku</a>'],{type:'text/html'}),(H.name||'dom')+' - prehliadka.html');};
 $('roof').onchange=e=>{roof=e.target.value;gen();};
 function show(s){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.s===s));document.querySelectorAll('.scr').forEach(x=>x.classList.toggle('on',x.id===s));
  $('tbed').classList.toggle('on',s==='ed');if(s==='home'){home();}$('tbvw').classList.toggle('on',s==='vw');const vb=$('VRButton');if(vb)vb.style.display=s==='vw'?'':'none';if(s==='vw')gen();else if(s==='ed')fit();}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.s));$('gen').onclick=()=>show('vw');
 const _sh=show;
 $('walk').onclick=()=>setWalk(!walk);
-load();window.__ok=true;
-if(!localStorage.vks_seen){localStorage.vks_seen=1;dlg('Vitajte vo Vkroč Štúdiu','<p>1. 🖼 <b>Nahrajte výkres</b> pôdorysu – steny sa skúsia rozpoznať samé.<br>2. 📏 <b>Nastavte mierku</b> – označte známu dĺžku.<br>3. Opravte steny (✏️ ✋ 🗑), pridajte 🚪 dvere a 🪟 okná.<br>4. ▶ <b>Vygenerovať 3D</b> – prechádzka aj vo VR okuliaroch.</p>',[['Rozumiem',1,'go']]);}
+const TH=location.hash.match(/^#t=(.+)/);
+if(TH){unpackH(TH[1]).then(j=>{H=j;PID=null;lvl=H.levels[0].name;if(j.roof){roof=j.roof;$('roof').value=roof;}document.body.classList.add('viewonly');show('vw');window.__ok=true;}).catch(()=>{alert('Odkaz na prehliadku je poškodený.');load();window.__ok=true;});}
+else{load();window.__ok=true;}
+if(!TH&&!localStorage.vks_seen){localStorage.vks_seen=1;dlg('Vitajte vo Vkroč Štúdiu','<p>1. 🖼 <b>Nahrajte výkres</b> pôdorysu – steny sa skúsia rozpoznať samé.<br>2. 📏 <b>Nastavte mierku</b> – označte známu dĺžku.<br>3. Opravte steny (✏️ ✋ 🗑), pridajte 🚪 dvere a 🪟 okná.<br>4. ▶ <b>Vygenerovať 3D</b> – prechádzka aj vo VR okuliaroch.</p>',[['Rozumiem',1,'go']]);}
