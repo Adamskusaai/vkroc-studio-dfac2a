@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
+import {detectWalls} from './cv.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
 const $=id=>document.getElementById(id),KEY='vkroc_studio_project';
 const DEMO={name:'Ukážkový dom',units:'m',levels:[{name:'1NP',elevation:0,height:2.8}],walls:[]};
@@ -18,10 +19,12 @@ function load(){const L=idx();if(L.length){try{openP(L[0].id);return;}catch(e){}
 const snap=()=>{undo.push(JSON.stringify(H));if(undo.length>80)undo.shift();};
 // ---------- editor ----------
 const cv=$('cv'),cx=cv.getContext('2d');
-const HINT={wall:'Ťahaj myšou = nová stena (prichytáva sa ku koncom stien). Koliesko/2 prsty = zoom a posun.',move:'Ťahaj koniec steny (bodku) alebo celú stenu. Dvere/okno ťahaj po stene.',door:'Klikni na stenu = vložia sa dvere.',window:'Klikni na stenu = vloží sa okno.',del:'Klikni na stenu, dvere alebo okno = zmaže sa.'};
+const TCH=matchMedia('(pointer:coarse)').matches;
+const HINT0={wall:'Ťahaj myšou = nová stena (prichytáva sa ku koncom stien). Koliesko/2 prsty = zoom a posun.',move:'Ťahaj koniec steny (bodku) alebo celú stenu. Dvere/okno ťahaj po stene.',door:'Klikni na stenu = vložia sa dvere.',window:'Klikni na stenu = vloží sa okno.',del:'Klikni na stenu, dvere alebo okno = zmaže sa.'};
+const HINT=Object.fromEntries(Object.entries(HINT0).map(([k,v])=>[k,TCH?v.replace('Ťahaj myšou','Ťahaj prstom').replace('Koliesko/2 prsty','2 prsty').replace(/Klikni/g,'Ťukni'):v]));HINT.cal='Ťukni/klikni na začiatok a koniec známej dĺžky (napr. kótovaná stena).';
 function fit(){const r=cv.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;
- let xs=[0,10],zs=[0,8];H.walls.forEach(w=>{xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);});
- const x0=Math.min(...xs)-1,x1=Math.max(...xs)+1,z0=Math.min(...zs)-1,z1=Math.max(...zs)+1;view.s=Math.min(cv.width/(x1-x0),cv.height/(z1-z0));view.x=x0;view.y=z0;draw();}
+ let xs=[0,10],zs=[0,8];if(bg&&bg.width){xs.push(0,bgW);zs.push(0,bgW*bg.height/bg.width);}H.walls.forEach(w=>{xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);});
+ const x0=Math.min(...xs)-.3,x1=Math.max(...xs)+.3,z0=Math.min(...zs)-.3,z1=Math.max(...zs)+.3;view.s=Math.min(cv.width/(x1-x0),cv.height/(z1-z0));view.x=x0;view.y=z0;draw();}
 const toS=p=>[(p[0]-view.x)*view.s,(p[1]-view.y)*view.s],toW=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*devicePixelRatio/view.s+view.x,(e.clientY-r.top)*devicePixelRatio/view.s+view.y];};
 const r2=v=>Math.round(v*20)/20;
 function geo(w){const[x0,z0]=w.start,[x1,z1]=w.end,L=Math.hypot(x1-x0,z1-z0)||1e-9;return{x0,z0,L,u:[(x1-x0)/L,(z1-z0)/L]};}
@@ -34,13 +37,14 @@ function snapPt(p,skip){let b=[r2(p[0]),r2(p[1])],bd=(TOUCH?28:15)*devicePixelRa
 function ortho(a,b){if(obl)return b;return Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1])?[b[0],a[1]]:[a[0],b[1]];}
 function quad(w,s0,s1,t0,t1){const g=geo(w),v=[-g.u[1],g.u[0]];cx.beginPath();[[s0,t0],[s1,t0],[s1,t1],[s0,t1]].forEach(([s,t],i)=>{const P=toS([g.x0+g.u[0]*s+v[0]*t,g.z0+g.u[1]*s+v[1]*t]);i?cx.lineTo(...P):cx.moveTo(...P);});cx.closePath();cx.fill();}
 function draw(){cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#f7f8fa';cx.fillRect(0,0,cv.width,cv.height);
- if(bg){const P=toS([0,0]),w=bgW*view.s;cx.globalAlpha=.45;cx.drawImage(bg,P[0],P[1],w,w*bg.height/bg.width);cx.globalAlpha=1;}
+ if(bg){const P=toS([0,0]),w=bgW*view.s;cx.globalAlpha=.6;cx.drawImage(bg,P[0],P[1],w,w*bg.height/bg.width);cx.globalAlpha=1;}
  cx.strokeStyle='#e3e7ee';cx.lineWidth=1;const x0=Math.floor(view.x),y0=Math.floor(view.y);for(let i=x0;i<x0+cv.width/view.s+1;i++){const a=toS([i,0])[0];cx.beginPath();cx.moveTo(a,0);cx.lineTo(a,cv.height);cx.stroke();}
  for(let i=y0;i<y0+cv.height/view.s+1;i++){const a=toS([0,i])[1];cx.beginPath();cx.moveTo(0,a);cx.lineTo(cv.width,a);cx.stroke();}
  H.walls.forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='#374151';quad(w,0,g.L,-t,t);
   (w.openings||[]).forEach(o=>{cx.fillStyle=o.type==='door'?'#d97706':'#38bdf8';quad(w,o.offset,o.offset+o.width,-t-.03,t+.03);});
   cx.fillStyle='#1e6fd9';cx.font=`${12*devicePixelRatio}px system-ui`;const m=toS([g.x0+g.u[0]*g.L/2-g.u[1]*(t+.25),g.z0+g.u[1]*g.L/2+g.u[0]*(t+.25)]);cx.textAlign='center';cx.fillText(g.L.toFixed(2)+' m',...m);
   if(tool==='move')['start','end'].forEach(k=>{const P=toS(w[k]);cx.fillStyle='#fff';cx.strokeStyle='#1e6fd9';cx.lineWidth=2;cx.beginPath();cx.arc(...P,6*devicePixelRatio,0,7);cx.fill();cx.stroke();});});
+ calPts.forEach((q,i)=>{const P=toS(q);cx.fillStyle='#e11d48';cx.beginPath();cx.arc(...P,7*devicePixelRatio,0,7);cx.fill();if(i)( cx.strokeStyle='#e11d48',cx.lineWidth=3,cx.beginPath(),cx.moveTo(...toS(calPts[0])),cx.lineTo(...P),cx.stroke());});
  if(drag&&drag.k==='new'){cx.strokeStyle='#1e6fd9';cx.lineWidth=3;cx.beginPath();cx.moveTo(...toS(drag.a));cx.lineTo(...toS(drag.b));cx.stroke();}}
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('wheel',e=>{e.preventDefault();const p=toW(e),f=e.deltaY<0?1.15:1/1.15;view.s*=f;view.x=p[0]-(p[0]-view.x)/f;view.y=p[1]-(p[1]-view.y)/f;draw();},{passive:false});
@@ -52,6 +56,7 @@ cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set
  if(ptrs.size>2)return;const p=toW(e);
  if(['door','window','del'].includes(tool))lastAct=Date.now();
  if(e.button===2){drag={k:'pan',e0:[e.clientX,e.clientY],v0:{...view}};return;}
+ if(tool==='cal'){calPts.push(p);draw();if(calPts.length===2)calDone();return;}
  if(tool==='wall'){drag={k:'new',a:snapPt(p),b:snapPt(p)};}
  else if(tool==='move'){const en=hitEnd(p);if(en){snap();drag={k:'end',w:en.w,key:en.k};return;}const op=hitOp(p);if(op){snap();drag={k:'op',...op};return;}const h=hitWall(p);if(h){snap();drag={k:'wall',w:h.w,p0:p,a:[...h.w.start],b:[...h.w.end]};return;}drag={k:'pan',e0:[e.clientX,e.clientY],v0:{...view}};}
  else if(tool==='door'||tool==='window'){const h=hitWall(p);if(!h)return;const d=tool==='door',wd=d?.9:1.2,g=geo(h.w);if(g.L<wd+.1)return;snap();
@@ -73,7 +78,7 @@ const pu=e=>{ptrs.delete(e.pointerId);if(pinch){if(!ptrs.size)pinch=null;return;
  if(drag.k==='new'&&Math.hypot(drag.b[0]-drag.a[0],drag.b[1]-drag.a[1])>.2){snap();H.walls.push({id:'w'+Date.now(),level:H.levels[0].name,start:drag.a,end:drag.b,thickness:+$('th').value/100,base:0,height:H.levels[0].height,openings:[]});}
  drag=null;save();draw();};
 cv.addEventListener('pointerup',pu);cv.addEventListener('pointercancel',pu);
-document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tool=b.dataset.t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));$('hint').textContent=HINT[tool];draw();});
+document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
 $('hint').textContent=HINT.wall;
 $('undo').onclick=()=>{if(undo.length){H=JSON.parse(undo.pop());save();draw();}};
 addEventListener('keydown',e=>{if(e.target.tagName!=='INPUT'&&(e.ctrlKey||e.metaKey)&&e.key==='z')$('undo').onclick();});
@@ -87,13 +92,27 @@ function dlg(title,body,btns){return new Promise(res=>{$('ovb').innerHTML='<h3>'
 const esc=t=>String(t).replace(/[<>&"]/g,c=>'&#'+c.charCodeAt(0)+';');
 async function askName(def){const r=await dlg('Názov projektu','<input type="text" value="'+esc(def)+'" placeholder="napr. Rodinný dom Kováč">',[['Zrušiť',null],['Vytvoriť',1,'go']]);return r?(r.name||def):null;}
 function readImg(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,2000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.8));};im.src=r.result;};r.readAsDataURL(f);});}
-let imgMode='ask';
+let imgMode='ask',calPts=[];
+function setTool(t){const b=document.querySelector('[data-t='+t+']');tool=t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));$('hint').textContent=HINT[t];calPts=[];draw();}
+$('cal').onclick=()=>{if(!H.underlay){dlg('Najprv nahrajte výkres','',[['OK',1]]);return;}setTool('cal');};
+async function calDone(){const d=Math.hypot(calPts[1][0]-calPts[0][0],calPts[1][1]-calPts[0][1]);
+ const r=await dlg('Aká dlhá je označená úsečka?','<input type="text" inputmode="decimal" placeholder="napr. 8,5"> <p style="color:#9fb3c8;font-size:13px">Zadajte v metroch.</p>',[['Zrušiť',null],['Nastaviť mierku',1,'go']]);
+ const v=r&&parseFloat((r.name||'').replace(',','.'));setTool('wall');if(!v||!d)return;const f=v/d;snap();
+ bgW=Math.round(bgW*f*100)/100;H.underlay.w=bgW;$('imw').value=bgW;H.walls.forEach(w=>{w.start=w.start.map(c=>Math.round(c*f*100)/100);w.end=w.end.map(c=>Math.round(c*f*100)/100);w.thickness=Math.max(.1,Math.round(w.thickness*f*20)/20);(w.openings||[]).forEach(o=>{o.offset*=f;o.width=Math.min(o.width,o.width*f>.5?o.width:o.width);});});save();fit();
+ if(!H.walls.length)recog();}
+async function recog(){if(!bg||!bg.complete||!bg.width){dlg('Najprv nahrajte výkres','',[['OK',1]]);return;}$('hint').textContent='Rozpoznávam steny…';await new Promise(r=>setTimeout(r,30));
+ let ws=[];try{ws=detectWalls(bg,bgW);}catch(e){console.warn(e);}
+ if(!ws.length){$('hint').textContent=HINT[tool];dlg('Steny sa nepodarilo rozpoznať','<p>Na výkrese sme nenašli hrubé čiary stien (napr. ide o situáciu, fotku alebo slabý sken). Steny nakreslite ručne nástrojom ✏️ Stena – výkres zostane ako podklad.</p>',[['OK',1,'go']]);return;}
+ snap();const lv=H.levels[0];H.walls=H.walls.concat(ws.map((w,i)=>({id:'a'+Date.now()+i,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:[]})));save();fit();
+ $('hint').textContent='Rozpoznaných '+ws.length+' stien. Skontrolujte ich: ✋ Posunúť opraví polohu, 🗑 Zmazať odstráni chybné, ↶ Späť vráti. Mierku nastavte cez 📏.';}
+$('rec').onclick=()=>{if(H.walls.length)dlg('Rozpoznať steny znova?','<p>Nové steny sa pridajú k existujúcim.</p>',[['Zrušiť',null],['Rozpoznať',1,'go']]).then(r=>r&&recog());else recog();};
+function afterImg(){const go=()=>{fit();recog().then(()=>{if(H.walls.length)dlg('Nastavte mierku','<p>Pre správne rozmery označte na výkrese známu dĺžku: 📏 Mierka → ťuknite na 2 body → zadajte metre.</p>',[['Neskôr',null],['📏 Označiť teraz',1,'go']]).then(r=>r&&$('cal').click());});};bg.complete&&bg.width?go():bg.onload=()=>{draw();go();};}
 const pickImg=m=>{imgMode=m;$('img').value='';$('img').click();};
 $('upl').onclick=()=>pickImg('ask');
 $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=await readImg(f);let m=imgMode;
  if(m==='ask'&&H.walls.length){const r=await dlg('Nahrali ste výkres','<p>Tento projekt už má nakreslené steny. Čo chcete urobiť?</p>',[['Zrušiť',null],['Vymeniť podklad v tomto projekte','swap'],['Nový projekt z tohto výkresu','new','go']]);if(!r)return;m=r.v;}
- if(m==='new'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n)newP(n,[],{src,w:12});}
- else{snap();H.underlay={src,w:bgW};setBg();save();draw();}};
+ if(m==='new'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20});afterImg();}}
+ else{snap();H.underlay={src,w:bgW};setBg();save();bg.onload=()=>fit();}};
 async function act(m){$('dd').classList.remove('on');
  if(m==='new'){const n=await askName('Nový dom');if(n)newP(n);}
  if(m==='newimg')pickImg('new');if(m==='open')$('ld').click();if(m==='mine')show('home');
