@@ -26,7 +26,7 @@ const snap=()=>{undo.push(JSON.stringify(H));if(undo.length>80)undo.shift();};
 // ---------- editor ----------
 const cv=$('cv'),cx=cv.getContext('2d');
 const TCH=matchMedia('(pointer:coarse)').matches;
-const HINT0={wall:'Ťahaj myšou = nová stena (prichytáva sa ku koncom stien). Koliesko/2 prsty = zoom a posun.',move:'Ťahaj koniec steny (bodku) alebo celú stenu. Dvere/okno ťahaj po stene.',door:'Klikni na stenu = vložia sa dvere.',window:'Klikni na stenu = vloží sa okno.',del:'Klikni na stenu, dvere alebo okno = zmaže sa.'};
+const HINT0={meas:'Ťahaj myšou = zmeria vzdialenosť (prichytáva sa ku koncom stien).',furn:'Klikni = vložiť nábytok. Klik na kus nábytku = otočenie. Posun ho presunie, Zmazať zmaže.',wall:'Ťahaj myšou = nová stena (prichytáva sa ku koncom stien). Koliesko/2 prsty = zoom a posun.',move:'Ťahaj koniec steny (bodku) alebo celú stenu. Dvere/okno ťahaj po stene.',door:'Klikni na stenu = vložia sa dvere.',window:'Klikni na stenu = vloží sa okno.',del:'Klikni na stenu, dvere alebo okno = zmaže sa.'};
 const HINT=Object.fromEntries(Object.entries(HINT0).map(([k,v])=>[k,TCH?v.replace('Ťahaj myšou','Ťahaj prstom').replace('Koliesko/2 prsty','2 prsty').replace(/Klikni/g,'Ťukni'):v]));HINT.stair=(TCH?'Ťukni':'Klikni')+' = schody z tohto podlažia na vyššie. Ťuknutím na existujúce schody ich otočíš o 90°.';HINT.cal='Ťukni/klikni na začiatok a koniec známej dĺžky (napr. kótovaná stena).';
 function fit(){const r=cv.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;
  let xs=[0,10],zs=[0,8];if(bg&&bg.width){xs.push(0,bgW);zs.push(0,bgW*bg.height/bg.width);}H.walls.forEach(w=>{xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);});if(H.plot)H.plot.pts.forEach(p=>{xs.push(p[0]);zs.push(p[1]);});
@@ -42,31 +42,55 @@ function hitEnd(p){let b=null,bd=(TOUCH?30:12)*devicePixelRatio/view.s;WL().forE
 function snapPt(p,skip){let b=[r2(p[0]),r2(p[1])],bd=(TOUCH?28:15)*devicePixelRatio/view.s;H.walls.forEach(w=>{if(w===skip)return;['start','end'].forEach(k=>{const d=Math.hypot(w[k][0]-p[0],w[k][1]-p[1]);if(d<bd){bd=d;b=[...w[k]];}});});return b;}
 function ortho(a,b){if(obl)return b;return Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1])?[b[0],a[1]]:[a[0],b[1]];}
 function quad(w,s0,s1,t0,t1){const g=geo(w),v=[-g.u[1],g.u[0]];cx.beginPath();[[s0,t0],[s1,t0],[s1,t1],[s0,t1]].forEach(([s,t],i)=>{const P=toS([g.x0+g.u[0]*s+v[0]*t,g.z0+g.u[1]*s+v[1]*t]);i?cx.lineTo(...P):cx.moveTo(...P);});cx.closePath();cx.fill();}
-let RC={k:'',r:[]};
-function rooms(){const ws=WL(),k=JSON.stringify(ws.map(w=>[w.start,w.end,w.thickness]));if(k===RC.k)return RC.r;RC.k=k;RC.r=[];if(ws.length<3)return RC.r;
+const RC={};
+function rooms(L=lvl){const ws=H.walls.filter(w=>w.level===L),k=JSON.stringify(ws.map(w=>[w.start,w.end,w.thickness]));const C=RC[L];if(C&&C.k===k)return nameR(C,L);const R={k,r:[]};RC[L]=R;if(ws.length<3)return R.r;
  const c=.1;let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;ws.forEach(w=>[w.start,w.end].forEach(p=>{x0=Math.min(x0,p[0]);z0=Math.min(z0,p[1]);x1=Math.max(x1,p[0]);z1=Math.max(z1,p[1]);}));x0-=.5;z0-=.5;
- const W=Math.ceil((x1-x0+.5)/c)+1,Hh=Math.ceil((z1-z0+.5)/c)+1;if(W*Hh>4e6)return RC.r;const g=new Int32Array(W*Hh);
+ const W=Math.ceil((x1-x0+.5)/c)+1,Hh=Math.ceil((z1-z0+.5)/c)+1;if(W*Hh>4e6)return R.r;const g=new Int32Array(W*Hh);Object.assign(R,{g,W,Hh,x0,z0,c});
  ws.forEach(w=>{const G=geo(w),t=Math.max(w.thickness/2,.06),n=Math.ceil(G.L/(c/2))+1;for(let i=0;i<=n;i++){const s=G.L*i/n;for(let q=-t;q<=t+1e-9;q+=c/2){const x=G.x0+G.u[0]*s-G.u[1]*q,z=G.z0+G.u[1]*s+G.u[0]*q,ix=Math.round((x-x0)/c),iz=Math.round((z-z0)/c);if(ix>=0&&iz>=0&&ix<W&&iz<Hh)g[iz*W+ix]=-1;}}});
- const fl=(s,id)=>{const st=[s];g[s]=id;let n=0,sx=0,sz=0,edge=false;while(st.length){const i=st.pop(),x=i%W,z=(i/W)|0;n++;sx+=x;sz+=z;if(!x||!z||x===W-1||z===Hh-1)edge=true;for(const j of[x>0?i-1:-1,x<W-1?i+1:-1,z>0?i-W:-1,z<Hh-1?i+W:-1])if(j>=0&&!g[j]){g[j]=id;st.push(j);}}return{n,sx,sz,edge};};
- let id=1;for(let i=0;i<g.length;i++)if(!g[i]){const r=fl(i,++id);if(!r.edge&&r.n*c*c>=1.5){let cx_=r.sx/r.n,cz=r.sz/r.n;RC.r.push({a:r.n*c*c,p:[x0+cx_*c,z0+cz*c]});}}
- return RC.r;}
+ const fl=(s,id)=>{const st=[s];g[s]=id;let n=0,sx=0,sz=0,edge=false,b=[1e9,1e9,-1e9,-1e9];while(st.length){const i=st.pop(),x=i%W,z=(i/W)|0;n++;sx+=x;sz+=z;if(x<b[0])b[0]=x;if(z<b[1])b[1]=z;if(x>b[2])b[2]=x;if(z>b[3])b[3]=z;if(!x||!z||x===W-1||z===Hh-1)edge=true;for(const j of[x>0?i-1:-1,x<W-1?i+1:-1,z>0?i-W:-1,z<Hh-1?i+W:-1])if(j>=0&&!g[j]){g[j]=id;st.push(j);}}return{n,sx,sz,edge,b};};
+ let id=1;for(let i=0;i<g.length;i++)if(!g[i]){const r=fl(i,++id);if(!r.edge&&r.n*c*c>=1.5){let px=x0+r.sx/r.n*c,pz=z0+r.sz/r.n*c;const ci=Math.round((pz-z0)/c)*W+Math.round((px-x0)/c);if(g[ci]!==id){const q=cellIn(R,id);px=q[0];pz=q[1];}R.r.push({id,a:r.n*c*c,p:[px,pz],bb:[x0+r.b[0]*c,z0+r.b[1]*c,x0+r.b[2]*c,z0+r.b[3]*c]});}}
+ return nameR(R,L);}
+function cellIn(R,id){let best=null,bd=-1;const{g,W,Hh,x0,z0,c}=R;for(let z=1;z<Hh-1;z+=2)for(let x=1;x<W-1;x+=2){const i=z*W+x;if(g[i]!==id)continue;let d=0;while(d<40&&g[i-d]===id&&g[i+d]===id&&g[i-d*W]===id&&g[i+d*W]===id)d++;if(d>bd){bd=d;best=[x0+x*c,z0+z*c];}}return best||[x0,z0];}
+function roomAt(R,p){if(!R||!R.g)return 0;const ix=Math.round((p[0]-R.x0)/R.c),iz=Math.round((p[1]-R.z0)/R.c);if(ix<0||iz<0||ix>=R.W||iz>=R.Hh)return 0;return R.g[iz*R.W+ix];}
+const RN=['Obývačka','Obývačka s kuchyňou','Kuchyňa','Jedáleň','Spálňa','Detská izba','Izba','Pracovňa','Kúpeľňa','WC','Chodba','Predsieň','Šatník','Komora','Technická miestnosť','Garáž','Terasa'];
+function sugName(r,big){const w=r.bb[2]-r.bb[0],d=r.bb[3]-r.bb[1],asp=Math.max(w,d)/Math.max(.1,Math.min(w,d));if(r.a<2.6)return 'WC';if(asp>2.6&&Math.min(w,d)<1.8)return 'Chodba';if(r.a<5.5)return 'Kúpeľňa';if(big&&r.a>=14)return r.a>=30?'Obývačka s kuchyňou':'Obývačka';if(r.a<9)return 'Kuchyňa';if(r.a<12)return 'Izba';return 'Spálňa';}
+function nameR(R,L){const mx=Math.max(0,...R.r.map(r=>r.a));R.r.forEach(r=>{const e=(H.rn||[]).find(e=>e.level===L&&roomAt(R,e.p)===r.id);r.n=e?e.n:sugName(r,r.a===mx);r.auto=!e;});return R.r;}
+async function nameDlg(r){const v=await dlg('Názov miestnosti','<p>'+r.a.toFixed(1).replace('.',',')+' m² · návrh: '+esc(r.n)+'</p><label>Názov<input type="text" name="n" list="rnl" value="'+esc(r.n)+'"></label><datalist id="rnl">'+RN.map(n=>'<option value="'+n+'">').join('')+'</datalist>',[['Zrušiť',0],['Uložiť',1,'go','check']]);
+ if(!v||!v.v)return;const n=String(v.f.n||'').trim().slice(0,40);if(!n)return;snap();H.rn=(H.rn||[]).filter(e=>!(e.level===lvl&&roomAt(RC[lvl],e.p)===r.id));H.rn.push({level:lvl,p:[...r.p],n});save();draw();toast('Miestnosť: '+n,'ok');}
 function WC(){const ws=WL();let x=0,z=0;ws.forEach(w=>{x+=w.start[0]+w.end[0];z+=w.start[1]+w.end[1];});const n=ws.length*2||1;return[x/n,z/n];}
+const FUR={bed:['Manželská posteľ',1.6,2.05],bed1:['Posteľ',.9,2],sofa:['Pohovka',2.2,.95],armch:['Kreslo',.85,.85],table:['Jedálenský stôl',1.6,.9],ctable:['Konferenčný stolík',1.1,.6],desk:['Písací stôl',1.2,.6],tv:['TV skrinka',1.8,.42],ward:['Šatníková skriňa',1.8,.62],kitch:['Kuchynská linka',2.6,.62],fridge:['Chladnička',.6,.65],bath:['Vaňa',1.7,.75],shower:['Sprchovací kút',.9,.9],sink:['Umývadlo',.6,.45],wc:['WC',.4,.65],shelf:['Polica',.9,.35],plant:['Rastlina',.45,.45]};
+const fdim=f=>{const F=FUR[f.t];return (f.r||0)%2?[F[2],F[1]]:[F[1],F[2]];};
+const FL=()=>(H.furn||[]).filter(f=>f.level===lvl);
+function hitFurn(p){const fs=FL();for(let i=fs.length-1;i>=0;i--){const f=fs[i],[w,d]=fdim(f);if(Math.abs(p[0]-f.p[0])<=w/2&&Math.abs(p[1]-f.p[1])<=d/2)return f;}return null;}
+let EXP=0,MEAS=null,GUIDES=[];
+function align(b,a){GUIDES=[];const tol=10*devicePixelRatio/view.s;let bx=null,bz=null;WL().forEach(w=>['start','end'].forEach(k=>{const e=w[k];if(Math.hypot(e[0]-b[0],e[1]-b[1])<1e-6)return;if((!a||a[1]===b[1])&&Math.abs(e[0]-b[0])<tol&&(!bx||Math.abs(e[0]-b[0])<Math.abs(bx[0]-b[0])))bx=e;if((!a||a[0]===b[0])&&Math.abs(e[1]-b[1])<tol&&(!bz||Math.abs(e[1]-b[1])<Math.abs(bz[1]-b[1])))bz=e;}));
+ const r=[...b];if(bx){r[0]=bx[0];GUIDES.push([bx,r]);}if(bz){r[1]=bz[1];GUIDES.push([bz,r]);}return r;}
 let WLB=[];
 function draw(){WLB=[];cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#FAF9F6';cx.fillRect(0,0,cv.width,cv.height);
- if(bg){const P=toS([0,0]),w=bgW*view.s;cx.globalAlpha=.6;cx.drawImage(bg,P[0],P[1],w,w*bg.height/bg.width);cx.globalAlpha=1;}
- cx.lineWidth=1;const gs=i=>cx.strokeStyle=i%5?'#EEEBE5':'#E0DBD2';const x0=Math.floor(view.x),y0=Math.floor(view.y);for(let i=x0;i<x0+cv.width/view.s+1;i++){gs(i);const a=toS([i,0])[0];cx.beginPath();cx.moveTo(a,0);cx.lineTo(a,cv.height);cx.stroke();}
- for(let i=y0;i<y0+cv.height/view.s+1;i++){gs(i);const a=toS([0,i])[1];cx.beginPath();cx.moveTo(0,a);cx.lineTo(cv.width,a);cx.stroke();}
+ if(EXP){cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);}
+ if(bg&&!EXP){const P=toS([0,0]),w=bgW*view.s;cx.globalAlpha=.6;cx.drawImage(bg,P[0],P[1],w,w*bg.height/bg.width);cx.globalAlpha=1;}
+ cx.lineWidth=1;if(!EXP){const gs=i=>cx.strokeStyle=i%5?'#EEEBE5':'#E0DBD2';const x0=Math.floor(view.x),y0=Math.floor(view.y);for(let i=x0;i<x0+cv.width/view.s+1;i++){gs(i);const a=toS([i,0])[0];cx.beginPath();cx.moveTo(a,0);cx.lineTo(a,cv.height);cx.stroke();}
+ for(let i=y0;i<y0+cv.height/view.s+1;i++){gs(i);const a=toS([0,i])[1];cx.beginPath();cx.moveTo(0,a);cx.lineTo(cv.width,a);cx.stroke();}}
  if(H.plot&&H.plot.pts.length>2){cx.beginPath();H.plot.pts.forEach((p,i)=>{const P=toS(p);i?cx.lineTo(...P):cx.moveTo(...P);});cx.closePath();cx.fillStyle='rgba(122,154,90,.13)';cx.fill();cx.setLineDash([8*devicePixelRatio,6*devicePixelRatio]);cx.strokeStyle=H.plot.fence?'#5f7f42':'#7a9a5a';cx.lineWidth=(H.plot.fence?2.5:1.5)*devicePixelRatio;cx.stroke();cx.setLineDash([]);
   const pp=H.plot.pts;cx.font=`500 ${11*devicePixelRatio}px Inter,system-ui`;cx.fillStyle='#5f7f42';cx.textAlign='center';pp.forEach((p,i)=>{const q=pp[(i+1)%pp.length],m=toS([(p[0]+q[0])/2,(p[1]+q[1])/2]);cx.fillText(Math.hypot(q[0]-p[0],q[1]-p[1]).toFixed(1)+' m',m[0],m[1]-6*devicePixelRatio);});}
  H.walls.filter(w=>w.level!==lvl).forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='rgba(11,11,11,.12)';quad(w,0,g.L,-t,t);});
  (H.stairs||[]).filter(st=>st.level===lvl||H.levels[H.levels.indexOf(LV())-1]?.name===st.level).forEach(st=>{const r=stairRect(st),a=toS([r[0],r[1]]),b=toS([r[2],r[3]]);cx.globalAlpha=st.level===lvl?1:.35;cx.fillStyle='#EADFCF';cx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);cx.strokeStyle='#B08D64';cx.lineWidth=1.5*devicePixelRatio;cx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);const d=st.dir||0,c=Math.cos(d),sn=Math.sin(d),L=st.length||3.6,W=st.width||1;for(let k=1;k<12;k++){const f=k/12,p1=toS([st.pos[0]+c*L*f,st.pos[1]+sn*L*f]),p2=toS([st.pos[0]+c*L*f-sn*W,st.pos[1]+sn*L*f+c*W]);cx.beginPath();cx.moveTo(...p1);cx.lineTo(...p2);cx.stroke();}const m0=toS([st.pos[0]-sn*W/2+c*.3,st.pos[1]+c*W/2+sn*.3]),m1=toS([st.pos[0]-sn*W/2+c*(L-.3),st.pos[1]+c*W/2+sn*(L-.3)]);cx.strokeStyle='#E2552D';cx.lineWidth=2*devicePixelRatio;cx.beginPath();cx.moveTo(...m0);cx.lineTo(...m1);cx.stroke();cx.fillStyle='#E2552D';cx.beginPath();cx.arc(...m1,4*devicePixelRatio,0,7);cx.fill();cx.globalAlpha=1;});
+ FL().forEach(f=>{const[w,d]=fdim(f),A=toS([f.p[0]-w/2,f.p[1]-d/2]),dd=devicePixelRatio;cx.fillStyle='#F1ECE4';cx.strokeStyle='#A39A8C';cx.lineWidth=1.2*dd;cx.beginPath();cx.roundRect(A[0],A[1],w*view.s,d*view.s,3*dd);cx.fill();cx.stroke();
+  if(f.t==='bed'||f.t==='bed1'){const r=f.r||0,hp=[[0,-1],[1,0],[0,1],[-1,0]][r],P=toS([f.p[0]+hp[0]*(d/2-.3)*(r%2?0:0)+hp[0]*(w/2-.3),f.p[1]+hp[1]*(d/2-.3)]);cx.fillStyle='#fff';cx.beginPath();cx.arc(P[0],P[1],Math.min(w,d)*view.s*.16,0,7);cx.fill();cx.stroke();}
+  if(Math.min(w,d)*view.s>28*dd){cx.fillStyle='#8A8174';cx.font=`500 ${9.5*dd}px Inter,system-ui`;cx.textAlign='center';const C=toS(f.p);cx.fillText(FUR[f.t][0].split(' ')[0],C[0],C[1]+3*dd);}});
  WL().forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='#1F1F1F';quad(w,0,g.L,-t,t);
-  (w.openings||[]).forEach(o=>{cx.fillStyle=o.type==='door'?'#E2552D':'#8EC3E6';quad(w,o.offset,o.offset+o.width,-t-.03,t+.03);});
+  (w.openings||[]).forEach(o=>{cx.fillStyle=o.type==='door'?'#E2552D':'#8EC3E6';quad(w,o.offset,o.offset+o.width,-t-.03,t+.03);
+   if(o.type==='door'){const sd=o.out?-1:1,v=[-g.u[1]*sd,g.u[0]*sd],W0=o.offset,W1=o.offset+o.width,pt=(s,n)=>toS([g.x0+g.u[0]*s+v[0]*n,g.z0+g.u[1]*s+v[1]*n]);cx.strokeStyle='rgba(226,85,45,.7)';cx.lineWidth=1.3*devicePixelRatio;
+    const sw=(hs,len,dir)=>{const H0=pt(hs,t),E=pt(hs,t+len),S=pt(hs+dir*len,t);cx.beginPath();cx.moveTo(...H0);cx.lineTo(...E);cx.stroke();cx.setLineDash([3*devicePixelRatio,3*devicePixelRatio]);cx.beginPath();const a0=Math.atan2(E[1]-H0[1],E[0]-H0[0]),a1=Math.atan2(S[1]-H0[1],S[0]-H0[0]);let da=a1-a0;while(da>Math.PI)da-=2*Math.PI;while(da<-Math.PI)da+=2*Math.PI;cx.arc(H0[0],H0[1],len*view.s,a0,a1,da<0);cx.stroke();cx.setLineDash([]);};
+    const k=o.kind||'single';if(k==='double'){sw(W0,o.width/2,1);sw(W1,o.width/2,-1);}else if(k==='sliding'){cx.beginPath();cx.moveTo(...pt(W0,t+.06));cx.lineTo(...pt(W0+o.width*.6,t+.06));cx.stroke();}else{o.hinge==='R'?sw(W1,o.width,-1):sw(W0,o.width,1);}}});
   cx.fillStyle='#6B6B6B';cx.font=`500 ${11.5*devicePixelRatio}px Inter,system-ui`;const mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2,C=WC(),sg=((mx-g.u[1]-C[0])**2+(mz+g.u[0]-C[1])**2)>((mx+g.u[1]-C[0])**2+(mz-g.u[0]-C[1])**2)?1:-1,M0=toS([mx,mz]),off=(t*view.s+(Math.abs(g.u[1])>.7?cx.measureText(g.L.toFixed(2)+' m').width/2+8*devicePixelRatio:14*devicePixelRatio))*sg,m=[M0[0]-g.u[1]*off,M0[1]+g.u[0]*off+4*devicePixelRatio];WLB.push(m);cx.textAlign='center';cx.fillText(g.L.toFixed(2)+' m',...m);
-  if(tool==='move')['start','end'].forEach(k=>{const P=toS(w[k]);cx.fillStyle='#fff';cx.strokeStyle='#E2552D';cx.lineWidth=2;cx.beginPath();cx.arc(...P,6*devicePixelRatio,0,7);cx.fill();cx.stroke();});});
+  if(tool==='move'&&!EXP)['start','end'].forEach(k=>{const P=toS(w[k]);cx.fillStyle='#fff';cx.strokeStyle='#E2552D';cx.lineWidth=2;cx.beginPath();cx.arc(...P,6*devicePixelRatio,0,7);cx.fill();cx.stroke();});});
  calPts.forEach((q,i)=>{const P=toS(q);cx.fillStyle='#E2552D';cx.beginPath();cx.arc(...P,7*devicePixelRatio,0,7);cx.fill();if(i)( cx.strokeStyle='#E2552D',cx.lineWidth=3,cx.beginPath(),cx.moveTo(...toS(calPts[0])),cx.lineTo(...P),cx.stroke());});
  if(drag&&drag.k==='new'){const t=+$('th').value/100*view.s;cx.strokeStyle='rgba(226,85,45,.85)';cx.lineWidth=Math.max(3,t);cx.lineCap='square';cx.beginPath();cx.moveTo(...toS(drag.a));cx.lineTo(...toS(drag.b));cx.stroke();cx.lineCap='butt';const L=Math.hypot(drag.b[0]-drag.a[0],drag.b[1]-drag.a[1]),P=toS(drag.b);cx.font=`600 ${12*devicePixelRatio}px Inter,system-ui`;const tx=L.toFixed(2)+' m',tw=cx.measureText(tx).width+14*devicePixelRatio;cx.fillStyle='#0B0B0B';cx.fillRect(P[0]+10*devicePixelRatio,P[1]-26*devicePixelRatio,tw,20*devicePixelRatio);cx.fillStyle='#fff';cx.textAlign='left';cx.fillText(tx,P[0]+17*devicePixelRatio,P[1]-12*devicePixelRatio);}
- const RS=rooms();let tot=0;RS.forEach(r=>{tot+=r.a;const P=toS(r.p),d=devicePixelRatio;if(WLB.some(q=>Math.abs(q[0]-P[0])<60*d&&Math.abs(q[1]-P[1]-4*d)<18*d))P[1]+=22*d;cx.font=`700 ${13*d}px Archivo,Inter,system-ui`;cx.textAlign='center';cx.fillStyle='rgba(11,11,11,.78)';cx.fillText(r.a.toFixed(1).replace('.',',')+' m²',P[0],P[1]+4*d);});
+ const dpr=devicePixelRatio;if(drag&&(drag.k==='new'||drag.k==='end'))GUIDES.forEach(([e,r])=>{cx.strokeStyle='rgba(226,85,45,.8)';cx.lineWidth=1*dpr;cx.setLineDash([5*dpr,4*dpr]);cx.beginPath();cx.moveTo(...toS(e));cx.lineTo(...toS(r));cx.stroke();cx.setLineDash([]);});
+ if(MEAS&&tool==='meas'){const A=toS(MEAS.a),B=toS(MEAS.b),L=Math.hypot(MEAS.b[0]-MEAS.a[0],MEAS.b[1]-MEAS.a[1]);cx.strokeStyle='#E2552D';cx.lineWidth=2*dpr;cx.setLineDash([7*dpr,5*dpr]);cx.beginPath();cx.moveTo(...A);cx.lineTo(...B);cx.stroke();cx.setLineDash([]);[A,B].forEach(P=>{cx.fillStyle='#E2552D';cx.beginPath();cx.arc(...P,4*dpr,0,7);cx.fill();});
+  const M=[(A[0]+B[0])/2,(A[1]+B[1])/2],tx=L.toFixed(2).replace('.',',')+' m';cx.font=`700 ${13*dpr}px Inter,system-ui`;const tw=cx.measureText(tx).width+16*dpr;cx.fillStyle='#0B0B0B';cx.beginPath();cx.roundRect(M[0]-tw/2,M[1]-26*dpr,tw,22*dpr,11*dpr);cx.fill();cx.fillStyle='#fff';cx.textAlign='center';cx.fillText(tx,M[0],M[1]-10*dpr);}
+ const RS=rooms();let tot=0;RS.forEach(r=>{tot+=r.a;const P=toS(r.p),d=devicePixelRatio;if(WLB.some(q=>Math.abs(q[0]-P[0])<70*d&&Math.abs(q[1]-P[1])<26*d))P[1]+=24*d;r.sp=P;cx.textAlign='center';cx.font=`700 ${12.5*d}px Archivo,Inter,system-ui`;cx.fillStyle=r.auto?'rgba(11,11,11,.55)':'#0B0B0B';cx.fillText(r.n,P[0],P[1]-2*d);cx.font=`500 ${11.5*d}px Inter,system-ui`;cx.fillStyle='#6B6B6B';cx.fillText(r.a.toFixed(1).replace('.',',')+' m²',P[0],P[1]+12*d);});
  const ta=$('area');if(ta){ta.hidden=!RS.length;ta.textContent='Plocha '+lvl+': '+tot.toFixed(1).replace('.',',')+' m² · '+RS.length+' miest.';}
  $('empE').hidden=!!(H.walls.length||bg||H.plot);}
 cv.addEventListener('contextmenu',e=>e.preventDefault());
@@ -81,26 +105,30 @@ cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set
  if(e.button===2){drag={k:'pan',e0:[e.clientX,e.clientY],v0:{...view}};return;}
  if(tool==='cal'){calPts.push(p);draw();if(calPts.length===2)calDone();return;}
  if(tool==='wall'){drag={k:'new',a:snapPt(p),b:snapPt(p)};}
- else if(tool==='move'){const en=hitEnd(p);if(en){snap();drag={k:'end',w:en.w,key:en.k};return;}const op=hitOp(p);if(op){snap();drag={k:'op',...op};return;}const h=hitWall(p);if(h){snap();drag={k:'wall',w:h.w,p0:p,a:[...h.w.start],b:[...h.w.end]};return;}drag={k:'pan',e0:[e.clientX,e.clientY],v0:{...view}};}
- else if(tool==='door'||tool==='window'){const h=hitWall(p);if(!h)return;const d=tool==='door',wd=d?.9:1.2,g=geo(h.w);if(g.L<wd+.1){const m='Stena je príliš krátka na '+(d?'dvere (min. 1 m).':'okno (min. 1,3 m).');$('hint').textContent=m;toast(m,'warn');return;}snap();
+ else if(tool==='meas'){const s=snapPt(p);MEAS={a:s,b:s};drag={k:'meas'};draw();}
+ else if(tool==='furn'){const f=hitFurn(p);if(f){snap();f.r=((f.r||0)+1)%4;save();draw();toast('Otočené o 90°.','ok',1500);return;}furnPick(p);}
+ else if(tool==='move'){const ff=hitFurn(p);if(ff&&!hitEnd(p)&&!hitWall(p)){snap();drag={k:'furn',f:ff,d:[ff.p[0]-p[0],ff.p[1]-p[1]]};return;}const en=hitEnd(p);if(en){snap();drag={k:'end',w:en.w,key:en.k};return;}const op=hitOp(p);if(op){snap();drag={k:'op',...op};return;}const h=hitWall(p);if(h){snap();drag={k:'wall',w:h.w,p0:p,a:[...h.w.start],b:[...h.w.end]};return;}drag={k:'pan',e0:[e.clientX,e.clientY],v0:{...view}};}
+ else if(tool==='door'||tool==='window'){const eo=hitOp(p);if(eo){opDlg(eo);return;}const h=hitWall(p);if(!h)return;const d=tool==='door',wd=d?.9:1.2,g=geo(h.w);if(g.L<wd+.1){const m='Stena je príliš krátka na '+(d?'dvere (min. 1 m).':'okno (min. 1,3 m).');$('hint').textContent=m;toast(m,'warn');return;}snap();
   (h.w.openings=h.w.openings||[]).push(d?{type:'door',offset:Math.max(.05,Math.min(g.L-wd-.05,r2(h.s-wd/2))),width:wd,sill:0,height:2.05}:{type:'window',offset:Math.max(.05,Math.min(g.L-wd-.05,r2(h.s-wd/2))),width:wd,sill:.9,height:1.4});save();draw();}
  else if(tool==='stair'){const ex=(H.stairs||[]).find(st=>{const r=stairRect(st);return st.level===lvl&&p[0]>r[0]&&p[0]<r[2]&&p[1]>r[1]&&p[1]<r[3];});if(ex){snap();ex.dir=((ex.dir||0)+Math.PI/2)%(2*Math.PI);if(ex.dir<1e-6)ex.dir=0;save();draw();toast('Schody otočené o 90°.','ok',1800);return;}snap();(H.stairs=H.stairs||[]).push({level:lvl,pos:[r2(p[0]),r2(p[1])],dir:0,width:1,length:3.6});save();draw();}
- else if(tool==='del'){const si=(H.stairs||[]).findIndex(st=>{const r=stairRect(st);return (st.level===lvl||H.levels[H.levels.indexOf(LV())-1]?.name===st.level)&&p[0]>r[0]&&p[0]<r[2]&&p[1]>r[1]&&p[1]<r[3];});if(si>=0){snap();H.stairs.splice(si,1);save();draw();return;}const op=hitOp(p);if(op){snap();op.w.openings.splice(op.w.openings.indexOf(op.o),1);}else{const h=hitWall(p);if(!h)return;snap();H.walls.splice(H.walls.indexOf(h.w),1);}save();draw();}});
+ else if(tool==='del'){const ff=hitFurn(p);if(ff&&!hitWall(p)){snap();H.furn.splice(H.furn.indexOf(ff),1);save();draw();return;}const si=(H.stairs||[]).findIndex(st=>{const r=stairRect(st);return (st.level===lvl||H.levels[H.levels.indexOf(LV())-1]?.name===st.level)&&p[0]>r[0]&&p[0]<r[2]&&p[1]>r[1]&&p[1]<r[3];});if(si>=0){snap();H.stairs.splice(si,1);save();draw();return;}const op=hitOp(p);if(op){snap();op.w.openings.splice(op.w.openings.indexOf(op.o),1);}else{const h=hitWall(p);if(!h)return;snap();H.walls.splice(H.walls.indexOf(h.w),1);}save();draw();}});
 cv.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,e);
  if(pinch&&ptrs.size>=2){const t=two(),k=t.d/pinch.d,r=cv.getBoundingClientRect();view.s=pinch.v0.s*k;view.x=pinch.w0[0]-(t.c[0]-r.left)*devicePixelRatio/view.s;view.y=pinch.w0[1]-(t.c[1]-r.top)*devicePixelRatio/view.s;draw();return;}
  if(!drag)return;const p=toW(e);
  if(drag.k==='pan'){view.x=drag.v0.x-(e.clientX-drag.e0[0])*devicePixelRatio/view.s;view.y=drag.v0.y-(e.clientY-drag.e0[1])*devicePixelRatio/view.s;}
- else if(drag.k==='new'){drag.b=ortho(drag.a,snapPt(p));}
+ else if(drag.k==='new'){const s=snapPt(p);drag.b=ortho(drag.a,s);if(s[0]===r2(p[0])&&s[1]===r2(p[1]))drag.b=align(drag.b,obl?null:drag.a);else GUIDES=[];}
+ else if(drag.k==='meas'){MEAS.b=snapPt(p);}
 draw();});
 // endpoint/wall/op dragging handled here to keep logic readable
 cv.addEventListener('pointermove',e=>{if(!drag)return;const p=toW(e);
  if(drag.k==='end')drag.w[drag.key]=ortho(drag.w[drag.key==='start'?'end':'start'],snapPt(p,drag.w));
  if(drag.k==='wall'){const d=[r2(p[0]-drag.p0[0]),r2(p[1]-drag.p0[1])];drag.w.start=[drag.a[0]+d[0],drag.a[1]+d[1]];drag.w.end=[drag.b[0]+d[0],drag.b[1]+d[1]];}
+ if(drag.k==='furn'){drag.f.p=[r2(p[0]+drag.d[0]),r2(p[1]+drag.d[1])];}
  if(drag.k==='op'){const q=proj(drag.w,p);drag.o.offset=Math.max(.05,Math.min(q.g.L-drag.o.width-.05,r2(q.s-drag.ds)));}
  draw();});
 const pu=e=>{ptrs.delete(e.pointerId);if(pinch){if(!ptrs.size)pinch=null;return;}if(!drag)return;if(e.type==='pointercancel'){drag=null;draw();return;}
  if(drag.k==='new'&&Math.hypot(drag.b[0]-drag.a[0],drag.b[1]-drag.a[1])>.2){snap();H.walls.push({id:'w'+Date.now(),level:lvl,start:drag.a,end:drag.b,thickness:+$('th').value/100,base:0,height:LV().height,openings:[]});}
- if(['end','wall','op'].includes(drag.k)&&undo.length&&undo[undo.length-1]===JSON.stringify(H))undo.pop();
+ if(['end','wall','op','furn'].includes(drag.k)&&undo.length&&undo[undo.length-1]===JSON.stringify(H))undo.pop();
  drag=null;save();draw();};
 cv.addEventListener('pointerup',pu);cv.addEventListener('pointercancel',pu);
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
@@ -137,7 +165,7 @@ $('lvl').onchange=async e=>{const v=e.target.value;if(v!=='+'){goLvl(v);return;}
  if(r.v==='c')ws.forEach((w,i)=>H.walls.push({...JSON.parse(JSON.stringify(w)),id:'c'+Date.now()+i,level:nm,height:L.height,openings:(w.openings||[]).filter(o=>o.type==='window')}));
  let xs=ws.flatMap(w=>[w.start[0],w.end[0]]),zs=ws.flatMap(w=>[w.start[1],w.end[1]]);if(!xs.length){xs=[0];zs=[0];}
  (H.stairs=H.stairs||[]).push({level:top.name,pos:[r2(Math.min(...xs)+.5),r2(Math.min(...zs)+.5)],dir:0,width:1,length:3.6});lvl=nm;delete LV().ul;setBg();banner();lvUI();save();fit();toast('Podlažie '+nm+' pridané.','ok');};
-function setTool(t){const b=document.querySelector('[data-t='+t+']');tool=t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));$('hint').textContent=HINT[t];calPts=[];draw();}
+function setTool(t){MEAS=null;GUIDES=[];const b=document.querySelector('[data-t='+t+']');tool=t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));$('hint').textContent=HINT[t];calPts=[];draw();}
 $('cal').onclick=()=>{if(!H.underlay){toast('Najprv nahrajte výkres pre toto podlažie.','warn');return;}setTool('cal');};
 async function calDone(){const d=Math.hypot(calPts[1][0]-calPts[0][0],calPts[1][1]-calPts[0][1]);
  const r=await dlg('Aká dlhá je označená úsečka?','<input type="text" inputmode="decimal" placeholder="napr. 8,5"> <p class="note">Zadajte v metroch.</p>',[['Zrušiť',null],['Nastaviť mierku',1,'go']]);
@@ -168,7 +196,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='ask'&&H.walls.length){const r=await dlg('Nahrali ste výkres','<p>Tento projekt už má nakreslené steny. Čo chcete urobiť?</p>',[['Zrušiť',null],['Vymeniť podklad v tomto projekte','swap'],['Nový projekt z tohto výkresu','new','go']]);if(!r||!r.v)return;m=r.v;}
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
-async function act(m){$('dd').classList.remove('on');if(m==='png'){exportPng();return;}
+async function act(m){$('dd').classList.remove('on');if(m==='png'||m==='a4'||m==='a3'){exportHi(m);return;}if(m==='furnish'){furnish();return;}if(m==='mirror'){mirror();return;}
  if(m==='new')wizNew();
  if(m==='newimg')pickImg('new');if(m==='open')$('ld').click();if(m==='mine')show('home');
  if(m==='demo')newP('Ukážkový dom',JSON.parse(JSON.stringify(DEMO.walls)),null,JSON.parse(JSON.stringify(DEMO.plot)));
@@ -205,8 +233,8 @@ $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{tr
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
 let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js');}return V;};
-function wUI(v){$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
-let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(n!==genN)return;m.setRoof(roof);const ok=m.gen(H,anim);$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
+function wUI(v){jumpsUI(v);$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
+let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(n!==genN)return;m.setRoof(roof);const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
 $('snap3').onclick=async()=>{const m=await v3();const u=m.snap&&m.snap();if(u){const b=await(await fetch(u)).blob();dl(b,(H.name||'dom')+'_3d.png');toast('3D snímka uložená (PNG).','ok');}};
 $('glb').onclick=async()=>{const m=await v3();try{const b=await m.glb();if(b){dl(b,(H.name||'dom')+'.glb');toast('3D model stiahnutý (GLB).','ok');}}catch(e){toast('Export zlyhal.','err');}};
@@ -220,6 +248,7 @@ $('roof').onchange=e=>{roof=e.target.value;if(H)H.roof=roof;gen(false);};
 function show(s,nopush){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.s===s));document.querySelectorAll('.scr').forEach(x=>x.classList.toggle('on',x.id===s));
  $('tbed').classList.toggle('on',s==='ed');if(s==='home'){home();}$('tbvw').classList.toggle('on',s==='vw');document.querySelector('.seg').style.visibility=s==='home'?'hidden':'';$('pname').style.display=s==='home'?'none':'';const vb=$('VRButton');if(vb)vb.style.display=s==='vw'&&!/NOT|ONLY/i.test(vb.textContent)?'':'none';if(s==='vw')gen(true);else if(s==='ed')requestAnimationFrame(fit);
  if(H&&s!=='home')$('pname').textContent=H.name;
+ if(s!=='vw')$('jumps').hidden=true;
  if(!nopush&&!TH){const h=s==='home'?'':'#p='+PID+(s==='vw'?'&v=3d':'');if(location.hash!==h)history.pushState(null,'',h||location.pathname);}}
 function route(){const m=location.hash.match(/^#p=([^&]+)(&v=3d)?/);if(m&&localStorage.getItem('vks_p_'+m[1])){try{if(PID!==m[1]||!H){PID=m[1];H=JSON.parse(localStorage.getItem('vks_p_'+m[1]));if(!H.levels)H.levels=JSON.parse(JSON.stringify(DEMO.levels));lvl=H.levels[0].name;syncUl();lvUI();undo=[];setBg();banner();}show(m[2]?'vw':'ed',true);return;}catch(e){}}
  show('home',true);}
@@ -240,7 +269,57 @@ cv.addEventListener('dblclick',async e=>{if(tool!=='move')return;const h=hitWall
 function exportPng(){fit();draw();const d=devicePixelRatio,pad=70*d,o=document.createElement('canvas');o.width=cv.width;o.height=cv.height+pad;const c=o.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,o.width,o.height);c.drawImage(cv,0,pad);
  c.fillStyle='#0B0B0B';c.font=`800 ${22*d}px Archivo,Inter,sans-serif`;c.textAlign='left';c.fillText((H.name||'Pôdorys')+' — '+lvl,20*d,32*d);c.font=`500 ${13*d}px Inter,sans-serif`;c.fillStyle='#6B6B6B';c.fillText(($('area').textContent||'')+'  ·  Vkroč Štúdio',20*d,54*d);c.fillStyle='#E2552D';c.fillRect(0,pad-3*d,o.width,3*d);
  o.toBlob(b=>{dl(b,(H.name||'podorys')+'_'+lvl+'.png');toast('Pôdorys exportovaný (PNG).','ok');});}
-window.__exportPng=exportPng;
+window.__exportPng=()=>exportHi('png');
 addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)||e.ctrlKey||e.metaKey||e.altKey||$('ov').classList.contains('on')||!$('ed').classList.contains('on'))return;
- const m={w:'wall',m:'move',d:'door',o:'window',s:'stair',x:'del',Delete:'del'}[e.key];if(m){setTool(m);return;}
- if(e.key==='f'){fit();draw();}else if(e.key==='3')$('gen').click();else if(e.key==='?')toast('Skratky: W stena · M posun · D dvere · O okno · S schody · X mazať · F prispôsobiť · 3 = 3D · Ctrl+Z späť','info',6000);});
+ const m={w:'wall',m:'move',d:'door',o:'window',s:'stair',x:'del',Delete:'del',r:'meas',n:'furn'}[e.key];if(m){setTool(m);return;}
+ if(e.key==='f'){fit();draw();}else if(e.key==='3')$('gen').click();else if(e.key==='?')toast('Skratky: W stena · M posun · R meranie · N nábytok · D dvere · O okno · S schody · X mazať · F prispôsobiť · 3 = 3D · Ctrl+Z späť','info',6000);});
+
+async function furnPick(p){const r=await dlg('Vložiť nábytok','<p>Vyberte kus nábytku. Presúvate ho nástrojom Posun, otáčate ťuknutím.</p>',Object.entries(FUR).map(([k,v])=>[v[0],k,'']));if(!r||!r.v)return;snap();(H.furn=H.furn||[]).push({t:r.v,p:[r2(p[0]),r2(p[1])],r:0,level:lvl});save();draw();}
+const OPK={door:{single:['Jednokrídlové',.9,2.05,0],double:['Dvojkrídlové',1.4,2.05,0],sliding:['Posuvné',1,2.05,0],entrance:['Vchodové',1,2.1,0]},window:{standard:['Štandardné',1.2,1.4,.9],french:['Francúzske (po zem)',1,2.2,0],small:['Malé (kúpeľňa)',.6,.6,1.5],band:['Pásové',2.4,.9,1.2]}};
+async function opDlg(op){const o=op.o,T=OPK[o.type],kd=o.kind||(o.type==='door'?'single':'standard'),c=v=>Math.round(v*100);
+ const body='<label>Typ<select name="k">'+Object.entries(T).map(([k,v])=>'<option value="'+k+'"'+(k===kd?' selected':'')+'>'+v[0]+'</option>').join('')+'</select></label><div style="display:flex;gap:8px"><label>Šírka (cm)<input type="number" name="w" value="'+c(o.width)+'"></label><label>Výška (cm)<input type="number" name="h" value="'+c(o.height)+'"></label></div>'+
+ (o.type==='window'?'<label>Parapet (cm)<input type="number" name="s" value="'+c(o.sill||0)+'"></label>':'<div style="display:flex;gap:8px"><label>Pánty<select name="g"><option value="L">vľavo</option><option value="R"'+(o.hinge==='R'?' selected':'')+'>vpravo</option></select></label><label>Otváranie<select name="o"><option value="0">dnu</option><option value="1"'+(o.out?' selected':'')+'>von</option></select></label></div>');
+ const r=await dlg(o.type==='door'?'Dvere':'Okno',body,[['Odstrániť','del','dang'],['Zrušiť',0],['Uložiť',1,'go','check']]);if(!r||!r.v)return;snap();
+ if(r.v==='del'){op.w.openings.splice(op.w.openings.indexOf(o),1);save();draw();return;}
+ const f=r.f,nk=f.k||kd;let w=+f.w/100,h=+f.h/100,s=f.s!=null?+f.s/100:o.sill;if(nk!==kd&&Math.abs(w-o.width)<.005&&Math.abs(h-o.height)<.005){w=T[nk][1];h=T[nk][2];s=T[nk][3];}
+ const L=geo(op.w).L;w=Math.max(.3,Math.min(L-.1,w||o.width));Object.assign(o,{kind:nk,width:w,height:Math.max(.3,h||o.height),sill:o.type==='window'?Math.max(0,s||0):0});if(o.type==='door'){o.hinge=f.g||'L';o.out=f.o==='1';}o.offset=Math.max(.05,Math.min(L-w-.05,o.offset));save();draw();toast((o.type==='door'?'Dvere':'Okno')+': '+T[nk][0]+', '+c(w)+' × '+c(o.height)+' cm','ok');}
+cv.addEventListener('click',e=>{if(tool!=='move')return;const d=devicePixelRatio,r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*d,y=(e.clientY-r.top)*d;const rm=rooms().find(q=>q.sp&&Math.abs(q.sp[0]-x)<60*d&&Math.abs(q.sp[1]-y)<20*d);if(rm)nameDlg(rm);});
+function furnish(){const RS=rooms();if(!RS.length){toast('Najprv uzavrite steny miestností.','warn');return;}snap();H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!RS.some(r=>f.p[0]>r.bb[0]&&f.p[0]<r.bb[2]&&f.p[1]>r.bb[1]&&f.p[1]<r.bb[3]));let n=0;
+ RS.forEach(r=>{const[x0,z0,x1,z1]=[r.bb[0]+.05,r.bb[1]+.05,r.bb[2]-.05,r.bb[3]-.05],cx_=(x0+x1)/2,cz=(z0+z1)/2,W=x1-x0,D=z1-z0;
+  const put=(t,x,z,rr=0)=>{const F=FUR[t],[w,d]=rr%2?[F[2],F[1]]:[F[1],F[2]];x=Math.max(x0+w/2,Math.min(x1-w/2,x));z=Math.max(z0+d/2,Math.min(z1-d/2,z));if(w>W||d>D)return;if(roomAt(RC[lvl],[x,z])!==r.id)return;H.furn.push({t,p:[r2(x),r2(z)],r:rr,level:lvl});n++;};
+  const nm=r.n.toLowerCase();
+  if(nm.startsWith('obýva')){put('sofa',cx_,z1,2);put('ctable',cx_,z1-1.6);put('tv',cx_,z0);put('plant',x0,z0);if(nm.includes('kuch')){put('kitch',x0+1.3,z0);put('table',x0+1.3,cz);}else put('armch',x0+.5,z1-1.6,1);}
+  else if(nm.startsWith('spál')){put('bed',cx_,z0+1.05);put('ward',cx_,z1,2);}
+  else if(nm.includes('izba')){put('bed1',x0+.45,z0+1);put('desk',x1-.6,z0);put('ward',x1,z1-.9,3);}
+  else if(nm.startsWith('prac')){put('desk',cx_,z0);put('shelf',x0,cz,1);}
+  else if(nm.startsWith('kuch')){put('kitch',cx_,z0);put('fridge',x1,z0);put('table',cx_,z1-.9);}
+  else if(nm.startsWith('jed')){put('table',cx_,cz);}
+  else if(nm.startsWith('kúp')){W>=1.75?put('bath',x0,z0):put('shower',x0,z0);put('sink',x1,z1,2);if(W>=2.3)put('wc',x1,z0);}
+  else if(nm==='wc'){put('wc',cx_,z0);}
+  else if(nm.startsWith('pred')||nm.startsWith('šat')){put('shelf',x0,z0);}});
+ save();draw();toast('Zariadené: '+n+' kusov nábytku. Názvy miestností upravíte ťuknutím na ne (Posun).','ok',5000);}
+function mirror(){const ws=WL();if(!ws.length)return;snap();let a=1e9,b=-1e9;ws.forEach(w=>{a=Math.min(a,w.start[0],w.end[0]);b=Math.max(b,w.start[0],w.end[0]);});const m=x=>+(a+b-x).toFixed(3);
+ ws.forEach(w=>{w.start=[m(w.start[0]),w.start[1]];w.end=[m(w.end[0]),w.end[1]];(w.openings||[]).forEach(o=>{if(o.type==='door')o.hinge=o.hinge==='R'?'L':'R';});});FL().forEach(f=>f.p=[m(f.p[0]),f.p[1]]);(H.rn||[]).forEach(e=>{if(e.level===lvl)e.p=[m(e.p[0]),e.p[1]];});
+ (H.stairs||[]).filter(s=>s.level===lvl).forEach(s=>{const r=stairRect(s),t=[m(r[2]),m(r[0])];s.dir=Math.PI-(s.dir||0);const q=stairRect(s);s.pos=[s.pos[0]+t[0]-q[0],s.pos[1]];});save();fit();toast('Podlažie zrkadlené.','ok');}
+function fitTo(W,Hh){cv.width=W;cv.height=Hh;let xs=[],zs=[];H.walls.filter(w=>w.level===lvl).forEach(w=>{xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);});FL().forEach(f=>{xs.push(f.p[0]);zs.push(f.p[1]);});if(H.plot)H.plot.pts.forEach(p=>{xs.push(p[0]);zs.push(p[1]);});if(!xs.length){xs=[0,10];zs=[0,8];}
+ const pd=1.2,x0=Math.min(...xs)-pd,x1=Math.max(...xs)+pd,z0=Math.min(...zs)-pd,z1=Math.max(...zs)+pd;view.s=Math.min(W/(x1-x0),Hh/(z1-z0));view.x=x0-(W/view.s-(x1-x0))/2;view.y=z0-(Hh/view.s-(z1-z0))/2;}
+function renderPlan(L,W,Hh,k){const sl=lvl,st=tool;lvl=L;tool='none';EXP=1;const DD=Object.getOwnPropertyDescriptor(window,'devicePixelRatio');Object.defineProperty(window,'devicePixelRatio',{value:k,configurable:true});let o;try{fitTo(W,Hh);draw();o=document.createElement('canvas');o.width=W;o.height=Hh;o.getContext('2d').drawImage(cv,0,0);o.s=view.s;}finally{if(DD)Object.defineProperty(window,'devicePixelRatio',DD);else delete window.devicePixelRatio;EXP=0;lvl=sl;tool=st;fit();}return o;}
+function page(L,PW,PH){const k=PW/1500,c=document.createElement('canvas');c.width=PW;c.height=PH;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,PW,PH);const m=40*k,tb=150*k;
+ const pl=renderPlan(L,PW-2*m,PH-2*m-tb,k);x.drawImage(pl,m,m);x.strokeStyle='#0B0B0B';x.lineWidth=1.5*k;x.strokeRect(m/2,m/2,PW-m,PH-m);
+ const y0=PH-m-tb+14*k,RS=rooms(L),tot=RS.reduce((s,r)=>s+r.a,0);x.fillStyle='#0B0B0B';x.fillRect(m,y0,330*k,tb-14*k);x.font=`800 ${34*k}px Archivo,Inter,sans-serif`;x.textAlign='left';x.fillStyle='#fff';x.fillText('VKRO',m+22*k,y0+52*k);const w1=x.measureText('VKRO').width;x.fillStyle='#E2552D';x.fillText('Č',m+22*k+w1,y0+52*k);
+ x.fillStyle='#fff';x.font=`600 ${15*k}px Inter,sans-serif`;x.fillText((H.name||'Projekt').slice(0,32),m+22*k,y0+84*k);x.fillStyle='#bdbdbd';x.font=`400 ${12*k}px Inter,sans-serif`;x.fillText('Podlažie '+L+' · '+new Date().toLocaleDateString('sk-SK'),m+22*k,y0+106*k);
+ x.fillStyle='#0B0B0B';x.font=`800 ${26*k}px Archivo,Inter,sans-serif`;x.fillText(tot.toFixed(1).replace('.',',')+' m²',m+360*k,y0+44*k);x.font=`500 ${11*k}px Inter,sans-serif`;x.fillStyle='#6B6B6B';x.fillText('ÚŽITKOVÁ PLOCHA · '+RS.length+' MIESTNOSTÍ',m+360*k,y0+64*k);
+ x.font=`400 ${12*k}px Inter,sans-serif`;x.fillStyle='#0B0B0B';RS.slice(0,15).forEach((r,i)=>{const col=Math.floor(i/5),row=i%5;x.fillText(r.n+' — '+r.a.toFixed(1).replace('.',',')+' m²',m+620*k+col*230*k,y0+20*k+row*20*k);});
+ const sb=pl.s,bx=PW-m-220*k,by=y0+70*k;x.fillStyle='#0B0B0B';x.font=`500 ${10*k}px Inter,sans-serif`;x.textAlign='center';for(let i=0;i<5;i++){x.fillStyle=i%2?'#fff':'#0B0B0B';x.fillRect(bx+i*sb,by,sb,6*k);x.strokeStyle='#0B0B0B';x.strokeRect(bx+i*sb,by,sb,6*k);x.fillStyle='#0B0B0B';x.fillText(i+'',bx+i*sb,by+20*k);}x.fillText('5 m',bx+5*sb,by+20*k);
+ x.strokeStyle='#0B0B0B';x.beginPath();x.moveTo(PW-m-26*k,y0+20*k);x.lineTo(PW-m-36*k,y0+50*k);x.lineTo(PW-m-26*k,y0+43*k);x.lineTo(PW-m-16*k,y0+50*k);x.closePath();x.fill();x.fillText('S',PW-m-26*k,y0+66*k);
+ x.fillStyle='#E2552D';x.fillRect(m,PH-m-3*k,PW-2*m,3*k);return c;}
+async function exportHi(kind){const lv=H.levels.filter(l=>H.walls.some(w=>w.level===l.name)).map(l=>l.name);if(!lv.length){toast('Pôdorys je prázdny.','warn');return;}busy('Pripravujem export…');await new Promise(r=>setTimeout(r,30));
+ try{if(kind==='png'){const c=page(lvl,4200,2970);await new Promise(r=>c.toBlob(b=>{dl(b,(H.name||'podorys')+'_'+lvl+'.png');r();}));toast('Pôdorys PNG (4200 × 2970 px).','ok');}
+  else{if(!window.jspdf)await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s);});const{jsPDF}=window.jspdf;const A3=kind==='a3',mw=A3?420:297,mh=A3?297:210,doc=new jsPDF({orientation:'landscape',unit:'mm',format:A3?'a3':'a4'});
+   lv.forEach((L,i)=>{if(i)doc.addPage();const c=page(L,A3?4961:3508,A3?3508:2480);doc.addImage(c.toDataURL('image/jpeg',.92),'JPEG',0,0,mw,mh);});dl(doc.output('blob'),(H.name||'podorys')+(A3?'_A3':'_A4')+'.pdf');toast('PDF '+(A3?'A3':'A4')+' · '+lv.length+' '+(lv.length>1?'strany':'strana')+'.','ok');}}
+ catch(e){console.warn(e);toast('Export zlyhal. Skontrolujte pripojenie.','err');}finally{busy(false);}}
+window.__exportHi=exportHi;
+
+async function jumpsUI(v){const J=$('jumps');if(!v||!H){J.hidden=true;return;}const m=await v3();J.innerHTML='';H.levels.forEach(l=>{const RS=rooms(l.name);RS.filter(r=>r.a>=2).forEach(r=>{const c=[(r.bb[0]+r.bb[2])/2,(r.bb[1]+r.bb[3])/2],RR=RC[l.name];let p=c;if(roomAt(RR,c)!==r.id){p=null;for(let k=0;k<400&&!p;k++){const q=[r.bb[0]+Math.random()*(r.bb[2]-r.bb[0]),r.bb[1]+Math.random()*(r.bb[3]-r.bb[1])];if(roomAt(RR,q)===r.id)p=q;}}if(!p)return;const b=document.createElement('button');b.textContent=r.n+(H.levels.length>1?' · '+l.name:'');b.onclick=()=>m.jump(p[0],p[1],l.elevation);J.appendChild(b);});});J.hidden=!J.children.length;}
+const setM=async()=>{H.mat={wall:$('mwall').value,floor:$('mfloor').value};save();(await v3()).setMat(H.mat);};$('mwall').onchange=setM;$('mfloor').onchange=setM;
+$('sunh').oninput=async e=>{const h=+e.target.value;$('sunv').textContent=Math.floor(h)+':'+(h%1?'30':'00');(await v3()).setSun(h);};
