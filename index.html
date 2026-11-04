@@ -28,6 +28,8 @@ html,body{overscroll-behavior:none;touch-action:manipulation}#v3 canvas{touch-ac
  #VRButton{bottom:calc(76px + env(safe-area-inset-bottom))!important;left:auto!important;right:12px!important;transform:none!important}}
 #joy{display:none;position:absolute;left:18px;bottom:24px;width:120px;height:120px;border-radius:50%;background:#ffffff22;border:2px solid #ffffff55;touch-action:none}#joy div{position:absolute;left:35px;top:35px;width:50px;height:50px;border-radius:50%;background:#1e6fd9cc}select{font:inherit;border-radius:8px;padding:4px}
 .viewonly .tab,.viewonly .ed-only,.viewonly #logo{pointer-events:none}.viewonly .tab,.viewonly .ed-only{display:none!important}
+#busy{position:fixed;inset:0;background:#0008;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff;font-size:16px}.spin{width:44px;height:44px;border:5px solid #fff4;border-top-color:#fff;border-radius:50%;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+#ban{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#b45309;color:#fff;padding:8px 12px;border-radius:10px;font-size:13.5px;max-width:92%;z-index:5}#ban button{margin-left:8px}.sl{display:inline-flex;align-items:center;gap:4px;font-size:13px;white-space:nowrap}.sl input{width:80px}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/","three-mesh-bvh":"https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.1/build/index.module.js"}}</script>
 </head><body>
@@ -38,15 +40,15 @@ html,body{overscroll-behavior:none;touch-action:manipulation}#v3 canvas{touch-ac
  <button id="undo">↶ Späť</button>
  <label>Hrúbka steny <input type="range" id="th" min="10" max="60" value="30"><b id="thv">30 cm</b></label><div class="sep"></div>
  <button id="obl">📐 Šikmé steny: VYP</button>
- <button id="upl">🖼 Nahrať výkres</button><button id="rec">🧱 Rozpoznať steny</button><button id="cal">📏 Mierka</button><button data-t="cal" hidden></button>
+ <button id="upl">🖼 Nahrať výkres</button><button id="rec">🧱 Rozpoznať steny</button><label class="sl">Citlivosť <input type="range" id="sens" min="0" max="1" step="0.05" value="0.5"></label><button id="cal">📏 Mierka</button><button data-t="cal" hidden></button>
  <label title="Pokročilé">šírka výkresu <input type="number" id="imw" value="12" step="0.5"> m</label>
  <div style="position:relative"><button id="menu">📁 Projekt ▾</button><div id="dd"><a data-m="new">➕ Nový projekt</a><a data-m="newimg">🖼 Nový projekt z výkresu</a><a data-m="open">📂 Otvoriť projekt (JSON)</a><a data-m="dl">💾 Uložiť / stiahnuť projekt</a><a data-m="mine">🗂 Moje projekty</a><a data-m="demo">🏠 Ukážkový dom</a></div></div>
  <button class="go" id="gen">▶ Vygenerovať 3D</button>
 </div>
 <div class="tb" id="tbvw"><button id="walk">🚶 Prechádzka</button><label>Strecha <select id="roof"><option value="flat">plochá</option><option value="gable">sedlová</option><option value="none">bez strechy</option></select></label><span class="ed-only" style="display:contents"><button id="glb">⬇ GLB</button><button id="share">🔗 Zdieľať</button></span></div>
 </header>
-<main><div class="scr" id="home"><div class="hw"><h2>Moje projekty</h2><div class="big"><button class="go" id="hNew">➕ Nový projekt</button><button class="go" id="hImg" style="background:#1e6fd9">🖼 Nový projekt z výkresu</button><button id="hDemo">🏠 Ukážka</button></div><div id="plist"></div></div></div><div class="scr on" id="ed"><canvas id="cv"></canvas><div id="hint"></div></div>
+<main><div class="scr" id="home"><div class="hw"><h2>Moje projekty</h2><div class="big"><button class="go" id="hNew">➕ Nový projekt</button><button class="go" id="hImg" style="background:#1e6fd9">🖼 Nový projekt z výkresu</button><button id="hDemo">🏠 Ukážka</button></div><div id="plist"></div></div></div><div class="scr on" id="ed"><canvas id="cv"></canvas><div id="hint"></div><div id="ban" hidden>📏 Mierka je odhadnutá. Pre presné rozmery ťuknite na 2 body známej dĺžky. <button id="banc">Kalibrovať</button></div></div>
 <div class="scr" id="vw"><div id="v3"></div><div id="st">Pripravené</div><div id="joy"><div></div></div></div></main>
-<div id="ov"><div id="ovb"></div></div><input type="file" id="img" accept="image/*" hidden><input type="file" id="ld" accept=".json" hidden>
+<div id="ov"><div id="ovb"></div></div><input type="file" id="img" accept="image/*,application/pdf,.pdf,.heic,.heif" hidden><input type="file" id="ld" accept=".json" hidden>
 <script type="module" src="app.js"></script>
 </body></html>

@@ -15,7 +15,7 @@ let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=nul
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
 function save(){if(!PID)return;const L=idx().filter(p=>p.id!==PID);L.unshift({id:PID,name:H.name,date:Date.now()});try{localStorage.setItem('vks_p_'+PID,JSON.stringify(H));localStorage.setItem(IDX,JSON.stringify(L));}catch(e){alert('Úložisko prehliadača je plné – stiahnite projekt ako súbor.');}}
 function setBg(){bg=null;bgW=H.underlay?H.underlay.w:12;$('imw').value=bgW;if(H.underlay){bg=new Image();bg.onload=draw;bg.src=H.underlay.src;}}
-function openP(id,data){PID=id;H=data||JSON.parse(localStorage.getItem('vks_p_'+id));if(!H.levels)H.levels=JSON.parse(JSON.stringify(DEMO.levels));lvl=H.levels[0].name;lvUI();undo=[];setBg();save();show('ed');}
+function openP(id,data){PID=id;H=data||JSON.parse(localStorage.getItem('vks_p_'+id));if(!H.levels)H.levels=JSON.parse(JSON.stringify(DEMO.levels));lvl=H.levels[0].name;lvUI();undo=[];setBg();save();show('ed');banner();if(H.underlay&&!H.walls.length)afterImg(1);}
 const newP=(name,walls=[],ul=null)=>openP('p'+Date.now(),{...JSON.parse(JSON.stringify(DEMO)),name,walls,underlay:ul});
 function load(){const L=idx();if(L.length){try{openP(L[0].id);return;}catch(e){}}newP('Ukážkový dom',JSON.parse(JSON.stringify(DEMO.walls)));}
 const snap=()=>{undo.push(JSON.stringify(H));if(undo.length>80)undo.shift();};
@@ -96,7 +96,16 @@ function dlg(title,body,btns){return new Promise(res=>{$('ovb').innerHTML='<h3>'
  $('ov').classList.add('on');const i=$('ovb').querySelector('input');if(i){i.focus();i.onkeydown=e=>{if(e.key==='Enter')bs.lastChild.click();};}});}
 var esc=t=>String(t).replace(/[<>&"]/g,c=>'&#'+c.charCodeAt(0)+';');
 async function askName(def){const r=await dlg('Názov projektu','<input type="text" value="'+esc(def)+'" placeholder="napr. Rodinný dom Kováč">',[['Zrušiť',null],['Vytvoriť',1,'go']]);return r?(r.name||def):null;}
-function readImg(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,2000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.8));};im.src=r.result;};r.readAsDataURL(f);});}
+const shrink=(im,M=2000)=>{const k=Math.min(1,M/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return c.toDataURL('image/jpeg',.85);};
+let pdfjs=null;
+async function readPdf(f){busy('Načítavam PDF…');try{if(!pdfjs){pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs');pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';}
+ const doc=await pdfjs.getDocument({data:await f.arrayBuffer()}).promise;let n=1;busy(0);
+ if(doc.numPages>1){const r=await dlg('PDF má '+doc.numPages+' strán','<p>Ktorú stranu použiť ako výkres?</p>',[['Zrušiť',null],...Array.from({length:Math.min(doc.numPages,12)},(_,i)=>['Strana '+(i+1),i+1,i?'':'go'])]);if(!r)return null;n=r.v;}
+ busy('Vykresľujem stranu '+n+'…');const pg=await doc.getPage(n),v0=pg.getViewport({scale:1}),sc=2400/Math.max(v0.width,v0.height),vp=pg.getViewport({scale:sc}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+ await pg.render({canvasContext:x,viewport:vp}).promise;busy(0);return shrink(c);}catch(e){busy(0);console.warn(e);dlg('PDF sa nepodarilo otvoriť','<p>Skúste výkres uložiť ako obrázok (JPG/PNG) alebo urobiť snímku obrazovky.</p>',[['OK',1,'go']]);return null;}}
+function readImg(f){if(/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name))return readPdf(f);
+ return new Promise(res=>{const u=URL.createObjectURL(f),im=new Image();im.onload=()=>{res(shrink(im));URL.revokeObjectURL(u);};
+  im.onerror=()=>{res(null);dlg('Obrázok sa nedá otvoriť',/hei[cf]/i.test(f.type+f.name)?'<p>Formát HEIC (fotky z iPhonu) tento prehliadač nevie zobraziť. Na iPhone: Nastavenia → Fotoaparát → Formáty → <b>Najkompatibilnejšie</b>, alebo pošlite fotku ako JPG / urobte snímku obrazovky.</p>':'<p>Podporované sú JPG, PNG, WebP a PDF.</p>',[['OK',1,'go']]);};im.src=u;});}
 let imgMode='ask',calPts=[];
 function lvUI(){const sel=$('lvl');sel.innerHTML=H.levels.map(l=>'<option'+(l.name===lvl?' selected':'')+'>'+esc(l.name)+'</option>').join('')+'<option value="+">➕ Pridať podlažie</option>';$('stb').hidden=H.levels.length<2;}
 $('lvl').onchange=async e=>{const v=e.target.value;if(v!=='+'){lvl=v;draw();return;}
@@ -111,21 +120,26 @@ $('cal').onclick=()=>{if(!H.underlay){dlg('Najprv nahrajte výkres','',[['OK',1]
 async function calDone(){const d=Math.hypot(calPts[1][0]-calPts[0][0],calPts[1][1]-calPts[0][1]);
  const r=await dlg('Aká dlhá je označená úsečka?','<input type="text" inputmode="decimal" placeholder="napr. 8,5"> <p style="color:#9fb3c8;font-size:13px">Zadajte v metroch.</p>',[['Zrušiť',null],['Nastaviť mierku',1,'go']]);
  const v=r&&parseFloat((r.name||'').replace(',','.'));setTool('wall');if(!v||!d)return;const f=v/d;snap();
- bgW=Math.round(bgW*f*100)/100;H.underlay.w=bgW;$('imw').value=bgW;H.walls.forEach(w=>{w.start=w.start.map(c=>Math.round(c*f*100)/100);w.end=w.end.map(c=>Math.round(c*f*100)/100);w.thickness=Math.max(.1,Math.round(w.thickness*f*20)/20);(w.openings||[]).forEach(o=>{o.offset*=f;o.width=Math.min(o.width,o.width*f>.5?o.width:o.width);});});save();fit();
- if(!H.walls.length)recog();}
-async function recog(){if(!bg||!bg.complete||!bg.width){dlg('Najprv nahrajte výkres','',[['OK',1]]);return;}$('hint').textContent='Rozpoznávam steny…';await new Promise(r=>setTimeout(r,30));
- let ws=[];try{ws=detectWalls(bg,bgW);}catch(e){console.warn(e);}
- if(!ws.length){$('hint').textContent=HINT[tool];dlg('Steny sa nepodarilo rozpoznať','<p>Na výkrese sme nenašli hrubé čiary stien (napr. ide o situáciu, fotku alebo slabý sken). Steny nakreslite ručne nástrojom ✏️ Stena – výkres zostane ako podklad.</p>',[['OK',1,'go']]);return;}
- snap();const lv=LV();H.walls=H.walls.concat(ws.map((w,i)=>({id:'a'+Date.now()+i,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:[]})));save();fit();
- $('hint').textContent='Rozpoznaných '+ws.length+' stien. Skontrolujte ich: ✋ Posunúť opraví polohu, 🗑 Zmazať odstráni chybné, ↶ Späť vráti. Mierku nastavte cez 📏.';}
-$('rec').onclick=()=>{if(H.walls.length)dlg('Rozpoznať steny znova?','<p>Nové steny sa pridajú k existujúcim.</p>',[['Zrušiť',null],['Rozpoznať',1,'go']]).then(r=>r&&recog());else recog();};
-function afterImg(){const go=()=>{fit();recog().then(()=>{if(H.walls.length)dlg('Nastavte mierku','<p>Pre správne rozmery označte na výkrese známu dĺžku: 📏 Mierka → ťuknite na 2 body → zadajte metre.</p>',[['Neskôr',null],['📏 Označiť teraz',1,'go']]).then(r=>r&&$('cal').click());});};bg.complete&&bg.width?go():bg.onload=()=>{draw();go();};}
+ bgW=Math.round(bgW*f*100)/100;H.underlay.w=bgW;H.underlay.cal=1;banner();$('imw').value=bgW;H.walls.forEach(w=>{w.start=w.start.map(c=>Math.round(c*f*100)/100);w.end=w.end.map(c=>Math.round(c*f*100)/100);w.thickness=Math.max(.1,Math.round(w.thickness*f*20)/20);(w.openings||[]).forEach(o=>{o.offset*=f;o.width=Math.min(o.width,o.width*f>.5?o.width:o.width);});});save();fit();
+ if(!H.walls.length)recog(1);}
+function busy(t){let b=$('busy');if(!t){if(b)b.remove();return;}if(!b){b=document.createElement('div');b.id='busy';document.body.appendChild(b);}b.innerHTML='<div class="spin"></div><div>'+t+'</div>';}
+function banner(){$('ban').hidden=!(H.underlay&&H.underlay.guess&&!H.underlay.cal&&H.walls.length);}
+let recBusy=0;
+async function recog(quiet){if(!bg||!bg.complete||!bg.width){if(!quiet)dlg('Najprv nahrajte výkres','',[['OK',1]]);return;}if(recBusy)return;recBusy=1;busy('Rozpoznávam steny…');await new Promise(r=>setTimeout(r,40));
+ let R=null;const man=H.walls.some(w=>!w.auto);try{R=detectWalls(bg,{sens:+$('sens').value,mW:H.underlay.cal||man?bgW:null,rect:H.underlay.rect||man});if(man)R.guess=false;}catch(e){console.warn(e);}
+ const ws=R?R.walls:[];busy(0);recBusy=0;snap();const lv=LV();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lv.name));
+ if(R&&!H.underlay.rect&&!man){H.underlay={src:R.canvas.toDataURL('image/jpeg',.85),w:R.w,rect:1,guess:R.guess};}else if(R&&R.guess&&!H.underlay.cal){H.underlay.w=R.w;H.underlay.guess=true;}
+ H.walls=H.walls.concat(ws.map((w,i)=>({id:'a'+Date.now()+i,auto:1,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:[]})));
+ save();const u=H.underlay;bgW=u.w;$('imw').value=bgW;if(!bg.src.endsWith(u.src.slice(-40))){bg=new Image();bg.onload=()=>{fit();};bg.src=u.src;}else fit();banner();
+ $('hint').textContent=ws.length?'✅ Rozpoznaných '+ws.length+' stien. Ak niečo chýba alebo prebýva, posuňte „Citlivosť“. Opravy: ✋ Posunúť, 🗑 Zmazať, ↶ Späť.':'⚠️ Steny sa nenašli. Skúste posunúť „Citlivosť“ alebo nakreslite steny ručne (✏️ Stena).';window.__rec=ws.length;}
+$('rec').onclick=()=>recog();let sT;$('sens').oninput=()=>{clearTimeout(sT);sT=setTimeout(()=>H.underlay&&recog(1),350);};$('banc').onclick=()=>$('cal').click();
+function afterImg(){const go=()=>{fit();recog(1);};bg.complete&&bg.width?go():bg.onload=()=>{draw();go();};}
 const pickImg=m=>{imgMode=m;$('img').value='';$('img').click();};
 $('upl').onclick=()=>pickImg('ask');
-$('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=await readImg(f);let m=imgMode;
+$('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=await readImg(f);if(!src)return;let m=imgMode;
  if(m==='ask'&&H.walls.length){const r=await dlg('Nahrali ste výkres','<p>Tento projekt už má nakreslené steny. Čo chcete urobiť?</p>',[['Zrušiť',null],['Vymeniť podklad v tomto projekte','swap'],['Nový projekt z tohto výkresu','new','go']]);if(!r)return;m=r.v;}
  if(m==='new'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20});afterImg();}}
- else{snap();H.underlay={src,w:bgW};setBg();save();bg.onload=()=>fit();}};
+ else{snap();H.walls=H.walls.filter(w=>!w.auto);H.underlay={src,w:20};setBg();save();afterImg();}};
 async function act(m){$('dd').classList.remove('on');
  if(m==='new'){const n=await askName('Nový dom');if(n)newP(n);}
  if(m==='newimg')pickImg('new');if(m==='open')$('ld').click();if(m==='mine')show('home');
