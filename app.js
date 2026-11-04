@@ -8,11 +8,14 @@ const DEMO={name:'Ukážkový dom',units:'m',levels:[{name:'1NP',elevation:0,hei
  W([0,0],[10,0],[{type:'window',offset:2,width:1.5,sill:.9,height:1.4},{type:'window',offset:6.5,width:1.5,sill:.9,height:1.4}]);
  W([10,0],[10,8],[{type:'window',offset:3,width:2,sill:.9,height:1.4}]);W([10,8],[0,8],[{type:'door',offset:4.5,width:1,sill:0,height:2.1}]);
  W([0,8],[0,0],[{type:'window',offset:3,width:1.2,sill:.9,height:1.4}]);W([6,0],[6,5],[{type:'door',offset:2,width:.9,sill:0,height:2.05}],.15);W([6,5],[10,5],[{type:'door',offset:1.5,width:.9,sill:0,height:2.05}],.15);})();
-let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null;
-function load(){try{H=JSON.parse(localStorage.getItem(KEY))}catch(e){}if(!H||!H.walls)H=JSON.parse(JSON.stringify(DEMO));}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(H))}catch(e){}};
+let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;
+const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
+function save(){if(!PID)return;const L=idx().filter(p=>p.id!==PID);L.unshift({id:PID,name:H.name,date:Date.now()});try{localStorage.setItem('vks_p_'+PID,JSON.stringify(H));localStorage.setItem(IDX,JSON.stringify(L));}catch(e){alert('Úložisko prehliadača je plné – stiahnite projekt ako súbor.');}}
+function setBg(){bg=null;bgW=H.underlay?H.underlay.w:12;$('imw').value=bgW;if(H.underlay){bg=new Image();bg.onload=draw;bg.src=H.underlay.src;}}
+function openP(id,data){PID=id;H=data||JSON.parse(localStorage.getItem('vks_p_'+id));if(!H.levels)H.levels=JSON.parse(JSON.stringify(DEMO.levels));undo=[];setBg();save();show('ed');}
+const newP=(name,walls=[],ul=null)=>openP('p'+Date.now(),{...JSON.parse(JSON.stringify(DEMO)),name,walls,underlay:ul});
+function load(){const L=idx();if(L.length){try{openP(L[0].id);return;}catch(e){}}newP('Ukážkový dom',JSON.parse(JSON.stringify(DEMO.walls)));}
 const snap=()=>{undo.push(JSON.stringify(H));if(undo.length>80)undo.shift();};
-load();
 // ---------- editor ----------
 const cv=$('cv'),cx=cv.getContext('2d');
 const HINT={wall:'Ťahaj myšou = nová stena (prichytáva sa ku koncom stien). Koliesko = zoom, pravé tlačidlo/2 prsty = posun.',move:'Ťahaj koniec steny (bodku) alebo celú stenu. Dvere/okno ťahaj po stene.',door:'Klikni na stenu = vložia sa dvere.',window:'Klikni na stenu = vloží sa okno.',del:'Klikni na stenu, dvere alebo okno = zmaže sa.'};
@@ -27,6 +30,7 @@ function hitWall(p){let b=null,bd=.35;H.walls.forEach(w=>{const q=proj(w,p);if(q
 function hitOp(p){for(const w of H.walls){const q=proj(w,p);if(Math.abs(q.t)>w.thickness/2+.15)continue;for(const o of w.openings||[])if(q.s>=o.offset&&q.s<=o.offset+o.width)return{w,o,ds:q.s-o.offset};}return null;}
 function hitEnd(p){let b=null,bd=12/view.s;H.walls.forEach(w=>['start','end'].forEach(k=>{const d=Math.hypot(w[k][0]-p[0],w[k][1]-p[1]);if(d<bd){bd=d;b={w,k};}}));return b;}
 function snapPt(p,skip){let b=[r2(p[0]),r2(p[1])],bd=15/view.s;H.walls.forEach(w=>{if(w===skip)return;['start','end'].forEach(k=>{const d=Math.hypot(w[k][0]-p[0],w[k][1]-p[1]);if(d<bd){bd=d;b=[...w[k]];}});});return b;}
+function ortho(a,b){if(obl)return b;return Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1])?[b[0],a[1]]:[a[0],b[1]];}
 function quad(w,s0,s1,t0,t1){const g=geo(w),v=[-g.u[1],g.u[0]];cx.beginPath();[[s0,t0],[s1,t0],[s1,t1],[s0,t1]].forEach(([s,t],i)=>{const P=toS([g.x0+g.u[0]*s+v[0]*t,g.z0+g.u[1]*s+v[1]*t]);i?cx.lineTo(...P):cx.moveTo(...P);});cx.closePath();cx.fill();}
 function draw(){cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#f7f8fa';cx.fillRect(0,0,cv.width,cv.height);
  if(bg){const P=toS([0,0]),w=bgW*view.s;cx.globalAlpha=.45;cx.drawImage(bg,P[0],P[1],w,w*bg.height/bg.width);cx.globalAlpha=1;}
@@ -49,11 +53,11 @@ cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set
  else if(tool==='del'){const op=hitOp(p);if(op){snap();op.w.openings.splice(op.w.openings.indexOf(op.o),1);}else{const h=hitWall(p);if(!h)return;snap();H.walls.splice(H.walls.indexOf(h.w),1);}save();draw();}});
 cv.addEventListener('pointermove',e=>{if(!drag)return;const p=toW(e);
  if(drag.k==='pan'){view.x=drag.v0.x-(e.clientX-drag.e0[0])*devicePixelRatio/view.s;view.y=drag.v0.y-(e.clientY-drag.e0[1])*devicePixelRatio/view.s;}
- else if(drag.k==='new'){let b=snapPt(p);const dx=Math.abs(b[0]-drag.a[0]),dz=Math.abs(b[1]-drag.a[1]);if(dx<.25*dz)b[0]=drag.a[0];if(dz<.25*dx)b[1]=drag.a[1];drag.b=b;}
+ else if(drag.k==='new'){drag.b=ortho(drag.a,snapPt(p));}
 draw();});
 // endpoint/wall/op dragging handled here to keep logic readable
 cv.addEventListener('pointermove',e=>{if(!drag)return;const p=toW(e);
- if(drag.k==='end')drag.w[drag.key]=snapPt(p,drag.w);
+ if(drag.k==='end')drag.w[drag.key]=ortho(drag.w[drag.key==='start'?'end':'start'],snapPt(p,drag.w));
  if(drag.k==='wall'){const d=[r2(p[0]-drag.p0[0]),r2(p[1]-drag.p0[1])];drag.w.start=[drag.a[0]+d[0],drag.a[1]+d[1]];drag.w.end=[drag.b[0]+d[0],drag.b[1]+d[1]];}
  if(drag.k==='op'){const q=proj(drag.w,p);drag.o.offset=Math.max(.05,Math.min(q.g.L-drag.o.width-.05,r2(q.s-drag.ds)));}
  draw();});
@@ -63,15 +67,35 @@ cv.addEventListener('pointerup',e=>{ptrs.delete(e.pointerId);if(!drag)return;
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tool=b.dataset.t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));$('hint').textContent=HINT[tool];draw();});
 $('hint').textContent=HINT.wall;
 $('undo').onclick=()=>{if(undo.length){H=JSON.parse(undo.pop());save();draw();}};
-addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='z')$('undo').onclick();});
+addEventListener('keydown',e=>{if(e.target.tagName!=='INPUT'&&(e.ctrlKey||e.metaKey)&&e.key==='z')$('undo').onclick();});
 $('th').oninput=()=>{$('thv').textContent=$('th').value+' cm';};
 $('th').onchange=()=>{snap();const t=+$('th').value/100;H.walls.forEach(w=>{if(w.thickness>=.2||t<.2)w.thickness=t;});save();draw();};
-$('img').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{bg=new Image();bg.onload=draw;bg.src=r.result;};r.readAsDataURL(f);};
-$('imw').oninput=()=>{bgW=+$('imw').value||12;draw();};
-$('menu').onclick=()=>{const c=prompt('Projekt:\n1 = stiahnuť JSON\n2 = načítať JSON zo súboru\n3 = nový prázdny projekt\n4 = ukážkový dom','1');
- if(c==='1'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(H,null,1)],{type:'application/json'}));a.download=(H.name||'dom')+'.json';a.click();}
- if(c==='2')$('ld').click();if(c==='3'){snap();H={...JSON.parse(JSON.stringify(DEMO)),name:'Nový dom',walls:[]};save();fit();}if(c==='4'){snap();H=JSON.parse(JSON.stringify(DEMO));save();fit();}};
-$('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;snap();H=j;if(!H.levels)H.levels=DEMO.levels;save();fit();}catch(_){alert('Neplatný súbor projektu.');}});};
+$('imw').oninput=()=>{bgW=+$('imw').value||12;if(H.underlay){H.underlay.w=bgW;save();}draw();};
+$('obl').onclick=()=>{obl=!obl;$('obl').textContent='📐 Šikmé steny: '+(obl?'ZAP':'VYP');$('obl').classList.toggle('on',obl);};
+function dlg(title,body,btns){return new Promise(res=>{$('ovb').innerHTML='<h3>'+title+'</h3>'+(body||'')+'<div class="bs"></div>';const bs=$('ovb').querySelector('.bs');
+ btns.forEach(([t,v,c])=>{const b=document.createElement('button');b.textContent=t;if(c)b.className=c;b.onclick=()=>{const i=$('ovb').querySelector('input');$('ov').classList.remove('on');res(v===null?null:{v,name:i&&i.value.trim()});};bs.appendChild(b);});
+ $('ov').classList.add('on');const i=$('ovb').querySelector('input');if(i){i.focus();i.onkeydown=e=>{if(e.key==='Enter')bs.lastChild.click();};}});}
+const esc=t=>String(t).replace(/[<>&"]/g,c=>'&#'+c.charCodeAt(0)+';');
+async function askName(def){const r=await dlg('Názov projektu','<input type="text" value="'+esc(def)+'" placeholder="napr. Rodinný dom Kováč">',[['Zrušiť',null],['Vytvoriť',1,'go']]);return r?(r.name||def):null;}
+function readImg(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,2000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.8));};im.src=r.result;};r.readAsDataURL(f);});}
+let imgMode='ask';
+const pickImg=m=>{imgMode=m;$('img').value='';$('img').click();};
+$('upl').onclick=()=>pickImg('ask');
+$('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=await readImg(f);let m=imgMode;
+ if(m==='ask'&&H.walls.length){const r=await dlg('Nahrali ste výkres','<p>Tento projekt už má nakreslené steny. Čo chcete urobiť?</p>',[['Zrušiť',null],['Vymeniť podklad v tomto projekte','swap'],['Nový projekt z tohto výkresu','new','go']]);if(!r)return;m=r.v;}
+ if(m==='new'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n)newP(n,[],{src,w:12});}
+ else{snap();H.underlay={src,w:bgW};setBg();save();draw();}};
+async function act(m){$('dd').classList.remove('on');
+ if(m==='new'){const n=await askName('Nový dom');if(n)newP(n);}
+ if(m==='newimg')pickImg('new');if(m==='open')$('ld').click();if(m==='mine')show('home');
+ if(m==='demo')newP('Ukážkový dom',JSON.parse(JSON.stringify(DEMO.walls)));
+ if(m==='dl'){save();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(H,null,1)],{type:'application/json'}));a.download=(H.name||'dom')+'.json';a.click();}}
+$('menu').onclick=e=>{e.stopPropagation();$('dd').classList.toggle('on');};document.addEventListener('click',()=>$('dd').classList.remove('on'));
+document.querySelectorAll('#dd a').forEach(a=>a.onclick=()=>act(a.dataset.m));
+$('logo').onclick=()=>show('home');$('hNew').onclick=()=>act('new');$('hImg').onclick=()=>act('newimg');$('hDemo').onclick=()=>act('demo');
+function home(){const L=idx();$('plist').innerHTML=L.length?'':'<p style="color:#9fb3c8">Zatiaľ žiadne projekty.</p>';L.forEach(p=>{const d=document.createElement('div');d.className='pc';d.innerHTML='<b>'+esc(p.name)+'</b><small>'+new Date(p.date).toLocaleString('sk-SK')+'</small><button class="x" title="Zmazať">🗑</button>';
+ d.onclick=()=>openP(p.id);d.querySelector('.x').onclick=async e=>{e.stopPropagation();if(await dlg('Zmazať projekt „'+esc(p.name)+'“?','',[['Nie',null],['Zmazať',1]])){localStorage.removeItem('vks_p_'+p.id);localStorage.setItem(IDX,JSON.stringify(idx().filter(x=>x.id!==p.id)));if(p.id===PID)PID=null;home();}};$('plist').appendChild(d);});}
+$('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){alert('Neplatný súbor projektu.');}});};
 addEventListener('resize',()=>{if($('ed').classList.contains('on'))fit();});
 // ---------- 3D ----------
 let R,scene,cam,rig,orb,world,loco,inited=false,walk=false;const clock=new THREE.Clock();
@@ -101,7 +125,8 @@ function gen(){if(!inited)init3();if(world)scene.remove(world);world=build();if(
  try{const col=colliderFromObject(colRoot),body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  place(walk);$('st').textContent='Model hotový ('+H.walls.length+' stien). Myš: otáčanie/zoom. Okuliare VR: tlačidlo dole.';}
 function show(s){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.s===s));document.querySelectorAll('.scr').forEach(x=>x.classList.toggle('on',x.id===s));
- $('tbed').classList.toggle('on',s==='ed');$('tbvw').classList.toggle('on',s==='vw');const vb=$('VRButton');if(vb)vb.style.display=s==='vw'?'':'none';if(s==='vw')gen();else fit();}
+ $('tbed').classList.toggle('on',s==='ed');if(s==='home'){home();}$('tbvw').classList.toggle('on',s==='vw');const vb=$('VRButton');if(vb)vb.style.display=s==='vw'?'':'none';if(s==='vw')gen();else if(s==='ed')fit();}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.s));$('gen').onclick=()=>show('vw');
+const _sh=show;
 $('walk').onclick=()=>{walk=!walk;place(walk);};
-fit();window.__ok=true;
+load();window.__ok=true;
