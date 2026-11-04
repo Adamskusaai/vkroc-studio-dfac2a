@@ -1,7 +1,7 @@
 // plan image -> walls (plain JS, no AI)
 // detectWalls(img,{sens,mW,rect}) -> {walls,canvas,w,guess,mode}
 export function detectWalls(img,o={}){const sens=o.sens??.5;
- let c=toCanvas(img,1400);
+ const c0=toCanvas(img,1400);if(o.site)return site(c0);let c=c0;
  if(!o.rect){c=deskew(c);c=rectify(c);}
  const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Uint8Array(W*H);
  for(let i=0;i<W*H;i++)g[i]=(d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11)|0;
@@ -11,7 +11,34 @@ export function detectWalls(img,o={}){const sens=o.sens??.5;
  cands.push({k:2,line:1,s:clean(pairUp(segs(dil(m,W,H,3),W,H,2),W,H),W,H)});
  cands.forEach(q=>q.L=q.s.reduce((a,s)=>a+s.b-s.a,0));const mx=Math.max(...cands.map(q=>q.L));
  const best=cands.find(q=>q.L>=.85*mx&&q.s.length>=3)||cands[0];
- return toMetres(best.s,W,H,o.mW,!!best.line,c);}
+ const R=toMetres(best.s,W,H,o.mW,!!best.line,c);R.mode='plan';
+ if(!planLike(best.s,W,H)){if(o.rect&&!o.mW)return{walls:[],canvas:c,w:o.w||15,mode:'none'};const S=site(c0);return S;}
+ return R;}
+// sanity: few walls, closed outline (bbox sides mostly covered), not a grid
+function planLike(ss,W,H){if(ss.length<3||ss.length>40)return false;
+ const x0=Math.min(...ss.map(s=>s.hz?s.a:s.c)),x1=Math.max(...ss.map(s=>s.hz?s.b:s.c)),y0=Math.min(...ss.map(s=>s.hz?s.c:s.a)),y1=Math.max(...ss.map(s=>s.hz?s.c:s.b));if(x1-x0<.1*W||y1-y0<.1*H)return false;
+ const cov=(hz,c,lo,hi)=>ss.filter(s=>s.hz===hz&&Math.abs(s.c-c)<2*s.t+3).reduce((a,s)=>a+Math.max(0,Math.min(s.b,hi)-Math.max(s.a,lo)),0)/(hi-lo);
+ const sides=[cov(1,y0,x0,x1),cov(1,y1,x0,x1),cov(0,x0,y0,y1),cov(0,x1,y0,y1)];
+ const tm=ss.map(s=>s.t).sort((a,b)=>a-b)[ss.length>>1];if(tm>.06*Math.max(x1-x0,y1-y0))return false; // blobs, not walls
+ const full=ss.filter(s=>(s.b-s.a)>.8*(s.hz?x1-x0:y1-y0)&&Math.min(Math.abs(s.c-(s.hz?y0:x0)),Math.abs(s.c-(s.hz?y1:x1)))>4*s.t).length;if(full>=3)return false; // street/grid
+ return sides.filter(v=>v>.45).length>=3&&sides.reduce((a,b)=>a+b)/4>.5;}
+// site plan: find building footprint = axis rectangle with hip-roof diagonals from its corners
+function site(c){const W=c.width,H=c.height,g=gray(c),m=binar(g,W,H,.5),Dm=Math.max(W,H);
+ const ss=segs(dil(m,W,H,3),W,H,2).filter(s=>s.t<.02*Dm),hs=ss.filter(s=>s.hz),vs=ss.filter(s=>!s.hz),tol=.008*Dm+3;
+ const on=(x,y)=>{for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=Math.round(x)+dx,yy=Math.round(y)+dy;if(xx>=0&&yy>=0&&xx<W&&yy<H&&m[yy*W+xx])return 1;}return 0;};
+ const D=c.getContext('2d').getImageData(0,0,W,H).data,sat=(x0,y0,x1,y1)=>{let n=0,k=0;for(let y=Math.max(0,y0|0);y<Math.min(H,y1);y+=3)for(let x=Math.max(0,x0|0);x<Math.min(W,x1);x+=3){const i=(y*W+x)*4,mx=Math.max(D[i],D[i+1],D[i+2]),mn=Math.min(D[i],D[i+1],D[i+2]);k++;if(mx-mn>35&&mx<250)n++;}return k?n/k:0;};
+ const cover=(s,lo,hi)=>Math.max(0,Math.min(s.b+tol,hi)-Math.max(s.a-tol,lo))/(hi-lo);let best=null;
+ for(const t of hs)for(const b of hs){const h=b.c-t.c;if(h<.03*Dm||h>.5*H)continue;
+  const L=vs.filter(v=>cover(v,t.c,b.c)>.8&&v.c>Math.max(t.a,b.a)-tol&&v.c<Math.min(t.b,b.b)+tol);
+  for(const l of L)for(const r of L){const w=r.c-l.c;if(w<.03*Dm||w>.5*W||w/h>4||h/w>4)continue;if(cover(t,l.c,r.c)<.8||cover(b,l.c,r.c)<.8)continue;
+   if(l.c<5||t.c<5||r.c>W-5||b.c>H-5)continue;
+   const d=Math.min(w,h)*.4;let hit=0;for(const[cx,cy,sx,sy]of[[l.c,t.c,1,1],[r.c,t.c,-1,1],[r.c,b.c,-1,-1],[l.c,b.c,1,-1]])for(let k=3;k<=20;k++)hit+=on(cx+sx*d*k/20,cy+sy*d*k/20);
+   const diag=hit/72;if(diag<.55||sat(l.c-.3*w,t.c-.3*h,r.c+.3*w,b.c+.3*h)>.12)continue;const cd=Math.hypot((l.c+r.c)/2-W/2,(t.c+b.c)/2-H/2)/Dm,sc=diag-.3*cd+.05*Math.min(w,h)/Dm;
+   if(!best||sc>best.sc)best={sc,x0:l.c,x1:r.c,y0:t.c,y1:b.c};}}
+ if(!best)return{walls:[],canvas:c,w:15,mode:'none',guess:true};
+ const lp=Math.max(best.x1-best.x0,best.y1-best.y0),ppm=lp/12,r=v=>Math.round(v/ppm*100)/100,{x0,x1,y0,y1}=best,T=.3;
+ const walls=[[x0,y0,x1,y0],[x1,y0,x1,y1],[x1,y1,x0,y1],[x0,y1,x0,y0]].map(q=>({start:[r(q[0]),r(q[1])],end:[r(q[2]),r(q[3])],thickness:T}));
+ return{walls,canvas:c,w:Math.round(W/ppm*100)/100,guess:true,mode:'site',longPx:lp,ppm};}
 function toCanvas(img,M){const S=Math.min(1,M/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*S);c.height=Math.round(img.height*S);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;}
 function gray(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Uint8Array(W*H);for(let i=0;i<W*H;i++)g[i]=(d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11)|0;return g;}
 function otsu(g){const h=new Array(256).fill(0);g.forEach(v=>h[v]++);let s=0,sB=0,wB=0,b=0,t=128;for(let i=0;i<256;i++)s+=i*h[i];for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=g.length-wB;if(!wF)break;sB+=i*h[i];const v=wB*wF*(sB/wB-(s-sB)/wF)**2;if(v>b){b=v;t=i;}}return t;}
@@ -27,7 +54,7 @@ function comps(m,W,H){const L=new Int32Array(W*H).fill(-1),st=[],cs=[];for(let i
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=W||yy>=H)continue;const q=yy*W+xx;if(m[q]&&L[q]<0){L[q]=id;st.push(q);}}}}return{L,cs};}
 const edge=(c,W,H)=>c.x0<=2||c.y0<=2||c.x1>=W-3||c.y1>=H-3,big=(c,W,H)=>(c.x1-c.x0)>.2*W||(c.y1-c.y0)>.2*H;
 function noBorder(cs,W,H){return cs.some(c=>!edge(c,W,H)&&big(c,W,H));}
-function dropSmall(m,W,H,minD){const{L,cs}=comps(m,W,H),o=new Uint8Array(W*H),nb=noBorder(cs,W,H);for(let i=0;i<W*H;i++)if(L[i]>=0){const c=cs[L[i]];if(Math.max(c.x1-c.x0,c.y1-c.y0)>=minD&&!(nb&&edge(c,W,H)))o[i]=1;}return o;}
+function dropSmall(m,W,H,minD){const{L,cs}=comps(m,W,H),o=new Uint8Array(W*H),nb=noBorder(cs,W,H);for(let i=0;i<W*H;i++)if(L[i]>=0){const c=cs[L[i]];const bw=c.x1-c.x0+1,bh=c.y1-c.y0+1;if(Math.max(bw,bh)>=minD&&!(nb&&edge(c,W,H))&&!(Math.min(bw,bh)>.04*Math.max(W,H)&&c.n>.5*bw*bh))o[i]=1;}return o;}
 // typical stroke width = mode of short perpendicular runs
 function lineW(m,W,H){const h=new Array(41).fill(0);for(let y=0;y<H;y+=2){let r=0;for(let x=0;x<=W;x++){if(x<W&&m[y*W+x])r++;else{if(r&&r<=40)h[r]++;r=0;}}}for(let x=0;x<W;x+=2){let r=0;for(let y=0;y<=H;y++){if(y<H&&m[y*W+x])r++;else{if(r&&r<=40)h[r]++;r=0;}}}
  let b=1;for(let i=1;i<=40;i++)if(h[i]>h[b])b=i;return b;}
