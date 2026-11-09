@@ -113,28 +113,30 @@ function proc(type, F, cols) {
 
   if (type === 'bed' || type === 'bed1') {
     box(g, wood, 0, 0.12, 0, w, 0.24, d);
-    box(g, std('#f7f4ee', 0.9), 0, 0.38, 0.02, w - 0.1, 0.16, d - 0.14);
+    box(g, std('#f0ebe3', 0.9), 0, 0.36, 0.02, w - 0.08, 0.14, d - 0.12);
     box(g, wood, 0, 0.45, -d / 2 + 0.04, w, 0.7, 0.08);
-    const pw = type === 'bed' ? w * 0.38 : w * 0.55;
-    box(g, std('#fffaf3', 0.95), type === 'bed' ? -w * 0.22 : 0, 0.55, -d / 2 + 0.28, pw, 0.12, 0.4);
-    if (type === 'bed') box(g, std('#fffaf3', 0.95), w * 0.22, 0.55, -d / 2 + 0.28, pw, 0.12, 0.4);
-    box(g, std(cols.bed || '#cbb9a0', 0.9), 0, 0.5, d * 0.12, w - 0.12, 0.06, d * 0.55);
+    const duvet = std(cols.bed || '#7a5535', 0.88);
+    box(g, duvet, 0, 0.48, d * 0.06, w - 0.08, 0.12, d * 0.72);
+    const pw = type === 'bed' ? w * 0.36 : w * 0.5;
+    box(g, std('#efe6d8', 0.95), type === 'bed' ? -w * 0.22 : 0, 0.58, -d / 2 + 0.32, pw, 0.1, 0.35);
+    if (type === 'bed') box(g, std('#efe6d8', 0.95), w * 0.22, 0.58, -d / 2 + 0.32, pw, 0.1, 0.35);
     // bedside
-    if (type === 'bed') {
+    {
       box(g, wood, -w / 2 - 0.28, 0.25, -d / 2 + 0.35, 0.4, 0.5, 0.4);
-      box(g, wood, w / 2 + 0.28, 0.25, -d / 2 + 0.35, 0.4, 0.5, 0.4);
+      if (type === 'bed') box(g, wood, w / 2 + 0.28, 0.25, -d / 2 + 0.35, 0.4, 0.5, 0.4);
       cyl(g, std('#f5e6c8', 0.4), -w / 2 - 0.28, 0.7, -d / 2 + 0.35, 0.06, 0.06, 0.25, 6);
     }
   } else if (type === 'sofa') {
-    box(g, wood, 0, 0.06, 0, w, 0.1, d);
-    box(g, fab, 0, 0.28, 0, w - 0.06, 0.28, d - 0.06);
+    const linen = std(cols.fab || '#7a6854', 0.88);
+    box(g, wood, 0, 0.05, 0, w, 0.08, d);
+    box(g, linen, 0, 0.26, 0.02, w - 0.08, 0.26, d - 0.12);
     for (let i = 0; i < 3; i++) {
-      const cw = (w - 0.12) / 3 - 0.04;
-      box(g, fab, -w / 2 + 0.1 + (i + 0.5) * ((w - 0.12) / 3), 0.5, 0.02, cw, 0.12, d - 0.2);
+      const cw = (w - 0.16) / 3 - 0.04;
+      box(g, linen, -w / 2 + 0.12 + (i + 0.5) * ((w - 0.16) / 3), 0.46, 0.04, cw, 0.1, d - 0.28);
     }
-    box(g, fab, 0, 0.58, -d / 2 + 0.1, w, 0.42, 0.14);
-    box(g, fab, -w / 2 + 0.08, 0.48, 0, 0.12, 0.36, d - 0.1);
-    box(g, fab, w / 2 - 0.08, 0.48, 0, 0.12, 0.36, d - 0.1);
+    box(g, linen, 0, 0.55, -d / 2 + 0.12, w - 0.04, 0.4, 0.16);
+    box(g, linen, -w / 2 + 0.09, 0.45, 0.02, 0.14, 0.34, d - 0.16);
+    box(g, linen, w / 2 - 0.09, 0.45, 0.02, 0.14, 0.34, d - 0.16);
   } else if (type === 'armch') {
     box(g, wood, 0, 0.06, 0, w, 0.1, d);
     box(g, fab, 0, 0.28, 0, w - 0.05, 0.28, d - 0.05);
@@ -148,8 +150,8 @@ function proc(type, F, cols) {
       box(g, wood, (a * w) / 2 - a * 0.08, 0.36, (b * d) / 2 - b * 0.08, 0.08, 0.72, 0.08)
     );
   } else if (type === 'ctable') {
-    box(g, wood, 0, 0.38, 0, w, 0.05, d);
-    box(g, wood, 0, 0.18, 0, w * 0.55, 0.36, d * 0.55);
+    box(g, wood, 0, 0.4, 0, w, 0.04, d);
+    [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,b])=>box(g, wood, a*(w/2-0.06), 0.2, b*(d/2-0.06), 0.05, 0.4, 0.05));
   } else if (type === 'desk') {
     box(g, wood, 0, 0.72, 0, w, 0.05, d);
     box(g, wood, -w / 2 + 0.08, 0.36, 0, 0.08, 0.72, d - 0.05);
@@ -160,30 +162,38 @@ function proc(type, F, cols) {
     box(g, dark, 0, 0.95, -d / 2 + 0.04, w * 0.85, 0.7, 0.05);
     box(g, std('#111', 0.3), 0, 0.95, -d / 2 + 0.02, w * 0.78, 0.62, 0.02);
   } else if (type === 'ward') {
-    box(g, white, 0, h / 2, 0, w, h, d);
-    box(g, wood, 0, h / 2, d / 2 - 0.01, 0.02, h - 0.1, 0.02);
-    box(g, metal, -w * 0.15, h * 0.5, d / 2 + 0.01, 0.03, 0.18, 0.02);
-    box(g, metal, w * 0.15, h * 0.5, d / 2 + 0.01, 0.03, 0.18, 0.02);
+    box(g, wood, 0, h / 2, 0, w, h, d);
+    box(g, std('#f7f2ea', 0.75), 0, h / 2, d / 2 - 0.01, w - 0.08, h - 0.12, 0.02);
+    box(g, wood, 0, h / 2, d / 2 + 0.005, 0.03, h - 0.15, 0.02);
+    box(g, metal, -w * 0.18, h * 0.5, d / 2 + 0.02, 0.03, 0.18, 0.02);
+    box(g, metal, w * 0.18, h * 0.5, d / 2 + 0.02, 0.03, 0.18, 0.02);
+    box(g, wood, 0, h + 0.01, 0, w + 0.02, 0.04, d + 0.02);
   } else if (type === 'kitch') {
-    box(g, white, 0, 0.45, 0, w, 0.9, d);
-    box(g, wood, 0, 0.92, 0, w + 0.04, 0.04, d + 0.04);
+    // base cabinets + continuous oak worktop (reads from dollhouse)
+    box(g, std('#f4f1ec', 0.75), 0, 0.42, 0, w, 0.84, d);
+    box(g, wood, 0, 0.9, 0, w + 0.08, 0.07, d + 0.1);
     // upper cabinets
-    box(g, white, 0, 2.0, -d * 0.05, w * 0.9, 0.7, d * 0.7);
-    // sink cut hint
-    box(g, metal, -w * 0.25, 0.94, 0, 0.45, 0.05, 0.35);
-    // stove
-    box(g, dark, w * 0.28, 0.94, 0, 0.5, 0.04, 0.45);
+    box(g, std('#f7f4ee', 0.75), 0, 2.05, -d * 0.08, w * 0.95, 0.75, d * 0.65);
+    box(g, wood, 0, 2.45, -d * 0.08, w * 0.97, 0.04, d * 0.68);
+    // sink + stove on worktop
+    box(g, metal, -w * 0.28, 0.94, 0, 0.48, 0.05, 0.36);
+    box(g, dark, w * 0.28, 0.94, 0, 0.52, 0.04, 0.46);
     for (let i = 0; i < 4; i++)
       cyl(g, dark, w * 0.18 + (i % 2) * 0.2, 0.97, -0.1 + Math.floor(i / 2) * 0.2, 0.07, 0.07, 0.03, 8);
+    // toe-kick contrast
+    box(g, dark, 0, 0.05, 0, w - 0.04, 0.1, d - 0.04);
   } else if (type === 'fridge') {
     box(g, metal, 0, h / 2, 0, w, h, d);
     box(g, dark, w / 2 - 0.02, h * 0.55, d / 2 + 0.01, 0.03, 0.5, 0.02);
     box(g, std('#e8eef5', 0.3), 0, h * 0.7, d / 2 - 0.01, w - 0.08, h * 0.35, 0.02);
   } else if (type === 'bath') {
     box(g, white, 0, 0.28, 0, w, 0.55, d);
-    box(g, std('#e8f0f5', 0.3), 0, 0.52, 0, w - 0.12, 0.04, d - 0.12);
+    box(g, std('#d8e8f0', 0.25), 0, 0.52, 0, w - 0.14, 0.06, d - 0.14);
+    box(g, metal, w/2-0.12, 0.7, -d/2+0.1, 0.04, 0.35, 0.04);
   } else if (type === 'shower') {
-    box(g, white, 0, 0.05, 0, w, 0.1, d);
+    // tray / tub basin — readable from dollhouse
+    box(g, white, 0, 0.12, 0, w, 0.24, d);
+    box(g, std('#d5e8f0', 0.2), 0, 0.22, 0, w - 0.12, 0.04, d - 0.12);
     box(g, std('#cfe0ea', 0.2, 0.1), -w / 2 + 0.02, 1.0, 0, 0.04, 2.0, d);
     box(g, std('#cfe0ea', 0.2, 0.1), 0, 1.0, -d / 2 + 0.02, w, 2.0, 0.04);
     cyl(g, metal, w / 2 - 0.1, 1.7, -d / 2 + 0.1, 0.04, 0.04, 0.2, 6);
@@ -211,10 +221,12 @@ function proc(type, F, cols) {
       g.add(s);
     }
   } else if (type === 'rug') {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), std(cols.rug || '#8b6b5a', 1));
-    m.position.set(0, 0.01, 0);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, d), std(cols.fab || cols.rug || '#7a4a28', 1));
+    m.position.set(0, 0.03, 0);
     m.receiveShadow = true;
     g.add(m);
+    const m2 = new THREE.Mesh(new THREE.BoxGeometry(w*0.92, 0.01, d*0.92), std('#b8885c', 1));
+    m2.position.set(0, 0.04, 0); g.add(m2);
   } else if (type === 'chair') {
     box(g, wood, 0, 0.42, 0, w, 0.06, d);
     [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,b])=>box(g, wood, a*w*0.35, 0.21, b*d*0.35, 0.05, 0.42, 0.05));
@@ -224,9 +236,22 @@ function proc(type, F, cols) {
     cyl(g, dark, 0, 0.55, 0, 0.03, 0.05, 1.1, 6);
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), std('#f5e6c8', 0.4));
     cap.material.emissive = new THREE.Color('#665533');
-    cap.material.emissiveIntensity = 0.4;
+    cap.material.emissiveIntensity = 0.55;
     cap.position.set(0, 1.15, 0);
     g.add(cap);
+  } else if (type === 'art') {
+    box(g, wood, 0, 1.35, 0, w, h || 0.7, 0.03);
+    box(g, std(cols.fab || '#c4b8a4', 0.9), 0, 1.35, 0.02, w - 0.08, (h || 0.7) - 0.08, 0.02);
+  } else if (type === 'curtain') {
+    const cloth = std(cols.fab || '#e8e2d6', 0.95);
+    box(g, wood, 0, 2.15, 0, w + 0.08, 0.04, 0.04);
+    box(g, cloth, -w * 0.28, 1.15, 0, w * 0.38, 1.9, 0.04);
+    box(g, cloth, w * 0.28, 1.15, 0, w * 0.38, 1.9, 0.04);
+  } else if (type === 'shoe') {
+    box(g, wood, 0, 0.35, 0, w, 0.7, d);
+    box(g, wood, 0, 0.12, 0, w - 0.04, 0.03, d - 0.04);
+    box(g, wood, 0, 0.35, 0, w - 0.04, 0.03, d - 0.04);
+    box(g, wood, 0, 0.55, 0, w - 0.04, 0.03, d - 0.04);
   } else {
     box(g, fab, 0, h / 2, 0, w, h, d);
   }
@@ -234,14 +259,8 @@ function proc(type, F, cols) {
 }
 
 export function makeFurn(type, F, cols = {}) {
-  // Prefer glTF for key living pieces when scale lands in a sane range
-  if (GLB[type] && cache.has('tpl_' + type)) {
-    const c = cloneTpl(type, F.w, F.d, F.h);
-    if (c) {
-      const b = new THREE.Box3().setFromObject(c); const s = new THREE.Vector3(); b.getSize(s);
-      if (s.x > F.w * 0.55 && s.x < F.w * 1.6 && s.z > F.d * 0.45 && s.z < F.d * 1.7) return c;
-    }
-  }
+  // Always procedural modern-Scandi kit for consistent marketing style (1:1 FUR sizes).
+  // Poly Haven glTF kept on disk/CREDITS for future opt-in, but mixed photoreal+blocky reads poorly.
   return proc(type, F, cols);
 }
 

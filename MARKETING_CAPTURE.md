@@ -46,3 +46,8 @@ Walk-in:
 
 4K portrait (if machine allows):
 `?demo=1&clean=1&cam=orbit&speed=0.4&w=2160&h=3840`
+
+
+## door=closed
+With `cam=walk&door=closed`, the front door starts shut and opens smoothly as the camera approaches (~1.5 m). Demo/clean uses tinted glass.
+Example: `?demo=1&clean=1&cam=walk&door=closed&w=1080&h=1920`

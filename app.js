@@ -1,4 +1,4 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261109w';
+import {detectWalls,gapMerge} from './cv.js?v=20261109ar';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -6,7 +6,7 @@ function stairRect(st){const L=st.length||3.6,W=st.width||1,d=st.dir||0,c=Math.c
 function toast(m,k='info',ms=3800){const t=document.createElement('div');t.className='toast '+k;t.innerHTML=I[k==='ok'?'check':k==='err'||k==='warn'?'warn':'info']+'<div>'+m+'</div>';$('toasts').appendChild(t);while($('toasts').children.length>3)$('toasts').firstChild.remove();setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),300);},ms);}
 window.__toast=()=>[...document.querySelectorAll('.toast')].map(t=>t.textContent).join(' | ');
 const $=id=>document.getElementById(id),KEY='vkroc_studio_project';
-const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f4f1ec',floor:'dub',fac:'#ece3d3',roof:'#5c6672'},
+const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f4f1ec',floor:'dub',fac:'#ece3d3',roof:'#a0a8b0'},
  levels:[{name:'1NP',elevation:0,height:2.85}],walls:[],furn:[],plot:{pts:[[-4,-5],[20,-5],[20,15],[-4,15]],fence:1},roof:'gable'};
 (()=>{const L='1NP',h=2.85,W=(a,b,o=[],t=.3)=>DEMO.walls.push({id:'w'+DEMO.walls.length,level:L,start:a,end:b,thickness:t,base:0,height:h,openings:o});
  // Outer 15×10.5 m ≈ 157 m² footprint (+ terrace/carport outside)
@@ -31,23 +31,33 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f4f1ec',
  W([8.2,7.4],[15,7.4],[{type:'door',offset:2.8,width:.85,height:2.05}],.15);
  // Kitchen peninsula hint wall short
  W([0,7.2],[3.8,7.2],[],.12);
- // Furniture (pre-placed, skandi) — rooms roughly: predsieň, wc, kúpeľňa, obývačka+kuch, 3 spálne
- const F=(t,x,z,r=0)=>DEMO.furn.push({t,p:[x,z],r,level:L});
- F('shelf',1.0,1.0); F('shelf',3.8,0.6,1); F('lamp',2.2,1.8); // predsieň
- F('wc',6.3,0.85); // wc
- F('bath',6.2,2.55); F('sink',5.7,3.2,1); F('wc',7.0,3.15); F('shelf',7.1,2.3,2); // kúpeľňa
- // obývačka
- F('sofa',4.4,5.5,0); F('ctable',4.4,6.7); F('tv',4.4,9.7,2); F('armch',6.7,5.7,3); F('armch',2.2,5.8,1);
- F('rug',4.4,6.6); F('plant',1.2,9.5); F('plant',7.4,9.4); F('lamp',6.9,7.2); F('shelf',1.3,7.5,1);
- // kuch + jedáleň
- F('kitch',1.6,8.6,0); F('fridge',3.35,8.35); F('table',2.3,5.5); F('chair',1.5,5.5,1); F('chair',3.1,5.5,3); F('chair',2.3,4.7,0); F('chair',2.3,6.3,2);
- // spálňa
- F('bed',11.5,2.0); F('ward',13.8,0.8,3); F('plant',9.0,0.7); F('lamp',9.5,2.8); F('rug',11.5,2.3); F('shelf',9.1,3.2,1); F('armch',13.5,3.3,2);
+ // Furniture — overlap-checked modern Scandi, readable from dollhouse
+ const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.2,.95],armch:[.85,.85],table:[1.6,.9],ctable:[1.1,.6],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.4,.62],fridge:[.6,.65],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.2,1.6],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4]};
+ const soft=new Set(['rug','curtain','plant','lamp','art','chair']); // may overlap solids / each other
+ const placed=[];
+ const dim=(t,r)=>{const d=FD[t]||[1,1];return (r||0)%2?[d[1],d[0]]:d;};
+ const hit=(t,x,z,r)=>{if(soft.has(t))return 0;const[w,d]=dim(t,r);for(const p of placed){if(soft.has(p.t))continue;const[pw,pd]=dim(p.t,p.r);if(Math.abs(x-p.p[0])<(w+pw)/2+.05&&Math.abs(z-p.p[1])<(d+pd)/2+.05)return 1;}return 0;};
+ const F=(t,x,z,r=0)=>{if(!FD[t]||hit(t,x,z,r))return;const it={t,p:[x,z],r,level:L};DEMO.furn.push(it);placed.push(it);};
+ // predsieň / hallway
+ F('shoe',0.7,1.6); F('shelf',4.5,0.55,1); F('lamp',2.4,2.0); F('plant',0.6,3.1);
+ // wc
+ F('wc',6.3,0.7); F('sink',6.9,1.35,1);
+ // kúpeľňa
+ F('shower',6.9,2.45); F('sink',5.6,3.2,1); F('wc',5.55,2.25); F('shelf',7.05,3.2,2);
+ // kitchen line along west wall (worktop), then dining, then living — no solid overlaps
+ F('fridge',0.45,7.35); F('kitch',0.45,9.0,1);
+ F('table',2.6,6.55); F('chair',1.8,6.55,1); F('chair',3.4,6.55,3); F('chair',2.6,5.75); F('chair',2.6,7.35,2);
+ F('sofa',5.6,4.7); F('rug',5.6,5.75); F('ctable',5.6,5.85); F('tv',5.6,10.0,2);
+ F('art',4.2,3.78); F('art',6.8,3.78); F('art',7.55,7.7,1);
+ F('armch',7.15,6.4,3); F('lamp',4.15,4.85); F('lamp',7.15,7.55);
+ F('plant',1.05,9.85); F('plant',7.5,9.7); F('plant',7.4,4.9);
+ F('curtain',5.5,10.35,2); F('curtain',0.15,8.5,1); F('curtain',0.15,5.2,1);
+ // master bedroom
+ F('bed',11.6,1.95); F('ward',14.15,0.95,3); F('rug',11.6,2.45); F('lamp',9.55,2.7); F('plant',9.15,0.75); F('curtain',12.2,0.2); F('art',9.0,2.0,1);
  // izba 1
- F('bed1',10.0,5.5); F('desk',13.5,5.0,3); F('ward',14.2,6.5,2); F('chair',13.2,5.6,2); F('plant',9.2,6.8); F('rug',11.2,5.6); F('lamp',14.0,4.5); F('shelf',9.1,4.5,1);
+ F('bed1',10.0,5.4); F('desk',13.6,5.0,3); F('ward',14.25,6.55,2); F('chair',13.2,5.55,2); F('rug',11.2,5.6); F('lamp',14.0,4.55); F('plant',9.15,6.7); F('shelf',9.15,4.6,1);
  // izba 2
- F('bed1',10.0,8.7); F('desk',13.5,8.5,3); F('shelf',9.0,9.8); F('chair',13.2,9.0,2); F('lamp',14.0,9.5); F('rug',11.2,8.8); F('ward',14.2,9.8,2); F('plant',9.2,7.9);
- // kúpeľňa extras
+ F('bed1',10.0,8.65); F('desk',13.6,8.55,3); F('ward',14.25,9.85,2); F('chair',13.2,9.0,2); F('rug',11.2,8.8); F('lamp',14.0,9.5); F('plant',9.15,7.95); F('shelf',9.15,9.85,1);
 })();
 let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
@@ -96,7 +106,7 @@ function nameR(R,L){const mx=Math.max(0,...R.r.map(r=>r.a));R.r.forEach(r=>{cons
 async function nameDlg(r){const v=await dlg('Názov miestnosti','<p>'+r.a.toFixed(1).replace('.',',')+' m² · návrh: '+esc(r.n)+'</p><label>Názov<input type="text" name="n" list="rnl" value="'+esc(r.n)+'"></label><datalist id="rnl">'+RN.map(n=>'<option value="'+n+'">').join('')+'</datalist>',[['Zrušiť',0],['Uložiť',1,'go','check']]);
  if(!v||!v.v)return;const n=String(v.f.n||'').trim().slice(0,40);if(!n)return;snap();H.rn=(H.rn||[]).filter(e=>!(e.level===lvl&&roomAt(RC[lvl],e.p)===r.id));H.rn.push({level:lvl,p:[...r.p],n});save();draw();toast('Miestnosť: '+n,'ok');}
 function WC(){const ws=WL();let x=0,z=0;ws.forEach(w=>{x+=w.start[0]+w.end[0];z+=w.start[1]+w.end[1];});const n=ws.length*2||1;return[x/n,z/n];}
-const FUR={bed:['Manželská posteľ',1.6,2.05],bed1:['Posteľ',.9,2],sofa:['Pohovka',2.2,.95],armch:['Kreslo',.85,.85],table:['Jedálenský stôl',1.6,.9],ctable:['Konferenčný stolík',1.1,.6],desk:['Písací stôl',1.2,.6],tv:['TV skrinka',1.8,.42],ward:['Šatníková skriňa',1.8,.62],kitch:['Kuchynská linka',2.6,.62],fridge:['Chladnička',.6,.65],bath:['Vaňa',1.7,.75],shower:['Sprchovací kút',.9,.9],sink:['Umývadlo',.6,.45],wc:['WC',.4,.65],shelf:['Polica',.9,.35],plant:['Rastlina',.45,.45],rug:['Koberec',2.2,1.6],lamp:['Lampa',.35,.35],chair:['Stolička',.45,.5]};
+const FUR={bed:['Manželská posteľ',1.6,2.05],bed1:['Posteľ',.9,2],sofa:['Pohovka',2.2,.95],armch:['Kreslo',.85,.85],table:['Jedálenský stôl',1.6,.9],ctable:['Konferenčný stolík',1.1,.6],desk:['Písací stôl',1.2,.6],tv:['TV skrinka',1.8,.42],ward:['Šatníková skriňa',1.8,.62],kitch:['Kuchynská linka',2.4,.62],fridge:['Chladnička',.6,.65],bath:['Vaňa',1.7,.75],shower:['Sprchovací kút',.9,.9],sink:['Umývadlo',.6,.45],wc:['WC',.4,.65],shelf:['Polica',.9,.35],plant:['Rastlina',.45,.45],rug:['Koberec',2.2,1.6],lamp:['Lampa',.35,.35],chair:['Stolička',.45,.5],art:['Obraz',.9,.04],curtain:['Záves',1.4,.08],shoe:['Botník',1.0,.4]};
 const fdim=f=>{const F=FUR[f.t];return (f.r||0)%2?[F[2],F[1]]:[F[1],F[2]];};
 const FL=()=>(H.furn||[]).filter(f=>f.level===lvl);
 function hitFurn(p){const fs=FL();for(let i=fs.length-1;i>=0;i--){const f=fs[i],[w,d]=fdim(f);if(Math.abs(p[0]-f.p[0])<=w/2&&Math.abs(p[1]-f.p[1])<=d/2)return f;}return null;}
@@ -288,9 +298,9 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109w');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam()};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109ar');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam()};}return V;};
 function wUI(v){jumpsUI(v);$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
-let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
+let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
 $('snap3').onclick=async()=>{const m=await v3();const u=m.snap&&m.snap();if(u){const b=await(await fetch(u)).blob();dl(b,(H.name||'dom')+'_3d.png');toast('3D snímka uložená (PNG).','ok');}};
 $('glb').onclick=async()=>{const m=await v3();try{const b=await m.glb();if(b){dl(b,(H.name||'dom')+'.glb');toast('3D model stiahnutý (GLB).','ok');}}catch(e){toast('Export zlyhal.','err');}};
@@ -395,7 +405,7 @@ function stopTour(){TOUR++;TON=false;$('ptour').innerHTML=I.next+'<span>Auto-pre
 async function tour(){const id=++TOUR,m=await v3(),wait=ms=>new Promise(r=>setTimeout(r,ms)),alive=()=>id===TOUR;TON=true;$('ptour').innerHTML=I.x+'<span>Zastaviť</span>';
  m.setWalk(false);wUI(false);jumpsUI(true);if(m.snapBuild)m.snapBuild();
  // slow exterior orbit intro
- if(m.playCam)m.playCam('orbit',0.55,{dur:10,loop:false});else m.setAuto(true,0.45);
+ if(m.setSun)m.setSun(16.5,false);if(m.playCam)m.playCam('orbit',0.55,{dur:10,loop:false});else m.setAuto(true,0.45);
  await wait(10000);if(m.stopCam)m.stopCam();m.setAuto(false);if(!alive())return;
  // room jumps with gentle spin
  const bs=[...$('jumps').querySelectorAll('button')];for(const b of bs){if(!alive())return;b.click();bs.forEach(x=>x.classList.toggle('on',x===b));const t0=performance.now();while(alive()&&performance.now()-t0<4800){m.spin(.008);await wait(16);}}
@@ -430,28 +440,35 @@ function tutWait(n=0,T=TUT,key='vkTut'){if(localStorage[key]||document.getElemen
 
 /* Marketing / Social capture — URL params only (hidden from normal UI)
    ?clean=1          hide all UI, cursor, toasts
-   &cam=orbit|dollhouse|walk|descend
+   &cam=orbit|dollhouse|walk|descend|interior
    &speed=0.5        camera path speed multiplier
    &w=1080&h=1920    fixed canvas (portrait 1080x1920 or 2160x3840)
    &demo=1           auto-open premium demo + 3D
    &tour=1           start auto-tour after load
+   &door=closed      walk: front door starts shut, opens ~1.5 m from cam
 */
 async function mktBoot(){
-  const q=new URLSearchParams(location.search);if(![...q.keys()].some(k=>['clean','cam','w','h','demo','tour','speed','grow'].includes(k)))return;
+  const q=new URLSearchParams(location.search);if(![...q.keys()].some(k=>['clean','cam','w','h','demo','tour','speed','grow','door'].includes(k)))return;
   try{localStorage.vkTut=1;localStorage.vkTut3=1;document.getElementById('tutx')?.remove();}catch(e){}
   const clean=q.get('clean')==='1',cam=q.get('cam'),speed=+q.get('speed')||1,w=+q.get('w')||0,h=+q.get('h')||0;
+  const doorClosed=q.get('door')==='closed';
   if(q.get('demo')==='1'||cam||clean||(w&&h)){
     window.__mktBusy=1;
     try{const D=JSON.parse(JSON.stringify(DEMO));newP(D.name,D.walls,null,D.plot);H.furn=D.furn||[];H.style=D.style;H.mat=D.mat||H.mat;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}save();}catch(e){}
     show('vw');
+    const m0=await v3();
+    if(m0.setDoorMode)m0.setDoorMode(doorClosed?'closed':'open');
+    if(m0.setMktGlass)m0.setMktGlass(!!(clean||q.get('demo')==='1'));
     // Finished house for capture — never leave mid wall-growth
     await gen(false);
   }
   const m=await v3();
+  if(m.setDoorMode)m.setDoorMode(doorClosed?'closed':'open');
+  if(m.setMktGlass)m.setMktGlass(!!(clean||q.get('demo')==='1'));
   if(m.snapBuild)m.snapBuild();
   window.__mktBusy=0;
   // QA / Social capture hooks (URL marketing only)
-  window.__vk={m,playCam:(k,s,e)=>m.playCam(k,s,e),scrub:(u)=>m.scrubCam&&m.scrubCam(u),snap:()=>m.snapBuild&&m.snapBuild(),debug:()=>m.debugViz&&m.debugViz(),doll:on=>m.dollhouse(on),walk:v=>m.setWalk(v),jump:(x,z)=>m.jump&&m.jump(x,z,1.55),stop:()=>m.stopCam&&m.stopCam()};
+  window.__vk={m,playCam:(k,s,e)=>m.playCam(k,s,e),scrub:(u)=>m.scrubCam&&m.scrubCam(u),count:()=>m.countFurn&&m.countFurn(),snap:()=>m.snapBuild&&m.snapBuild(),debug:()=>m.debugViz&&m.debugViz(),doll:on=>m.dollhouse(on),walk:v=>m.setWalk(v),jump:(x,z)=>m.jump&&m.jump(x,z,1.55),stop:()=>m.stopCam&&m.stopCam()};
   if(w&&h){m.setCanvasSize(w,h);document.documentElement.classList.add('mkt-fixed');
     let s=document.getElementById('mktcss');if(!s){s=document.createElement('style');s.id='mktcss';document.head.appendChild(s);}
     s.textContent=`html.mkt-fixed #v3{width:${w}px!important;height:${h}px!important;max-width:none!important;margin:0 auto;}html.mkt-fixed #vw{display:flex;align-items:center;justify-content:center;background:#0b0c0e;}`;
@@ -466,7 +483,7 @@ async function mktBoot(){
   try{document.querySelectorAll('.tut,.toast,#tut,#tutx').forEach(e=>e.remove());localStorage.vkTut=1;localStorage.vkTut3=1;}catch(e){}
   m.setWalk(false);wUI(false);jumpsUI(true);
   if(cam&&m.playCam){await new Promise(r=>setTimeout(r,900));
-    if(cam==='interior'){m.playCam('interior',speed,{x:7.0,z:8.2,tx:1.5,tz:5.5});}
+    if(cam==='interior'){m.playCam('interior',speed,{x:4.2,z:8.4,tx:6.0,tz:5.1});}
     else m.playCam(cam,speed,{loop:cam==='orbit',dur:cam==='orbit'?16:cam==='dollhouse'?4:cam==='walk'?12:12});
   }
   else if(q.get('tour')==='1'){await new Promise(r=>setTimeout(r,800));tour();}
