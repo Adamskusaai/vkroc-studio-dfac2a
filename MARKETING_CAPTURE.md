@@ -65,3 +65,5 @@ Cache `v=20261109bi`. Full-height dollhouse (roof only off). `cam=reveal` ~8s ro
 - Reveal: `?demo=1&clean=1&cam=reveal&w=1080&h=1920&v=20261109bi`
 - Dollhouse: `?demo=1&clean=1&cam=dollhouse&w=1080&h=1920&v=20261109bi`
 - Walk door=closed: `?demo=1&clean=1&cam=walk&door=closed&w=1080&h=1920&v=20261109bi`
+
+Site import: `detectParcel` → `H.plot` when situation drawing has parcel lines.

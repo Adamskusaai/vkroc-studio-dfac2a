@@ -287,7 +287,7 @@ function site(c){const W=c.width,H=c.height,Dm=Math.max(W,H),D=c.getContext('2d'
 
 
 /** Find parcel (pozemok) polygon enclosing the house: thin boundary lines → axis-aligned strip, else flood extent. */
-function detectParcel(c,house,mainX1,ppm){const W=c.width,H=c.height,Dm=Math.max(W,H),hx0=house.x0,hy0=house.y0,hx1=house.x1,hy1=house.y1;
+export function detectParcel(c,house,mainX1,ppm){const W=c.width,H=c.height,Dm=Math.max(W,H),hx0=house.x0,hy0=house.y0,hx1=house.x1,hy1=house.y1;
  if(!(hx1>hx0&&hy1>hy0))return null;
  const g=gray(c),m0=binar(g,W,H,.42),m=m0.slice();
  // Clear house body + inset so we only see parcel lines
