@@ -282,7 +282,55 @@ function site(c){const W=c.width,H=c.height,Dm=Math.max(W,H),D=c.getContext('2d'
  const conf=best.sc;const low=conf<2.2;
  const lp=Math.max(best.x1-best.x0,best.y1-best.y0),ppm=lp/12,r=v=>Math.round(v*100/ppm)/100,{x0,x1,y0,y1}=best,T=.3;
  const walls=[[x0,y0,x1,y0],[x1,y0,x1,y1],[x1,y1,x0,y1],[x0,y1,x0,y0]].map(q=>({start:[r(q[0]),r(q[1])],end:[r(q[2]),r(q[3])],thickness:T}));
- return{walls,canvas:c,w:Math.round(W/ppm*100)/100,guess:true,mode:low?'none':'site',longPx:lp,ppm,hip:!!best.hip||best.src==='hip',needTrace:low?1:0,conf,src:best.src,_guessBox:best};}
+ const parc=(!low)&&detectParcel(c,best,mainX1,ppm);
+ return{walls,canvas:c,w:Math.round(W/ppm*100)/100,guess:true,mode:low?'none':'site',longPx:lp,ppm,hip:!!best.hip||best.src==='hip',needTrace:low?1:0,conf,src:best.src,_guessBox:best,parcel:parc||null};}
+
+
+/** Find parcel (pozemok) polygon enclosing the house: thin boundary lines → axis-aligned strip, else flood extent. */
+function detectParcel(c,house,mainX1,ppm){const W=c.width,H=c.height,Dm=Math.max(W,H),hx0=house.x0,hy0=house.y0,hx1=house.x1,hy1=house.y1;
+ if(!(hx1>hx0&&hy1>hy0))return null;
+ const g=gray(c),m0=binar(g,W,H,.42),m=m0.slice();
+ // Clear house body + inset so we only see parcel lines
+ for(let y=Math.max(0,hy0|0);y<=Math.min(H-1,hy1|0);y++)for(let x=Math.max(0,hx0|0);x<=Math.min(W-1,hx1|0);x++)m[y*W+x]=0;
+ const xCut=mainX1<W?mainX1:W;for(let y=0;y<H;y++)for(let x=xCut|0;x<W;x++)m[y*W+x]=0;
+ const ss=segs(dil(m,W,H,2),W,H,1).filter(s=>s.t<=.012*Dm+2&&(s.b-s.a)>=.06*Dm);
+ const hs=ss.filter(s=>s.hz),vs=ss.filter(s=>!s.hz);
+ const overlap=(a0,a1,b0,b1)=>Math.max(0,Math.min(a1,b1)-Math.max(a0,b0));
+ // --- axis-aligned bounds from nearest long thin lines ---
+ let top=null,bot=null,left=null,right=null;
+ for(const s of hs){const len=s.b-s.a,ov=overlap(s.a,s.b,hx0-len*.2,hx1+len*.2);
+  if(s.c<hy0-3){const dist=hy0-s.c;if(dist>.5*H)continue;const sc=len/Dm*1.2+ov/Math.max(hx1-hx0,1)-dist/Dm;if(ov>.15*(hx1-hx0)||len>.25*W){if(!top||sc>top.sc)top={c:s.c,a:s.a,b:s.b,sc,len};}}
+  if(s.c>hy1+3){const dist=s.c-hy1;if(dist>.5*H)continue;const sc=len/Dm*1.2+ov/Math.max(hx1-hx0,1)-dist/Dm;if(ov>.15*(hx1-hx0)||len>.25*W){if(!bot||sc>bot.sc)bot={c:s.c,a:s.a,b:s.b,sc,len};}}}
+ for(const s of vs){const len=s.b-s.a,ov=overlap(s.a,s.b,hy0-len*.2,hy1+len*.2);
+  if(s.c<hx0-3){const dist=hx0-s.c;if(dist>.55*W)continue;const sc=len/Dm*1.2+ov/Math.max(hy1-hy0,1)-dist/Dm;if(ov>.12*(hy1-hy0)||len>.2*H){if(!left||sc>left.sc)left={c:s.c,a:s.a,b:s.b,sc,len};}}
+  if(s.c>hx1+3){const dist=s.c-hx1;if(dist>.55*W)continue;const sc=len/Dm*1.2+ov/Math.max(hy1-hy0,1)-dist/Dm;if(ov>.12*(hy1-hy0)||len>.2*H){if(!right||sc>right.sc)right={c:s.c,a:s.a,b:s.b,sc,len};}}}
+ // Prefer horizontal strip span from the longest top/bot lines
+ let x0,x1,y0,y1,conf=0;
+ if(top&&bot){y0=top.c;y1=bot.c;x0=Math.min(top.a,bot.a);x1=Math.max(top.b,bot.b);conf+=1.5+(top.len+bot.len)/Dm;
+  if(left){x0=Math.min(x0,left.c);conf+=.8;} if(right){x1=Math.max(x1,right.c);conf+=.8;}
+  // If left/right missing, snap to ends of the long horizontals already used
+ }else if(left&&right){x0=left.c;x1=right.c;y0=Math.min(left.a,right.a);y1=Math.max(left.b,right.b);conf+=1.2;
+  if(top){y0=Math.min(y0,top.c);conf+=.7;} if(bot){y1=Math.max(y1,bot.c);conf+=.7;}
+ }else{
+  // Flood-extent fallback from a seed just outside the house toward more open space
+  const seedX=Math.min(W-2,Math.round(hx1+Math.max(8,(hx1-hx0)*.15))), seedY=Math.round((hy0+hy1)/2);
+  if(seedX>=xCut)return null;
+  const seen=new Uint8Array(W*H),st=[seedY*W+seedX];let minx=seedX,maxx=seedX,miny=seedY,maxy=seedY,n=0;
+  const ink=m0; // original ink incl. house walls as barriers
+  while(st.length&&n<W*H*.45){const p=st.pop();if(p<0||p>=W*H||seen[p])continue;const y=(p/W)|0,x=p-y*W;
+   if(x<0||x>=xCut||y<0||y>=H)continue;if(ink[p])continue;seen[p]=1;n++;
+   if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
+   st.push(p+1,p-1,p+W,p-W);}
+  if(n<200)return null;x0=minx;x1=maxx;y0=miny;y1=maxy;conf=.9;}
+ if(!(x1>x0+10&&y1>y0+10))return null;
+ // Must contain house (with small slack) and be larger than house
+ const pad=3;if(x0>hx0+pad||y0>hy0+pad||x1<hx1-pad||y1<hy1-pad)return null;
+ const hA=(hx1-hx0)*(hy1-hy0),pA=(x1-x0)*(y1-y0);if(pA<hA*1.8||pA>W*H*.85)return null;
+ const asp=Math.max((x1-x0)/(y1-y0),(y1-y0)/(x1-x0));if(asp>12)return null;
+ conf+=Math.min(2,pA/hA*.15);if(conf<1.2)return null;
+ const r2=v=>Math.round(v/ppm*100)/100;
+ const pts=[[r2(x0),r2(y0)],[r2(x1),r2(y0)],[r2(x1),r2(y1)],[r2(x0),r2(y1)]];
+ return{pts,conf,fence:1,src:'lines'};}
 
 function cloneCanvas(c){const o=document.createElement('canvas');o.width=c.width;o.height=c.height;o.getContext('2d').drawImage(c,0,0);return o;}
 function toCanvas(img,M){const S=Math.min(1,M/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*S);c.height=Math.round(img.height*S);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;}

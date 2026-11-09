@@ -13,7 +13,7 @@ Base (live):  https://adamskusaai.github.io/vkroc-studio-dfac2a/
 |-------|--------|--------|
 | `demo=1` | | Auto-open premium furnished demo house and switch to 3D |
 | `clean=1` | | No UI chrome, no cursor, toasts suppressed |
-| `cam` | `orbit` \| `dollhouse` \| `walk` \| `descend` | Fixed eased camera path |
+| `cam` | `orbit` | `dollhouse` | `walk` | `descend` | `interior` | Fixed eased camera path |
 | `speed` | e.g. `0.5`, `1` | Path speed multiplier (lower = slower) |
 | `w`,`h` | e.g. `1080`/`1920` or `2160`/`3840` | Fixed canvas size for recording |
 | `tour=1` | | Start cinematic auto-tour after load |
