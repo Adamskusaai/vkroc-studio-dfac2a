@@ -1,27 +1,148 @@
 // plan image -> walls (plain JS, no AI)
-// detectWalls(img,{sens,mW,rect}) -> {walls,canvas,w,guess,mode}
+// detectWalls(img,{sens,mW,rect,site,aiPass}) -> {walls,canvas,w,guess,mode,needTrace?}
+// AI_HOOK: pass o.aiPass = (img, classicResult) => result|null for a future optional AI fallback.
 export function detectWalls(img,o={}){const sens=o.sens??.5;
- const c0=toCanvas(img,1400);if(o.site)return site(c0);let c=c0;
- if(!o.rect){c=deskew(c);c=rectify(c);}
- const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Uint8Array(W*H);
- for(let i=0;i<W*H;i++)g[i]=(d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11)|0;
- let m=binar(g,W,H,sens);m=dropSmall(m,W,H,.025*Math.max(W,H));
- const lw=lineW(m,W,H),f=2.2-1.4*sens,ks=[...new Set([Math.round(lw*f)+1,Math.round(lw*1.2)+1,Math.round(lw*.8),3].map(k=>Math.max(3,k)))].sort((a,b)=>b-a);
- let cands=ks.map(k=>({k,s:clean(segs(open(m,W,H,k),W,H,k),W,H)}));
- cands.push({k:2,line:1,s:clean(pairUp(segs(dil(m,W,H,3),W,H,2),W,H),W,H)});
- cands.forEach(q=>q.L=q.s.reduce((a,s)=>a+s.b-s.a,0));const mx=Math.max(...cands.map(q=>q.L));
- const best=cands.find(q=>q.L>=.85*mx&&q.s.length>=3)||cands[0];
- const R=toMetres(best.s,W,H,o.mW,!!best.line,c);R.mode='plan';
- if(!planLike(best.s,W,H)){if(o.rect&&!o.mW)return{walls:[],canvas:c,w:o.w||15,mode:'none'};const S=site(c0);return S;}
+ const c0=toCanvas(img,1400);if(o.site){const S=site(c0);return finish(S,img,o);}
+ let paper=cropPaper(c0);paper=flatten(paper);paper=autoInvert(paper);
+ const pipes=[];
+ if(o.rect) pipes.push(paper);
+ else{
+  pipes.push(paper);
+  try{pipes.push(deskew(paper));}catch(e){}
+  try{const d=deskew(paper);pipes.push(rectify(d));}catch(e){}
+ }
+ // unique by size fingerprint
+ const seen=new Set(),uniq=[];for(const c of pipes){const k=c.width+'x'+c.height;if(seen.has(k)&&uniq.length)continue;seen.add(k);uniq.push(c);}
+ let best=null;
+ for(const c of uniq){
+  const W=c.width,H=c.height,g=gray(c);
+  let m=binar(g,W,H,sens);m=dropSmall(m,W,H,.02*Math.max(W,H));
+  const lw=Math.max(1,lineW(m,W,H)),f=2.2-1.4*sens;
+  const ks=[...new Set([Math.round(lw*f)+1,Math.round(lw*1.2)+1,Math.round(lw*.8),Math.max(3,lw),3].map(k=>Math.max(3,k)))].sort((a,b)=>b-a);
+  const cands=ks.map(k=>({k,s:clean(segs(open(m,W,H,k),W,H,k),W,H)}));
+  cands.push({k:2,line:1,s:clean(pairUp(segs(dil(m,W,H,3),W,H,2),W,H),W,H)});
+  // also a slightly more aggressive thin-line pass (listing screenshots / CAD)
+  cands.push({k:2,line:1,s:clean(pairUp(segs(dil(m,W,H,2),W,H,1),W,H),W,H)});
+  for(const q of cands){
+   q.s=focusSegs(q.s,W,H);
+   q.sc=scorePlan(q.s,W,H);
+   q.L=q.s.reduce((a,s)=>a+s.b-s.a,0);
+   if(q.sc>0){
+    const R=toMetres(q.s,W,H,o.mW,!!q.line,c);R.mode='plan';R._sc=q.sc;R._n=q.s.length;
+    if(!best||R._sc>best._sc||(R._sc===best._sc&&R._n<best._n)) best=R;
+   }
+  }
+ }
+ // site footprint as alternative (plot drawings)
+ const S=site(c0);if(S&&S.walls&&S.walls.length){S._sc=S.hip?12:6;S._n=S.walls.length;
+  // prefer site when plan looks like plot junk (many outer-boundary walls, few interiors) or plan missing
+  if(!best||best._sc<6||siteBeatsPlan(best,S,c0)) best=S;
+ }
+ if(looksLikeUI(c0)) best=null;
+ else if(best&&best.mode==='plan'&&!looksLikeDrawing(best.canvas||paper)) best=null;
+ else if(best&&best.mode==='site'&&best._sc<10&&!looksLikeDrawing(c0)) best=null; // non-hip site needs to look like a drawing
+ if(!best||best._sc<3||!(best.walls&&best.walls.length)){
+  const none={walls:[],canvas:paper,w:o.w||15,mode:'none',guess:true,needTrace:1};
+  return finish(none,img,o);
+ }
+ // final sanity: drop absurd wall counts
+ if(best.mode==='plan'&&best.walls.length>48){
+  const focused=focusWalls(best.walls);
+  if(focused.length>=3&&focused.length<best.walls.length){best.walls=focused;best._n=focused.length;}
+  if(best.walls.length>48){const none={walls:[],canvas:best.canvas||paper,w:best.w||15,mode:'none',guess:true,needTrace:1};return finish(none,img,o);}
+ }
+ return finish(best,img,o);}
+function finish(R,img,o){delete R._sc;delete R._n;
+ // AI_HOOK — classic CV only for now; optional future pass may replace a failed/junk result.
+ if(typeof o.aiPass==='function'){try{const A=o.aiPass(img,R);if(A&&A.walls&&A.walls.length)return A;}catch(e){}}
  return R;}
-// sanity: few walls, closed outline (bbox sides mostly covered), not a grid
-function planLike(ss,W,H){if(ss.length<3||ss.length>40)return false;
- const x0=Math.min(...ss.map(s=>s.hz?s.a:s.c)),x1=Math.max(...ss.map(s=>s.hz?s.b:s.c)),y0=Math.min(...ss.map(s=>s.hz?s.c:s.a)),y1=Math.max(...ss.map(s=>s.hz?s.c:s.b));if(x1-x0<.1*W||y1-y0<.1*H)return false;
- const cov=(hz,c,lo,hi)=>ss.filter(s=>s.hz===hz&&Math.abs(s.c-c)<2*s.t+3).reduce((a,s)=>a+Math.max(0,Math.min(s.b,hi)-Math.max(s.a,lo)),0)/(hi-lo);
+function siteBeatsPlan(P,S,c){if(!P||P.mode!=='plan')return true;if(P.walls.length>24)return true;
+ // if plan bbox is almost the full image and site found a smaller house, prefer site
+ const xs=P.walls.flatMap(w=>[w.start[0],w.end[0]]),zs=P.walls.flatMap(w=>[w.start[1],w.end[1]]);
+ const pw=Math.max(...xs)-Math.min(...xs),ph=Math.max(...zs)-Math.min(...zs);
+ const sx=S.walls.flatMap(w=>[w.start[0],w.end[0]]),sz=S.walls.flatMap(w=>[w.start[1],w.end[1]]);
+ const sw=Math.max(...sx)-Math.min(...sx),sh=Math.max(...sz)-Math.min(...sz);
+ return sw*sh>0&&sw*sh<.55*pw*ph&&P.walls.length>=8;}
+// 0 = reject, higher = better plan-like segment set
+function scorePlan(ss,W,H){if(!ss||ss.length<3||ss.length>55)return 0;
+ const x0=Math.min(...ss.map(s=>s.hz?s.a:s.c)),x1=Math.max(...ss.map(s=>s.hz?s.b:s.c)),y0=Math.min(...ss.map(s=>s.hz?s.c:s.a)),y1=Math.max(...ss.map(s=>s.hz?s.c:s.b));
+ const bw=x1-x0,bh=y1-y0;if(bw<.08*W||bh<.08*H)return 0;
+ const cov=(hz,c,lo,hi)=>{const L=hi-lo||1;return ss.filter(s=>s.hz===hz&&Math.abs(s.c-c)<2*s.t+3).reduce((a,s)=>a+Math.max(0,Math.min(s.b,hi)-Math.max(s.a,lo)),0)/L;};
  const sides=[cov(1,y0,x0,x1),cov(1,y1,x0,x1),cov(0,x0,y0,y1),cov(0,x1,y0,y1)];
- const tm=ss.map(s=>s.t).sort((a,b)=>a-b)[ss.length>>1];if(tm>.06*Math.max(x1-x0,y1-y0))return false; // blobs, not walls
- const full=ss.filter(s=>(s.b-s.a)>.8*(s.hz?x1-x0:y1-y0)&&Math.min(Math.abs(s.c-(s.hz?y0:x0)),Math.abs(s.c-(s.hz?y1:x1)))>4*s.t).length;if(full>=3)return false; // street/grid
- return sides.filter(v=>v>.45).length>=3&&sides.reduce((a,b)=>a+b)/4>.5;}
+ const sideN=sides.filter(v=>v>.4).length,sideAvg=sides.reduce((a,b)=>a+b)/4;
+ if(sideN<2||sideAvg<.35)return 0;
+ const tm=ss.map(s=>s.t).sort((a,b)=>a-b)[ss.length>>1];if(tm>.08*Math.max(bw,bh))return 0; // blobs
+ // reject street/grid: many full-span lines away from bbox edge
+ const full=ss.filter(s=>(s.b-s.a)>.85*(s.hz?bw:bh)&&Math.min(Math.abs(s.c-(s.hz?y0:x0)),Math.abs(s.c-(s.hz?y1:x1)))>5*s.t).length;
+ if(full>=4)return 0;
+ const long=ss.filter(s=>(s.b-s.a)>.2*Math.max(bw,bh)).length;
+ const short=ss.length-long;if(short>long*3+8)return 0; // furniture/text crumbs
+ let sc=sideN*1.5+sideAvg*3+Math.min(16,long)*.4-Math.max(0,ss.length-28)*.12;
+ if(ss.length>=6&&ss.length<=30)sc+=2;
+ if(sideN>=3)sc+=1.2;
+ // reward presence of interior partitions (not only outer box)
+ const interior=ss.filter(s=>{const c=s.c;return s.hz?Math.abs(c-y0)>3*s.t&&Math.abs(c-y1)>3*s.t:Math.abs(c-x0)>3*s.t&&Math.abs(c-x1)>3*s.t;}).length;
+ if(interior>=2)sc+=1.5;if(interior>=4)sc+=1;
+ return sc;}
+function planLike(ss,W,H){return scorePlan(ss,W,H)>=3;}
+// keep segments near the densest wall cluster (drops plot boundary / distant junk)
+function focusSegs(ss,W,H){if(ss.length<18)return ss;
+ const Dm=Math.max(W,H),G=6,cell=new Array(G*G).fill(0);
+ for(const s of ss){const x=s.hz?(s.a+s.b)/2:s.c,y=s.hz?s.c:(s.a+s.b)/2;const gx=Math.min(G-1,Math.max(0,(x/W*G)|0)),gy=Math.min(G-1,Math.max(0,(y/H*G)|0));cell[gy*G+gx]+=s.b-s.a;}
+ let bi=0;for(let i=1;i<cell.length;i++)if(cell[i]>cell[bi])bi=i;
+ const bx=(bi%G+.5)*W/G,by=(((bi/G)|0)+.5)*H/G;
+ const dists=ss.map(s=>{const x=s.hz?(s.a+s.b)/2:s.c,y=s.hz?s.c:(s.a+s.b)/2;return{s,d:Math.hypot(x-bx,y-by)};}).sort((a,b)=>a.d-b.d);
+ let tot=ss.reduce((a,s)=>a+s.b-s.a,0),acc=0,R=0.4*Dm,kept=0;
+ for(const q of dists){acc+=q.s.b-q.s.a;kept++;R=Math.max(R,q.d);if(acc>.9*tot&&kept>=Math.min(ss.length,8))break;}
+ R=Math.min(R+.05*Dm,.7*Dm);
+ const out=ss.filter(s=>{const x=s.hz?(s.a+s.b)/2:s.c,y=s.hz?s.c:(s.a+s.b)/2;return Math.hypot(x-bx,y-by)<=R;});
+ return out.length>=4?out:ss;}
+function focusWalls(ws){if(ws.length<5)return ws;
+ const mid=w=>[(w.start[0]+w.end[0])/2,(w.start[1]+w.end[1])/2];
+ const cx=ws.reduce((a,w)=>a+mid(w)[0],0)/ws.length,cz=ws.reduce((a,w)=>a+mid(w)[1],0)/ws.length;
+ const ds=ws.map(w=>({w,d:Math.hypot(mid(w)[0]-cx,mid(w)[1]-cz)})).sort((a,b)=>a.d-b.d);
+ const keep=Math.max(4,Math.min(ws.length,Math.ceil(ws.length*.7)));
+ const R=ds[keep-1].d*1.15+.5;return ws.filter(w=>Math.hypot(mid(w)[0]-cx,mid(w)[1]-cz)<=R);}
+// crop to bright paper / drawing region (phone photos on dark desk)
+function looksLikeDrawing(c){if(!c)return false;const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data;let wh=0,dk=0,sat=0,n=0;
+ for(let y=0;y<H;y+=3)for(let x=0;x<W;x+=3){const i=(y*W+x)*4,r=d[i],g=d[i+1],b=d[i+2],l=r*.3+g*.59+b*.11,mx=Math.max(r,g,b),mn=Math.min(r,g,b);n++;
+  if(l>200)wh++;else if(l<160){dk++;if(mx-mn>45)sat++;}}
+ if(!n)return false;return wh/n>.28&&dk/n>.01&&dk/n<.45&&(dk?sat/dk:.0)<.35;}
+function looksLikeUI(c){if(!c)return false;const W=c.width,H=c.height;
+ // Full phone-UI screenshots are very tall; real plans rarely exceed ~1.7 after paper crop.
+ if(H>W*1.85)return true;
+ if(H<W*1.45)return false;
+ const d=c.getContext('2d').getImageData(0,0,W,Math.max(8,(H*.12)|0)).data;let sat=0,n=0;
+ for(let i=0;i<d.length;i+=16){const r=d[i],g=d[i+1],b=d[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);n++;if(mx-mn>40)sat++;}
+ return n&&sat/n>.15;}
+function autoInvert(c){const W=c.width,H=c.height,g=gray(c);let dark=0;for(let i=0;i<g.length;i+=7)if(g[i]<128)dark++;
+ if(dark/(g.length/7)<.55)return c; // already light paper
+ const d=c.getContext('2d').getImageData(0,0,W,H),p=d.data;for(let i=0;i<p.length;i+=4){p[i]=255-p[i];p[i+1]=255-p[i+1];p[i+2]=255-p[i+2];}
+ c.getContext('2d').putImageData(d,0,0);return c;}
+function cropPaper(c){const W=c.width,H=c.height,g=gray(c);let sx=0,sy=0,ex=W-1,ey=H-1;
+ // bright mask
+ const th=Math.max(otsu(g),170),m=new Uint8Array(W*H);for(let i=0;i<W*H;i++)m[i]=g[i]>=th-15?1:0;
+ const{cs}=comps(m,W,H);if(!cs.length)return c;
+ let best=null;for(const q of cs){const bw=q.x1-q.x0+1,bh=q.y1-q.y0+1,ar=bw*bh;if(ar<.15*W*H)continue;if(q.n<.45*ar)continue; // solid-ish bright
+  if(!best||ar>best.ar)best={...q,ar};}
+ if(!best)return c;const pad=Math.round(.02*Math.max(W,H));
+ sx=Math.max(0,best.x0-pad);sy=Math.max(0,best.y0-pad);ex=Math.min(W-1,best.x1+pad);ey=Math.min(H-1,best.y1+pad);
+ if((ex-sx)<.35*W||(ey-sy)<.35*H)return c;
+ if((ex-sx)>W*.97&&(ey-sy)>H*.97)return c;
+ const o=document.createElement('canvas');o.width=ex-sx+1;o.height=ey-sy+1;o.getContext('2d').drawImage(c,-sx,-sy);return o;}
+// flatten uneven illumination (phone shadows)
+function flatten(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H),p=d.data;
+ // downsample mean luminance
+ const S=32,sw=S,sh=S,sm=new Float32Array(sw*sh);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4,l=p[i]*.3+p[i+1]*.59+p[i+2]*.11;sm[((y*sh/H)|0)*sw+((x*sw/W)|0)]+=l;}
+ const cnt=new Float32Array(sw*sh);for(let y=0;y<H;y++)for(let x=0;x<W;x++)cnt[((y*sh/H)|0)*sw+((x*sw/W)|0)]++;
+ for(let i=0;i<sm.length;i++)sm[i]=cnt[i]?sm[i]/cnt[i]:200;
+ // bilinear sample background and divide
+ const sample=(x,y)=>{const gx=x*(sw-1)/(W-1),gy=y*(sh-1)/(H-1),x0=gx|0,y0=gy|0,x1=Math.min(sw-1,x0+1),y1=Math.min(sh-1,y0+1),fx=gx-x0,fy=gy-y0;
+  return sm[y0*sw+x0]*(1-fx)*(1-fy)+sm[y0*sw+x1]*fx*(1-fy)+sm[y1*sw+x0]*(1-fx)*fy+sm[y1*sw+x1]*fx*fy;};
+ let mean=0;for(let i=0;i<sm.length;i++)mean+=sm[i];mean/=sm.length||1;
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4,bg=sample(x,y)||1,s=mean/bg;for(let k=0;k<3;k++)p[i+k]=Math.max(0,Math.min(255,p[i+k]*s));}
+ c.getContext('2d').putImageData(d,0,0);return c;}
 // site plan: find building footprint = axis rectangle with hip-roof diagonals from its corners
 function site(c){const W=c.width,H=c.height,g=gray(c),m=binar(g,W,H,.5),Dm=Math.max(W,H);
  const ss=segs(dil(m,W,H,3),W,H,2).filter(s=>s.t<.02*Dm),hs=ss.filter(s=>s.hz),vs=ss.filter(s=>!s.hz),tol=.008*Dm+3;
@@ -34,11 +155,26 @@ function site(c){const W=c.width,H=c.height,g=gray(c),m=binar(g,W,H,.5),Dm=Math.
    if(l.c<5||t.c<5||r.c>W-5||b.c>H-5)continue;
    const d=Math.min(w,h)*.4;let hit=0;for(const[cx,cy,sx,sy]of[[l.c,t.c,1,1],[r.c,t.c,-1,1],[r.c,b.c,-1,-1],[l.c,b.c,1,-1]])for(let k=3;k<=20;k++)hit+=on(cx+sx*d*k/20,cy+sy*d*k/20);
    const diag=hit/72;if(diag<.55||sat(l.c-.3*w,t.c-.3*h,r.c+.3*w,b.c+.3*h)>.12)continue;const cd=Math.hypot((l.c+r.c)/2-W/2,(t.c+b.c)/2-H/2)/Dm,sc=diag-.3*cd+.05*Math.min(w,h)/Dm;
-   if(!best||sc>best.sc)best={sc,x0:l.c,x1:r.c,y0:t.c,y1:b.c};}}
- if(!best)return{walls:[],canvas:c,w:15,mode:'none',guess:true};
+   if(!best||sc>best.sc)best={sc,x0:l.c,x1:r.c,y0:t.c,y1:b.c,hip:1};}}
+ if(!best){
+  // fallback: house-sized rectangle with strong edges, low chroma, not a busy map interior
+  const ss2=segs(dil(m,W,H,3),W,H,2).filter(s=>s.t<.025*Dm);const hs2=ss2.filter(s=>s.hz),vs2=ss2.filter(s=>!s.hz),tol2=.01*Dm+3;
+  const cover2=(s,lo,hi)=>Math.max(0,Math.min(s.b+tol2,hi)-Math.max(s.a-tol2,lo))/(hi-lo||1);
+  const inkIn=(x0,y0,x1,y1)=>{let n=0,k=0;for(let y=y0|0;y<y1;y+=4)for(let x=x0|0;x<x1;x+=4){if(x<0||y<0||x>=W||y>=H)continue;k++;if(m[y*W+x])n++;}return k?n/k:1;};
+  for(const t of hs2)for(const b of hs2){const h=b.c-t.c;if(h<.06*Dm||h>.45*H)continue;
+   const L=vs2.filter(v=>cover2(v,t.c,b.c)>.8&&v.c>Math.max(t.a,b.a)-tol2&&v.c<Math.min(t.b,b.b)+tol2);
+   for(const l of L)for(const r of L){const w=r.c-l.c;if(w<.06*Dm||w>.45*W||w/h>3.2||h/w>3.2)continue;
+    if(cover2(t,l.c,r.c)<.8||cover2(b,l.c,r.c)<.8)continue;
+    if(l.c<4||t.c<4||r.c>W-4||b.c>H-4)continue;
+    if(w*h>.4*W*H)continue;
+    if(sat(l.c,t.c,r.c,b.c)>.1)continue;
+    const inner=inkIn(l.c+w*.15,t.c+h*.15,r.c-w*.15,b.c-h*.15);if(inner>.22)continue; // busy interior = map/hatching
+    const sc=.08*Math.min(w,h)/Dm+(inner<.08?.05:0);if(!best||sc>best.sc)best={sc,x0:l.c,x1:r.c,y0:t.c,y1:b.c,hip:0};}}
+ }
+ if(!best)return{walls:[],canvas:c,w:15,mode:'none',guess:true,needTrace:1};
  const lp=Math.max(best.x1-best.x0,best.y1-best.y0),ppm=lp/12,r=v=>Math.round(v/ppm*100)/100,{x0,x1,y0,y1}=best,T=.3;
  const walls=[[x0,y0,x1,y0],[x1,y0,x1,y1],[x1,y1,x0,y1],[x0,y1,x0,y0]].map(q=>({start:[r(q[0]),r(q[1])],end:[r(q[2]),r(q[3])],thickness:T}));
- return{walls,canvas:c,w:Math.round(W/ppm*100)/100,guess:true,mode:'site',longPx:lp,ppm};}
+ return{walls,canvas:c,w:Math.round(W/ppm*100)/100,guess:true,mode:'site',longPx:lp,ppm,hip:!!best.hip};}
 function toCanvas(img,M){const S=Math.min(1,M/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*S);c.height=Math.round(img.height*S);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;}
 function gray(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Uint8Array(W*H);for(let i=0;i<W*H;i++)g[i]=(d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11)|0;return g;}
 function otsu(g){const h=new Array(256).fill(0);g.forEach(v=>h[v]++);let s=0,sB=0,wB=0,b=0,t=128;for(let i=0;i<256;i++)s+=i*h[i];for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=g.length-wB;if(!wF)break;sB+=i*h[i];const v=wB*wF*(sB/wB-(s-sB)/wF)**2;if(v>b){b=v;t=i;}}return t;}
@@ -114,3 +250,35 @@ function toMetres(ss,W,H,mW,line,cv){let ppm,guess=false;
  const r=v=>Math.round(v/ppm*100)/100;
  const walls=ss.map(s=>{const t=line?.2:Math.min(.6,Math.max(.1,Math.round(s.t/ppm*20)/20));return s.hz?{start:[r(s.a),r(s.c)],end:[r(s.b),r(s.c)],thickness:t}:{start:[r(s.c),r(s.a)],end:[r(s.c),r(s.b)],thickness:t};});
  return{walls,canvas:cv,w:Math.round(W/ppm*100)/100,guess,mode:line?'line':'thick'};}
+
+/** Merge colinear wall segments that leave a door/window-sized gap.
+ *  Endpoints may meet other walls (T-junction / corner / entrance); only a
+ *  body blocking the open middle of the gap is rejected. */
+export function gapMerge(ws,on){ws=(ws||[]).map(w=>({...w,op:[...(w.op||w.openings||[])]}));if(!on||ws.length<3)return ws;
+ const P=[];ws.forEach(w=>P.push(w.start,w.end));
+ const xs=P.map(p=>p[0]),zs=P.map(p=>p[1]),bb=[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];
+ const D=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+ const segD=(p,w)=>{const dx=w.end[0]-w.start[0],dz=w.end[1]-w.start[1],L2=dx*dx+dz*dz||1;let t=((p[0]-w.start[0])*dx+(p[1]-w.start[1])*dz)/L2;t=Math.max(0,Math.min(1,t));return Math.hypot(w.start[0]+dx*t-p[0],w.start[1]+dz*t-p[1]);};
+ let ch=1,it=0;while(ch&&it++<200){ch=0;
+  for(let i=0;i<ws.length&&!ch;i++)for(let j=i+1;j<ws.length&&!ch;j++){const A=ws[i],B=ws[j];const La=D(A.start,A.end),Lb=D(B.start,B.end);if(La<.3||Lb<.3)continue;
+   const u=[(A.end[0]-A.start[0])/La,(A.end[1]-A.start[1])/La],v=[(B.end[0]-B.start[0])/Lb,(B.end[1]-B.start[1])/Lb];if(Math.abs(u[0]*v[1]-u[1]*v[0])>.03)continue;
+   if(Math.abs(A.thickness-B.thickness)>.12)continue;const n=[-u[1],u[0]],off=p=>(p[0]-A.start[0])*n[0]+(p[1]-A.start[1])*n[1];if(Math.abs(off(B.start))>.12||Math.abs(off(B.end))>.12)continue;
+   const s=p=>(p[0]-A.start[0])*u[0]+(p[1]-A.start[1])*u[1],sb=[s(B.start),s(B.end)].sort((x,y)=>x-y);let g0,g1;if(sb[0]>=La-.01){g0=La;g1=sb[0];}else if(sb[1]<=.01){g0=sb[1];g1=0;}else continue;
+   const gap=Math.abs(g1-g0);if(gap<.55||gap>2.8)continue;const lo=Math.min(g0,g1),hi=Math.max(g0,g1),pt=t=>[A.start[0]+u[0]*t,A.start[1]+u[1]*t];
+   // Allow walls meeting at jambs/corners; reject only if something sits in the open middle.
+   const mid=pt((lo+hi)/2),eps=.28;
+   const blocked=ws.some(w=>{if(w===A||w===B)return false;
+    const inside=p=>{const t=s(p);return t>lo+eps&&t<hi-eps&&Math.abs(off(p))<Math.max(A.thickness,w.thickness)*.85+.12;};
+    if(inside(w.start)||inside(w.end))return true;
+    return segD(mid,w)<w.thickness*.45+.06 && (()=>{const dx=w.end[0]-w.start[0],dz=w.end[1]-w.start[1],L2=dx*dx+dz*dz||1;let t=((mid[0]-w.start[0])*dx+(mid[1]-w.start[1])*dz)/L2;const q=[w.start[0]+dx*Math.max(0,Math.min(1,t)),w.start[1]+dz*Math.max(0,Math.min(1,t))];const tt=s(q);return tt>lo+eps&&tt<hi-eps;})();});
+   if(blocked)continue;
+   const all=[0,La,sb[0],sb[1]],a0=Math.min(...all),a1=Math.max(...all),st=pt(a0),en=pt(a1),m=pt((lo+hi)/2);
+   const ext=Math.min(Math.abs(m[0]-bb[0]),Math.abs(m[0]-bb[2]),Math.abs(m[1]-bb[1]),Math.abs(m[1]-bb[3]))<.5;
+   const r2=x=>Math.round(x*100)/100,typ=!ext||gap<1.35?'door':'window';
+   const o=typ==='door'?{type:'door',offset:r2(lo-a0),width:r2(Math.min(gap,1.2)),height:2.05}:{type:'window',offset:r2(lo-a0+.05),width:r2(Math.max(.5,gap-.1)),sill:gap>2.1?0:.9,height:gap>2.1?2.2:1.4};
+   if(typ==='door'&&gap>1.2)o.offset=r2(lo-a0+(gap-1.2)/2);
+   if(typ==='door'&&ext)o.out=1;
+   const sh=(w,d)=>(w.op||[]).map(q=>({...q,offset:r2(q.offset+d)}));const flipB=s(B.start)>s(B.end);
+   const opB=(B.op||[]).map(q=>({...q,offset:r2((flipB?sb[1]-q.offset-q.width:sb[0]+q.offset)-a0)}));
+   const W={...A,start:[r2(st[0]),r2(st[1])],end:[r2(en[0]),r2(en[1])],op:[...sh(A,s(A.start)-a0),o,...opB]};ws.splice(j,1);ws.splice(i,1,W);ch=1;}}
+ return ws;}

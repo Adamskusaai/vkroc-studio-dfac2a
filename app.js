@@ -1,4 +1,4 @@
-import {detectWalls} from './cv.js';
+import {detectWalls,gapMerge} from './cv.js';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -11,7 +11,7 @@ const DEMO={name:'Ukážkový dom',units:'m',levels:[{name:'1NP',elevation:0,hei
  W([0,0],[10,0],[{type:'window',offset:2,width:1.5,sill:.9,height:1.4},{type:'window',offset:6.5,width:1.5,sill:.9,height:1.4}]);
  W([10,0],[10,8],[{type:'window',offset:3,width:2,sill:.9,height:1.4}]);W([10,8],[0,8],[{type:'door',offset:4.5,width:1,sill:0,height:2.1}]);
  W([0,8],[0,0],[{type:'window',offset:3,width:1.2,sill:.9,height:1.4}]);W([6,0],[6,5],[{type:'door',offset:2,width:.9,sill:0,height:2.05}],.15);W([6,5],[10,5],[{type:'door',offset:1.5,width:.9,sill:0,height:2.05}],.15);})();
-let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;
+let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
 function thumb(h){const ws=h.walls.filter(w=>w.level===h.levels[0].name),pp=h.plot?h.plot.pts:[];const P=[...ws.flatMap(w=>[w.start,w.end]),...pp];if(!P.length)return'';const xs=P.map(p=>p[0]),zs=P.map(p=>p[1]),x0=Math.min(...xs),z0=Math.min(...zs),S=Math.max(Math.max(...xs)-x0,Math.max(...zs)-z0,1),k=100/S,f=v=>(v*k).toFixed(1);
  return '<svg viewBox="-6 -6 112 112" preserveAspectRatio="xMidYMid meet">'+(pp.length?'<path d="M'+pp.map(p=>f(p[0]-x0)+' '+f(p[1]-z0)).join('L')+'Z" fill="#E4EED9" stroke="#7a9a5a" stroke-dasharray="3 2"/>':'')+'<path d="'+ws.map(w=>'M'+f(w.start[0]-x0)+' '+f(w.start[1]-z0)+'L'+f(w.end[0]-x0)+' '+f(w.end[1]-z0)).join('')+'" stroke="#0B0B0B" stroke-width="'+Math.max(1.5,.3*k).toFixed(1)+'" stroke-linecap="square" fill="none"/></svg>';}
@@ -96,12 +96,13 @@ function draw(){WLB=[];cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#FAF9F6';cx.fi
  for(let k=0;k<3&&WLB.some(q=>Math.abs(q[0]-P[0])<(tw/2+26*d)&&Math.abs(q[1]-P[1])<th/2+10*d);k++)P[1]+=(r.p[1]>0?1:1)*16*d;
  r.sp=P;cx.textAlign='center';if(!small){cx.fillStyle=r.auto?'rgba(11,11,11,.55)':'#0B0B0B';ln.forEach((t,i)=>cx.fillText(t,P[0],P[1]-2*d-(ln.length-1-i)*fs*1.1*d));}cx.font=`500 ${Math.min(11.5,fs)*d}px Inter,system-ui`;cx.fillStyle='#6B6B6B';cx.fillText(r.a.toFixed(1).replace('.',',')+' m²',P[0],P[1]+12*d);});
  const ta=$('area');if(ta){ta.hidden=!RS.length;ta.textContent='Plocha '+lvl+': '+tot.toFixed(1).replace('.',',')+' m² · '+RS.length+' miest.';}
+ if(cornerPts&&cornerPts.length){const d=devicePixelRatio;cornerPts.forEach((p,i)=>{const s=toS(p);cx.fillStyle='#E85D04';cx.beginPath();cx.arc(s[0],s[1],7*d,0,6.3);cx.fill();cx.strokeStyle='#fff';cx.lineWidth=2*d;cx.stroke();cx.fillStyle='#fff';cx.font=`700 ${11*d}px Inter,system-ui`;cx.textAlign='center';cx.fillText(String(i+1),s[0],s[1]+4*d);});if(cornerPts.length>1){cx.strokeStyle='#E85D0488';cx.lineWidth=2*d;cx.setLineDash([6*d,4*d]);cx.beginPath();cornerPts.forEach((p,i)=>{const s=toS(p);i?cx.lineTo(s[0],s[1]):cx.moveTo(s[0],s[1]);});if(cornerPts.length===4){const s=toS(cornerPts[0]);cx.lineTo(s[0],s[1]);}cx.stroke();cx.setLineDash([]);}cx.textAlign='left';}
  $('empE').hidden=!!(H.walls.length||bg||H.plot);}
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('wheel',e=>{e.preventDefault();const p=toW(e),f=e.deltaY<0?1.15:1/1.15;view.s*=f;view.x=p[0]-(p[0]-view.x)/f;view.y=p[1]-(p[1]-view.y)/f;draw();},{passive:false});
 const ptrs=new Map();let pinch=null,lastAct=0;
 const two=()=>{const [a,b]=[...ptrs.values()];return{c:[(a.clientX+b.clientX)/2,(a.clientY+b.clientY)/2],d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)||1};};
-cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,e);TOUCH=e.pointerType==='touch';
+cv.addEventListener('pointerdown',e=>{if(cv._cornerMode){e.preventDefault();const p=toW(e);cornerPts.push(p);$('hint').textContent='Označovanie rohov: '+cornerPts.length+'/4';draw();if(cornerPts.length>=4)finishCorners();return;}cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,e);TOUCH=e.pointerType==='touch';
  if(ptrs.size===2){if(drag&&['end','wall','op'].includes(drag.k)&&undo.length)H=JSON.parse(undo.pop());else if(Date.now()-lastAct<400&&undo.length)H=JSON.parse(undo.pop());
   const t=two();pinch={...t,v0:{...view},w0:toW({clientX:t.c[0],clientY:t.c[1]})};drag=null;draw();return;}
  if(ptrs.size>2)return;const p=toW(e);
@@ -179,6 +180,14 @@ async function calDone(){const d=Math.hypot(calPts[1][0]-calPts[0][0],calPts[1][
 function busy(t){let b=$('busy');if(!t){if(b)b.remove();return;}if(!b){b=document.createElement('div');b.id='busy';b.className='busy';document.body.appendChild(b);}b.innerHTML='<div><span class="spin"></span><b>'+t+'</b></div>';}
 function banner(){$('ban').hidden=!(H.underlay&&H.underlay.guess&&!H.underlay.cal&&H.walls.length);}
 let recBusy=0;
+
+function offerTrace(){dlg('Rozpoznanie sa nepodarilo','<p>Na výkrese neviem spoľahlivo nájsť steny (fotka, tiene, situácia alebo neštandardný formát).</p><p><b>Označte 4 rohy domu</b> na podklade – vytvorím obvod. Vnútro potom dokreslíte, alebo skúste inú citlivosť.</p>',[['Zrušiť',null],['Kresliť ručne','draw'],['Označiť 4 rohy','corners','go']]).then(r=>{if(!r)return;if(r.v==='draw'){tool('wall');toast('Kreslite steny prstom / myšou.','ok');}else if(r.v==='corners')startCorners();});}
+let cornerPts=[];
+function startCorners(){cornerPts=[];tool('pan');toast('Ťuknite 4 rohy domu (v smere hodinových ručičiek).','ok');$('hint').textContent='Označovanie rohov: 0/4 – ťuknite roh domu na výkrese.';
+ cv._cornerMode=1;}
+function finishCorners(){if(cornerPts.length<4)return;cv._cornerMode=0;snap();const lv=LV(),r2=x=>Math.round(x*100)/100,P=cornerPts.slice(0,4).map(p=>[r2(p[0]),r2(p[1])]);
+ for(let i=0;i<4;i++){const a=P[i],b=P[(i+1)%4];H.walls.push({id:'c'+Date.now()+i,auto:1,level:lv.name,start:a,end:b,thickness:.3,base:0,height:lv.height,openings:[]});}
+ cornerPts=[];save();fit();banner();toast('Obvod domu hotový (4 steny). Dokreslite vnútorné priečky.','ok');$('hint').textContent='Obvod z rohov je hotový. Dokreslite vnútorné steny alebo pridajte dvere/okná.';}
 async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)toast('Najprv nahrajte výkres pre toto podlažie.','warn');return;}if(recBusy)return;recBusy=1;busy('Rozpoznávam steny…');await new Promise(r=>setTimeout(r,40));
  let R=null;const man=H.walls.some(w=>!w.auto);try{R=detectWalls(bg,{sens:+$('sens').value,mW:H.underlay.cal||man?bgW:null,rect:H.underlay.rect||man,site:H.underlay.site&&!man,w:bgW});if(man)R.guess=false;}catch(e){console.warn(e);}
  const ws=R?R.walls:[];busy(0);recBusy=0;if(!nosnap)snap();const lv=LV();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lv.name));
@@ -186,10 +195,13 @@ async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)to
  H.walls=H.walls.concat(gapMerge(ws,R&&R.mode==='plan').map((w,i)=>({id:'a'+Date.now()+i,auto:1,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:w.op||[]})));
  save();const u=H.underlay;bgW=u.w;$('imw').value=bgW;if(!bg.src.endsWith(u.src.slice(-40))){bg=new Image();bg.onload=()=>{fit();};bg.src=u.src;}else fit();banner();
  const md=R?R.mode:'none';window.__mode=md;
- const hm=md==='site'?'Toto vyzerá ako situácia pozemku – nakreslil som obvod domu. Vnútorné steny dokreslite alebo nahrajte pôdorys.':ws.length?'Rozpoznaných '+H.walls.filter(w=>w.auto&&w.level===lv.name).length+' stien'+((n=>n?' a '+n+(n<5?' otvory':' otvorov')+' (dvere/okná)':'')(H.walls.filter(w=>w.auto&&w.level===lv.name).reduce((s,w)=>s+w.openings.length,0)))+'. Ak niečo chýba alebo prebýva, posuňte „Citlivosť“. Opravy: Posunúť, Zmazať, Späť.':'Na obrázku sme nenašli steny ani obrys domu. Výkres zostáva ako podklad – steny nakreslite ručne alebo nahrajte pôdorys.';$('hint').textContent=hm;if(!quiet||md!=='plan')toast(hm.split('. ')[0]+'.',ws.length?'ok':'warn');
+ const nAuto=H.walls.filter(w=>w.auto&&w.level===lv.name).length,nOp=H.walls.filter(w=>w.auto&&w.level===lv.name).reduce((s,w)=>s+(w.openings||[]).length,0);
+ const hm=md==='site'?'Toto vyzerá ako situácia pozemku – nakreslil som obvod domu. Vnútorné steny dokreslite alebo nahrajte pôdorys.':ws.length?'Rozpoznaných '+nAuto+' stien'+(nOp?' a '+nOp+(nOp<5?' otvory':' otvorov')+' (dvere/okná)':'')+'. Ak niečo chýba alebo prebýva, posuňte „Citlivosť“. Opravy: Posunúť, Zmazať, Späť.':(R&&R.needTrace)?'Pôdorys sa nepodarilo spoľahlivo prečítať. Označte 4 rohy domu, alebo steny nakreslite ručne.':'Na obrázku sme nenašli steny ani obrys domu. Výkres zostáva ako podklad – steny nakreslite ručne alebo nahrajte pôdorys.';
+ $('hint').textContent=hm;if(!quiet||md!=='plan')toast(hm.split('. ')[0]+'.',ws.length?'ok':'warn');
+ if(!ws.length&&R&&R.needTrace&&!quiet){setTimeout(()=>offerTrace(),200);}
  if(md==='site'&&!H.plot&&ws.length){const xs=ws.flatMap(w=>[w.start[0],w.end[0]]),zs=ws.flatMap(w=>[w.start[1],w.end[1]]);H.plot=plotAround(Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs));save();fit();}
  if(md==='site'&&!quiet2.v&&!H.underlay.cal&&!man){quiet2.v=1;dlg('Situácia pozemku','<p>Toto vyzerá ako situácia pozemku – nakreslil som obvod domu. Vnútorné steny dokresli alebo nahraj pôdorys.</p><p>Aká dlhá je dlhšia strana domu (v metroch)? Nájdete ju na kóte, napr. „14400“ = 14,4 m.</p><input type="text" inputmode="decimal" placeholder="napr. 14,4">',[['Neskôr',null],['Nastaviť','ok','go']]).then(r=>{quiet2.v=0;const v=parseFloat(((r&&r.name)||'').replace(',','.'));if(r&&v>2&&v<100)scaleBy(v/(R.longPx/R.ppm));});}
- window.__rec=ws.length;}
+ window.__rec=ws.length;window.__nw=H.walls.length;window.__ops=H.walls.reduce((s,w)=>s+(w.openings||[]).length,0);window.__need=!!(R&&R.needTrace);}
 const quiet2={v:0};
 function scaleBy(f){snap();bgW=Math.round(bgW*f*100)/100;H.underlay.w=bgW;H.underlay.cal=1;$('imw').value=bgW;H.walls.forEach(w=>{w.start=w.start.map(c=>Math.round(c*f*100)/100);w.end=w.end.map(c=>Math.round(c*f*100)/100);});save();fit();banner();}
 $('rec').onclick=()=>recog();$('recx').onclick=()=>{const n=H.walls.filter(w=>w.auto&&w.level===lvl).length;if(!n)return;snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));save();draw();$('hint').textContent='Rozpoznané steny vymazané ('+n+'). Späť ich vráti.';toast('Vymazaných '+n+' rozpoznaných stien.','ok');};let sT;$('sens').oninput=()=>{clearTimeout(sT);sT=setTimeout(()=>H.underlay&&recog(1),350);};$('banc').onclick=()=>$('cal').click();
@@ -365,23 +377,3 @@ function tut(T=TUT,key='vkTut'){document.getElementById('tutx')?.remove();const 
 window.tut=tut;
 function tutWait(n=0,T=TUT,key='vkTut'){if(localStorage[key]||document.getElementById('tutx')||n>60)return;const ok=document.getElementById(T===TUT?'ed':'vw').classList.contains('on')&&!document.getElementById('sk3').offsetParent&&!document.getElementById('ov').classList.contains('on')&&!document.body.classList.contains('pres');if(ok&&n>2)tut(T,key);else setTimeout(()=>tutWait(n+1,T,key),400);}
 const TUT3=[['#walk','Prechádzka','Vstúpte dnu a kráčajte po dome. Na mobile joystickom, na počítači klávesmi W A S D.'],['#jumps','Miestnosti','Ťuknutím sa presuniete priamo do miestnosti.'],['#lookb','Vzhľad','Štýl interiéru jedným kliknutím, farby stien, fasády, strechy a podlahy.'],['#pres','Prezentácia','Čistý režim na celú obrazovku s automatickou prehliadkou a kontaktom makléra.'],['#share','Zdieľať','Odkaz pre klienta – otvorí sa rovno prezentácia.']];
-
-function gapMerge(ws,on){ws=ws.map(w=>({...w,op:[]}));if(!on||ws.length<3)return ws;const P=[];ws.forEach(w=>P.push(w.start,w.end));
- const xs=P.map(p=>p[0]),zs=P.map(p=>p[1]),bb=[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];
- const D=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]),near=(p,ex)=>ws.some(w=>!ex.includes(w)&&(D(w.start,p)<.35||D(w.end,p)<.35||segD(p,w)<w.thickness*.6+.05));
- const segD=(p,w)=>{const dx=w.end[0]-w.start[0],dz=w.end[1]-w.start[1],L2=dx*dx+dz*dz||1;let t=((p[0]-w.start[0])*dx+(p[1]-w.start[1])*dz)/L2;t=Math.max(0,Math.min(1,t));return Math.hypot(w.start[0]+dx*t-p[0],w.start[1]+dz*t-p[1]);};
- let ch=1,it=0;while(ch&&it++<200){ch=0;
-  for(let i=0;i<ws.length&&!ch;i++)for(let j=i+1;j<ws.length&&!ch;j++){const A=ws[i],B=ws[j];const La=D(A.start,A.end),Lb=D(B.start,B.end);if(La<.3||Lb<.3)continue;
-   const u=[(A.end[0]-A.start[0])/La,(A.end[1]-A.start[1])/La],v=[(B.end[0]-B.start[0])/Lb,(B.end[1]-B.start[1])/Lb];if(Math.abs(u[0]*v[1]-u[1]*v[0])>.03)continue;
-   if(Math.abs(A.thickness-B.thickness)>.12)continue;const n=[-u[1],u[0]],off=p=>(p[0]-A.start[0])*n[0]+(p[1]-A.start[1])*n[1];if(Math.abs(off(B.start))>.12||Math.abs(off(B.end))>.12)continue;
-   const s=p=>(p[0]-A.start[0])*u[0]+(p[1]-A.start[1])*u[1],sb=[s(B.start),s(B.end)].sort((x,y)=>x-y);let g0,g1;if(sb[0]>=La-.01){g0=La;g1=sb[0];}else if(sb[1]<=.01){g0=sb[1];g1=0;}else continue;
-   const gap=Math.abs(g1-g0);if(gap<.6||gap>2.6)continue;const lo=Math.min(g0,g1),hi=Math.max(g0,g1),pt=t=>[A.start[0]+u[0]*t,A.start[1]+u[1]*t];
-   if(near(pt(lo),[A,B])||near(pt(hi),[A,B]))continue;
-   const all=[0,La,sb[0],sb[1]],a0=Math.min(...all),a1=Math.max(...all),st=pt(a0),en=pt(a1),m=pt((lo+hi)/2);
-   const ext=Math.min(Math.abs(m[0]-bb[0]),Math.abs(m[0]-bb[2]),Math.abs(m[1]-bb[1]),Math.abs(m[1]-bb[3]))<.45;
-   const r2=x=>Math.round(x*100)/100,typ=!ext||gap<.95?'door':'window',o=typ==='door'?{type:'door',offset:r2(lo-a0),width:r2(Math.min(gap,1.2)),height:2.05}:{type:'window',offset:r2(lo-a0+.05),width:r2(gap-.1),sill:gap>2.1?0:.9,height:gap>2.1?2.2:1.4};
-   if(typ==='door'&&gap>1.2)o.offset=r2(lo-a0+(gap-1.2)/2);
-   const sh=(w,d)=>(w.op||[]).map(q=>({...q,offset:r2(q.offset+d)}));const dA=s(A.start)-a0,flipB=s(B.start)>s(B.end);
-   const opB=(B.op||[]).map(q=>({...q,offset:r2((flipB?sb[1]-q.offset-q.width:sb[0]+q.offset)-a0)}));
-   const W={...A,start:[r2(st[0]),r2(st[1])],end:[r2(en[0]),r2(en[1])],op:[...sh(A,dA),o,...opB]};ws.splice(j,1);ws.splice(i,1,W);ch=1;}}
- return ws;}
