@@ -1,4 +1,4 @@
-import {detectWalls,gapMerge} from './cv.js';
+import {detectWalls,gapMerge} from './cv.js?v=20261109f';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -6,11 +6,42 @@ function stairRect(st){const L=st.length||3.6,W=st.width||1,d=st.dir||0,c=Math.c
 function toast(m,k='info',ms=3800){const t=document.createElement('div');t.className='toast '+k;t.innerHTML=I[k==='ok'?'check':k==='err'||k==='warn'?'warn':'info']+'<div>'+m+'</div>';$('toasts').appendChild(t);while($('toasts').children.length>3)$('toasts').firstChild.remove();setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),300);},ms);}
 window.__toast=()=>[...document.querySelectorAll('.toast')].map(t=>t.textContent).join(' | ');
 const $=id=>document.getElementById(id),KEY='vkroc_studio_project';
-const DEMO={name:'Ukážkový dom',units:'m',levels:[{name:'1NP',elevation:0,height:2.8}],walls:[],plot:{pts:[[-5,-6],[15,-6],[15,15],[-5,15]],fence:1}};
-(()=>{const W=(a,b,o=[],t=.3)=>DEMO.walls.push({id:'w'+DEMO.walls.length,level:'1NP',start:a,end:b,thickness:t,base:0,height:2.8,openings:o});
- W([0,0],[10,0],[{type:'window',offset:2,width:1.5,sill:.9,height:1.4},{type:'window',offset:6.5,width:1.5,sill:.9,height:1.4}]);
- W([10,0],[10,8],[{type:'window',offset:3,width:2,sill:.9,height:1.4}]);W([10,8],[0,8],[{type:'door',offset:4.5,width:1,sill:0,height:2.1}]);
- W([0,8],[0,0],[{type:'window',offset:3,width:1.2,sill:.9,height:1.4}]);W([6,0],[6,5],[{type:'door',offset:2,width:.9,sill:0,height:2.05}],.15);W([6,5],[10,5],[{type:'door',offset:1.5,width:.9,sill:0,height:2.05}],.15);})();
+const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f4f1ec',floor:'dub',fac:'#ece3d3',roof:'#2b3442'},
+ levels:[{name:'1NP',elevation:0,height:2.85}],walls:[],furn:[],plot:{pts:[[-4,-5],[20,-5],[20,15],[-4,15]],fence:1},roof:'gable'};
+(()=>{const L='1NP',h=2.85,W=(a,b,o=[],t=.3)=>DEMO.walls.push({id:'w'+DEMO.walls.length,level:L,start:a,end:b,thickness:t,base:0,height:h,openings:o});
+ // Outer 15×10.5 m ≈ 157 m² footprint (+ terrace/carport outside)
+ // South facade z=0, north z=10.5, west x=0, east x=15
+ W([0,0],[15,0],[
+  {type:'door',offset:1.2,width:1.1,sill:0,height:2.15,out:1}, // vstup
+  {type:'window',offset:4.2,width:2.2,sill:.4,height:2.1}, // obývačka
+  {type:'window',offset:8.2,width:1.8,sill:.9,height:1.4},
+  {type:'window',offset:11.5,width:1.6,sill:.9,height:1.4}]);
+ W([15,0],[15,10.5],[{type:'window',offset:2.2,width:1.4,sill:.9,height:1.4},{type:'window',offset:6.5,width:1.4,sill:.9,height:1.4}]);
+ W([15,10.5],[0,10.5],[{type:'window',offset:2,width:1.5,sill:.9,height:1.4},{type:'window',offset:6,width:2,sill:.9,height:1.4},{type:'window',offset:11,width:1.5,sill:.9,height:1.4}]);
+ W([0,10.5],[0,0],[{type:'window',offset:3.5,width:1.2,sill:.9,height:1.4},{type:'window',offset:7.2,width:1.2,sill:.9,height:1.4}]);
+ // Internal: hallway / living split
+ W([0,3.6],[5.2,3.6],[{type:'door',offset:2.8,width:.9,height:2.05}],.15);
+ W([5.2,0],[5.2,3.6],[{type:'door',offset:1.4,width:.85,height:2.05}],.15); // do WC/kúpeľne zóny
+ W([5.2,1.9],[7.4,1.9],[],.15); W([7.4,0],[7.4,1.9],[{type:'door',offset:.4,width:.7,height:2.0}],.12); // WC
+ W([5.2,1.9],[5.2,3.6],[{type:'door',offset:.5,width:.8,height:2.05}],.15); // kúpeľňa
+ W([7.4,1.9],[7.4,3.6],[],.15); W([5.2,3.6],[7.4,3.6],[],.15);
+ // Vertical spine bedrooms / living
+ W([8.2,0],[8.2,10.5],[{type:'door',offset:4.6,width:.9,height:2.05},{type:'door',offset:7.6,width:.9,height:2.05}],.15);
+ W([8.2,4.2],[15,4.2],[{type:'door',offset:2.8,width:.85,height:2.05}],.15);
+ W([8.2,7.4],[15,7.4],[{type:'door',offset:2.8,width:.85,height:2.05}],.15);
+ // Kitchen peninsula hint wall short
+ W([0,7.2],[3.8,7.2],[],.12);
+ // Furniture (pre-placed, skandi) — rooms roughly: predsieň, wc, kúpeľňa, obývačka+kuch, 3 spálne
+ const F=(t,x,z,r=0)=>DEMO.furn.push({t,p:[x,z],r,level:L});
+ F('shelf',1.0,1.0); F('shelf',3.8,0.6,1); // predsieň
+ F('wc',6.3,0.85); // wc
+ F('bath',6.2,2.55); F('sink',5.7,3.2,1); F('wc',7.0,3.15); // kúpeľňa
+ F('sofa',4.2,5.4,0); F('ctable',4.2,6.5); F('tv',4.2,9.8,2); F('armch',6.5,5.6,3); F('plant',1.0,9.5);
+ F('kitch',1.6,8.5,0); F('fridge',3.3,8.3); F('table',2.2,5.0); // kuch + jedálenský
+ F('bed',11.5,2.0); F('ward',13.8,0.8,3); F('plant',9.0,0.7); // spálňa
+ F('bed1',10.0,5.5); F('desk',13.5,5.0,3); F('ward',14.2,6.5,2); // izba
+ F('bed1',10.0,8.7); F('desk',13.5,8.5,3); F('shelf',9.0,9.8); // izba 2
+})();
 let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
 function thumb(h){const ws=h.walls.filter(w=>w.level===h.levels[0].name),pp=h.plot?h.plot.pts:[];const P=[...ws.flatMap(w=>[w.start,w.end]),...pp];if(!P.length)return'';const xs=P.map(p=>p[0]),zs=P.map(p=>p[1]),x0=Math.min(...xs),z0=Math.min(...zs),S=Math.max(Math.max(...xs)-x0,Math.max(...zs)-z0,1),k=100/S,f=v=>(v*k).toFixed(1);
@@ -72,7 +103,9 @@ function draw(){WLB=[];cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#FAF9F6';cx.fi
  cx.lineWidth=1;if(!EXP){const gs=i=>cx.strokeStyle=i%5?'#EEEBE5':'#E0DBD2';const x0=Math.floor(view.x),y0=Math.floor(view.y);for(let i=x0;i<x0+cv.width/view.s+1;i++){gs(i);const a=toS([i,0])[0];cx.beginPath();cx.moveTo(a,0);cx.lineTo(a,cv.height);cx.stroke();}
  for(let i=y0;i<y0+cv.height/view.s+1;i++){gs(i);const a=toS([0,i])[1];cx.beginPath();cx.moveTo(0,a);cx.lineTo(cv.width,a);cx.stroke();}}
  if(H.plot&&H.plot.pts.length>2){cx.beginPath();H.plot.pts.forEach((p,i)=>{const P=toS(p);i?cx.lineTo(...P):cx.moveTo(...P);});cx.closePath();cx.fillStyle='rgba(122,154,90,.13)';cx.fill();cx.setLineDash([8*devicePixelRatio,6*devicePixelRatio]);cx.strokeStyle=H.plot.fence?'#5f7f42':'#7a9a5a';cx.lineWidth=(H.plot.fence?2.5:1.5)*devicePixelRatio;cx.stroke();cx.setLineDash([]);
-  const pp=H.plot.pts;cx.font=`500 ${11*devicePixelRatio}px Inter,system-ui`;cx.fillStyle='#5f7f42';cx.textAlign='center';pp.forEach((p,i)=>{const q=pp[(i+1)%pp.length],m=toS([(p[0]+q[0])/2,(p[1]+q[1])/2]);cx.fillText(Math.hypot(q[0]-p[0],q[1]-p[1]).toFixed(1)+' m',m[0],m[1]-6*devicePixelRatio);});}
+  const pp=H.plot.pts,d=devicePixelRatio;cx.font=`500 ${11*d}px Inter,system-ui`;cx.fillStyle='#5f7f42';cx.textAlign='center';pp.forEach((p,i)=>{const q=pp[(i+1)%pp.length],m=toS([(p[0]+q[0])/2,(p[1]+q[1])/2]);cx.fillText(Math.hypot(q[0]-p[0],q[1]-p[1]).toFixed(1)+' m',m[0],m[1]-6*d);});
+  // editable corner handles
+  pp.forEach(p=>{const P=toS(p);cx.fillStyle='#fff';cx.strokeStyle='#5f7f42';cx.lineWidth=2*d;cx.beginPath();cx.arc(P[0],P[1],5.5*d,0,6.3);cx.fill();cx.stroke();});cx.textAlign='left';}
  H.walls.filter(w=>w.level!==lvl).forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='rgba(11,11,11,.12)';quad(w,0,g.L,-t,t);});
  (H.stairs||[]).filter(st=>st.level===lvl||H.levels[H.levels.indexOf(LV())-1]?.name===st.level).forEach(st=>{const r=stairRect(st),a=toS([r[0],r[1]]),b=toS([r[2],r[3]]);cx.globalAlpha=st.level===lvl?1:.35;cx.fillStyle='#EADFCF';cx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);cx.strokeStyle='#B08D64';cx.lineWidth=1.5*devicePixelRatio;cx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);const d=st.dir||0,c=Math.cos(d),sn=Math.sin(d),L=st.length||3.6,W=st.width||1;for(let k=1;k<12;k++){const f=k/12,p1=toS([st.pos[0]+c*L*f,st.pos[1]+sn*L*f]),p2=toS([st.pos[0]+c*L*f-sn*W,st.pos[1]+sn*L*f+c*W]);cx.beginPath();cx.moveTo(...p1);cx.lineTo(...p2);cx.stroke();}const m0=toS([st.pos[0]-sn*W/2+c*.3,st.pos[1]+c*W/2+sn*.3]),m1=toS([st.pos[0]-sn*W/2+c*(L-.3),st.pos[1]+c*W/2+sn*(L-.3)]);cx.strokeStyle='#E2552D';cx.lineWidth=2*devicePixelRatio;cx.beginPath();cx.moveTo(...m0);cx.lineTo(...m1);cx.stroke();cx.fillStyle='#E2552D';cx.beginPath();cx.arc(...m1,4*devicePixelRatio,0,7);cx.fill();cx.globalAlpha=1;});
  FL().forEach(f=>{const[w,d]=fdim(f),A=toS([f.p[0]-w/2,f.p[1]-d/2]),dd=devicePixelRatio;cx.fillStyle='#F1ECE4';cx.strokeStyle='#A39A8C';cx.lineWidth=1.2*dd;cx.beginPath();cx.roundRect(A[0],A[1],w*view.s,d*view.s,3*dd);cx.fill();cx.stroke();
@@ -133,7 +166,7 @@ cv.addEventListener('pointermove',e=>{if(!drag)return;const p=toW(e);
  draw();});
 const pu=e=>{ptrs.delete(e.pointerId);if(pinch){if(!ptrs.size)pinch=null;return;}if(!drag)return;if(e.type==='pointercancel'){drag=null;draw();return;}
  if(drag.k==='new'&&Math.hypot(drag.b[0]-drag.a[0],drag.b[1]-drag.a[1])>.2){snap();H.walls.push({id:'w'+Date.now(),level:lvl,start:drag.a,end:drag.b,thickness:+$('th').value/100,base:0,height:LV().height,openings:[]});}
- if(['end','wall','op','furn'].includes(drag.k)&&undo.length&&undo[undo.length-1]===JSON.stringify(H))undo.pop();
+ if(['end','wall','op','furn','plot'].includes(drag.k)&&undo.length&&undo[undo.length-1]===JSON.stringify(H))undo.pop();
  drag=null;save();draw();};
 cv.addEventListener('pointerup',pu);cv.addEventListener('pointercancel',pu);
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
@@ -215,7 +248,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
 async function act(m){$('dd').classList.remove('on');if(m==='png'||m==='a4'||m==='a3'){exportHi(m);return;}if(m==='furnish'){furnish();return;}if(m==='agent'){agentDlg();return;}if(m==='tut'){$('vw').classList.contains('on')?tut(TUT3,'vkTut3'):tut();return;}if(m==='pano'){panoDlg();return;}if(m==='pres'){presOn(true);return;}if(m==='mirror'){mirror();return;}
  if(m==='new')wizNew();
  if(m==='newimg')pickImg('new');if(m==='open')$('ld').click();if(m==='mine')show('home');
- if(m==='demo')newP('Ukážkový dom',JSON.parse(JSON.stringify(DEMO.walls)),null,JSON.parse(JSON.stringify(DEMO.plot)));
+ if(m==='demo'){const D=JSON.parse(JSON.stringify(DEMO));newP(D.name,D.walls,null,D.plot);H.furn=D.furn||[];H.style=D.style;H.mat=D.mat||H.mat;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}save();toast('Ukážkový rodinný dom – zariadený, pripravený na 3D.','ok');}
  if(m==='dl'){save();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(H,null,1)],{type:'application/json'}));a.download=(H.name||'dom')+'.json';a.click();toast('Projekt stiahnutý.','ok');}}
 $('menu').onclick=e=>{e.stopPropagation();$('dd').classList.toggle('on');};document.addEventListener('click',()=>$('dd').classList.remove('on'));
 document.querySelectorAll('#dd a').forEach(a=>a.onclick=()=>act(a.dataset.m));
@@ -248,7 +281,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js');}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109f');}return V;};
 function wUI(v){jumpsUI(v);$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(n!==genN)return;m.setRoof(roof);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#2b3442';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
@@ -260,7 +293,7 @@ $('share').onclick=async()=>{const base=location.href.split('#')[0]+'#t='+await 
  const r=await dlg('Zdieľať prehliadku','<p>Odkaz otvorí 3D prehliadku bez editora. Pošlite ho klientovi.</p><label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="pr" checked style="width:auto" onchange="const i=this.closest(\'.dlg\').querySelector(\'input[readonly]\');i.value=this.checked?i.dataset.p:i.dataset.b"> Prezentácia pre klienta (auto-prehliadka, kontakt makléra)</label><input type="text" readonly data-b="'+esc(base)+'" data-p="'+esc(url)+'" value="'+esc(url)+'">',[['Zavrieť',null],['Stiahnuť ako súbor','f'],['Kopírovať odkaz','c','go']]);if(r&&r.f&&!r.f.pr)url=base;
  if(r&&r.v==='c'){try{await navigator.clipboard.writeText(url);toast('Odkaz skopírovaný.','ok');}catch(e){toast('Kopírovanie zlyhalo – označte odkaz ručne.','warn');}}
  if(r&&r.v==='f')dl(new Blob(['<!doctype html><meta charset="utf-8"><title>'+esc(H.name)+' – prehliadka</title><meta http-equiv="refresh" content="0;url='+esc(url)+'"><a href="'+esc(url)+'">Otvoriť prehliadku</a>'],{type:'text/html'}),(H.name||'dom')+' - prehliadka.html');};
-$('roof').onchange=e=>{roof=e.target.value;if(H)H.roof=roof;gen(false);};
+$('roof').onchange=async e=>{const v=e.target.value,prev=roof;roof=v;if(H)H.roof=roof;if((v==='none')!==(prev==='none')&&prev&&v){const m=await v3();if(m.setRoof){m.setRoof(v,true);if(v!=='none')gen(false);else return;}}gen(false);};
 function show(s,nopush){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.s===s));document.querySelectorAll('.scr').forEach(x=>x.classList.toggle('on',x.id===s));
  $('tbed').classList.toggle('on',s==='ed');if(s==='home'){home();}$('tbvw').classList.toggle('on',s==='vw');document.querySelector('.seg').style.visibility=s==='home'?'hidden':'';$('pname').style.display=s==='home'?'none':'';const vb=$('VRButton');if(vb)vb.style.display=s==='vw'&&!/NOT|ONLY/i.test(vb.textContent)?'':'none';if(s==='vw'){gen(true);if(!localStorage.vkTut3)tutWait(0,TUT3,'vkTut3');}else if(s==='ed'){requestAnimationFrame(fit);if(!localStorage.vkTut)tutWait();}
  if(H&&s!=='home')$('pname').textContent=H.name;
@@ -340,7 +373,7 @@ function roomPts(){const out=[];H.levels.forEach(l=>{const RS=rooms(l.name);RS.f
 async function panoDlg(){const P=roomPts();if(!P.length){toast('Najprv uzavrite steny miestností.','warn');return;}const r=await dlg('360° panoráma','<p>Equirektangulárny obrázok 4096×2048 pre realitné portály a 360° prehliadače.</p><label>Miestnosť<select name="i"><option value="all">Všetky miestnosti</option>'+P.map((q,i)=>'<option value="'+i+'">'+esc(q.n)+'</option>').join('')+'</select></label>',[['Zrušiť',0],['Stiahnuť',1,'pri','dl']]);if(!r||!r.v)return;const was=$('vw').classList.contains('on');if(!was)show('vw');const m=await v3();await new Promise(s=>setTimeout(s,was?200:1800));const L=r.f.i==='all'?P:[P[+r.f.i]];for(const q of L){const u=m.pano(q.p[0],q.p[1],q.e);if(!u)continue;const a=document.createElement('a');a.href=u;a.download=(H.name||'projekt')+' - '+q.n+' 360.jpg';a.click();await new Promise(s=>setTimeout(s,400));}toast(L.length>1?'Panorámy stiahnuté ('+L.length+').':'Panoráma stiahnutá.','ok');}
 async function jumpsUI(v){const J=$('jumps');if(!v||!H){J.hidden=true;return;}const m=await v3();J.innerHTML='';H.levels.forEach(l=>{const RS=rooms(l.name);RS.filter(r=>r.a>=2).forEach(r=>{const c=[(r.bb[0]+r.bb[2])/2,(r.bb[1]+r.bb[3])/2],RR=RC[l.name];let p=c;if(roomAt(RR,c)!==r.id){p=null;for(let k=0;k<400&&!p;k++){const q=[r.bb[0]+Math.random()*(r.bb[2]-r.bb[0]),r.bb[1]+Math.random()*(r.bb[3]-r.bb[1])];if(roomAt(RR,q)===r.id)p=q;}}if(!p)return;const b=document.createElement('button');b.textContent=r.n+(H.levels.length>1?' · '+l.name:'');b.onclick=()=>m.jump(p[0],p[1],l.elevation);J.appendChild(b);});});J.hidden=!J.children.length;}
 const setM=async()=>{H.mat={wall:$('mwall').value,floor:$('mfloor').value,fac:$('mfac').value,roof:$('mroof').value};save();(await v3()).setMat(H.mat);};['mwall','mfloor','mfac','mroof'].forEach(k=>$(k).onchange=setM);const SP={moderny:['#f4f1ec','beton'],skandi:['#f4f1ec','dub'],klasik:['#e8e0d2','orech']};$('msty').onchange=async e=>{const s=e.target.value;snap();H.style=s||undefined;if(SP[s]){H.mat={...(H.mat||{}),wall:SP[s][0],floor:SP[s][1]};}save();if(!(H.furn||[]).length&&s)furnish();await gen();toast(s?'Štýl „'+e.target.selectedOptions[0].textContent+'“ použitý.':'Pôvodné farby.','ok');};
-$('sunh').oninput=async e=>{const h=+e.target.value;$('sunv').textContent=Math.floor(h)+':'+(h%1?'30':'00');(await v3()).setSun(h);};
+$('sunh').oninput=async e=>{const h=+e.target.value;$('sunv').textContent=Math.floor(h)+':'+(h%1?'30':'00');(await v3()).setSun(h,true);};
 
 function extSides(){H.levels.forEach(l=>{rooms(l.name);const C=RC[l.name];H.walls.filter(w=>w.level===l.name).forEach(w=>{const g=geo(w),n=[-g.u[1],g.u[0]],m=[g.x0+g.u[0]*g.L/2,g.z0+g.u[1]*g.L/2],o=w.thickness/2+.15,A=C&&roomAt(C,[m[0]+n[0]*o,m[1]+n[1]*o]),B=C&&roomAt(C,[m[0]-n[0]*o,m[1]-n[1]*o]);const iA=C.r.some(q=>q.id===A),iB=C.r.some(q=>q.id===B);w._ext=iA===iB?0:iA?-1:1;});});}
 // ---- look panel
@@ -353,11 +386,22 @@ async function presOn(auto){document.body.classList.add('pres');$('prn').textCon
 async function presOff(){stopTour();document.body.classList.remove('pres');dispatchEvent(new Event('resize'));const m=await v3();if(m.isWalk()){m.setWalk(false);wUI(false);}else jumpsUI(false);m.resize&&m.resize();}
 function stopTour(){TOUR++;TON=false;$('ptour').innerHTML=I.next+'<span>Auto-prehliadka</span>';v3().then(m=>m.setAuto(false));}
 async function tour(){const id=++TOUR,m=await v3(),wait=ms=>new Promise(r=>setTimeout(r,ms)),alive=()=>id===TOUR;TON=true;$('ptour').innerHTML=I.x+'<span>Zastaviť</span>';
- m.setWalk(false);wUI(false);jumpsUI(true);m.setAuto(true);await wait(9000);m.setAuto(false);if(!alive())return;
- const bs=[...$('jumps').querySelectorAll('button')];for(const b of bs){if(!alive())return;b.click();bs.forEach(x=>x.classList.toggle('on',x===b));const t0=performance.now();while(alive()&&performance.now()-t0<5200){m.spin(.012);await wait(16);}}
- if(!alive())return;m.setWalk(false);wUI(false);jumpsUI(true);stopTour();}
+ m.setWalk(false);wUI(false);jumpsUI(true);
+ // slow exterior orbit intro
+ if(m.playCam)m.playCam('orbit',0.55,{dur:10,loop:false,y:null});else m.setAuto(true,0.45);
+ await wait(10000);if(m.stopCam)m.stopCam();m.setAuto(false);if(!alive())return;
+ // room jumps with gentle spin
+ const bs=[...$('jumps').querySelectorAll('button')];for(const b of bs){if(!alive())return;b.click();bs.forEach(x=>x.classList.toggle('on',x===b));const t0=performance.now();while(alive()&&performance.now()-t0<4800){m.spin(.008);await wait(16);}}
+ if(!alive())return;
+ // dollhouse peek then slow exterior finale
+ if(m.dollhouse){m.dollhouse(true);await wait(4500);if(!alive())return;m.dollhouse(false);await wait(800);}
+ if(!alive())return;m.setWalk(false);wUI(false);jumpsUI(true);
+ if(m.playCam)m.playCam('orbit',0.4,{dur:14,loop:true});else m.setAuto(true,0.35);
+ await wait(12000);if(!alive())return;if(m.stopCam)m.stopCam();stopTour();}
 $('ptour').onclick=()=>TON?stopTour():tour();
-$('pext').onclick=async()=>{stopTour();const m=await v3();m.setWalk(false);wUI(false);jumpsUI(true);};
+$('pext').onclick=async()=>{stopTour();const m=await v3();if(m.dollhouse)m.dollhouse(false);m.setWalk(false);wUI(false);jumpsUI(true);};
+let DOLL_ON=false;$('pdoll')&&($('pdoll').onclick=async()=>{stopTour();const m=await v3();DOLL_ON=!DOLL_ON;if(m.dollhouse)m.dollhouse(DOLL_ON);else{roof=DOLL_ON?'none':(H&&H.roof)||'gable';$('roof').value=roof;gen(false);}wUI(false);jumpsUI(true);});
+$('doll')&&($('doll').onclick=async()=>{stopTour();const m=await v3();DOLL_ON=!DOLL_ON;if(m.dollhouse)m.dollhouse(DOLL_ON);wUI(false);jumpsUI(!DOLL_ON);});
 $('pexit').onclick=presOff;$('pres').onclick=()=>presOn(false);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('pres')&&!document.body.classList.contains('viewonly'))presOff();});
 async function agentDlg(){const g=H.agent||{};const r=await dlg('Prezentácia – kontakt makléra','<p>Zobrazí sa v režime Prezentácia a v zdieľanom odkaze.</p><label>Meno<input name="name" value="'+esc(g.name||'')+'"></label><label>Realitná kancelária<input name="firm" value="'+esc(g.firm||'')+'"></label><label>Telefón<input name="phone" type="tel" value="'+esc(g.phone||'')+'"></label><label>E-mail<input name="email" type="email" value="'+esc(g.email||'')+'"></label><label>Logo (obrázok)<input name="logo" type="file" accept="image/*"></label>'+(g.logo?'<label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="rmlogo" style="width:auto"> odstrániť logo</label>':''),[['Zrušiť',null],['Uložiť',1,'go','check']]);if(!r||!r.v)return;
@@ -376,4 +420,41 @@ function tut(T=TUT,key='vkTut'){document.getElementById('tutx')?.remove();const 
  w.querySelector('.tn').onclick=()=>{if(++i>=st.length)end();else show();};w.querySelector('.ts').onclick=end;addEventListener('resize',show);show();}
 window.tut=tut;
 function tutWait(n=0,T=TUT,key='vkTut'){if(localStorage[key]||document.getElementById('tutx')||n>60)return;const ok=document.getElementById(T===TUT?'ed':'vw').classList.contains('on')&&!document.getElementById('sk3').offsetParent&&!document.getElementById('ov').classList.contains('on')&&!document.body.classList.contains('pres');if(ok&&n>2)tut(T,key);else setTimeout(()=>tutWait(n+1,T,key),400);}
+
+/* Marketing / Social capture — URL params only (hidden from normal UI)
+   ?clean=1          hide all UI, cursor, toasts
+   &cam=orbit|dollhouse|walk|descend
+   &speed=0.5        camera path speed multiplier
+   &w=1080&h=1920    fixed canvas (portrait 1080x1920 or 2160x3840)
+   &demo=1           auto-open premium demo + 3D
+   &tour=1           start auto-tour after load
+*/
+async function mktBoot(){
+  const q=new URLSearchParams(location.search);if(![...q.keys()].some(k=>['clean','cam','w','h','demo','tour','speed'].includes(k)))return;
+  try{localStorage.vkTut=1;localStorage.vkTut3=1;document.getElementById('tutx')?.remove();}catch(e){}
+  const clean=q.get('clean')==='1',cam=q.get('cam'),speed=+q.get('speed')||1,w=+q.get('w')||0,h=+q.get('h')||0;
+  if(q.get('demo')==='1'||cam||clean||(w&&h)){
+    try{const D=JSON.parse(JSON.stringify(DEMO));newP(D.name,D.walls,null,D.plot);H.furn=D.furn||[];H.style=D.style;H.mat=D.mat||H.mat;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}save();}catch(e){}
+    show('vw');await gen(true);
+  }
+  const m=await v3();
+  if(w&&h){m.setCanvasSize(w,h);document.documentElement.classList.add('mkt-fixed');
+    let s=document.getElementById('mktcss');if(!s){s=document.createElement('style');s.id='mktcss';document.head.appendChild(s);}
+    s.textContent=`html.mkt-fixed #v3{width:${w}px!important;height:${h}px!important;max-width:none!important;margin:0 auto;}html.mkt-fixed #vw{display:flex;align-items:center;justify-content:center;background:#0b0c0e;}`;
+  }
+  if(clean){try{document.querySelectorAll('.tut,#tut,#tutx,.tw').forEach(e=>e.remove());localStorage.vkTut=1;localStorage.vkTut3=1;}catch(e){}document.documentElement.classList.add('mkt-clean');
+    let s=document.getElementById('mktcss2');if(!s){s=document.createElement('style');s.id='mktcss2';document.head.appendChild(s);}
+    s.textContent=`html.mkt-clean #hdr,html.mkt-clean header,html.mkt-clean .seg,html.mkt-clean #tbed,html.mkt-clean #tbvw,html.mkt-clean #st,html.mkt-clean #joy,html.mkt-clean #jumps,html.mkt-clean #pbar,html.mkt-clean #agent,html.mkt-clean #look,html.mkt-clean .toast,html.mkt-clean #ov,html.mkt-clean #tut,html.mkt-clean #tutx,html.mkt-clean #sk3{display:none!important;opacity:0!important;pointer-events:none!important}
+      html.mkt-clean,html.mkt-clean body,html.mkt-clean #vw{cursor:none!important;background:#0b0c0e;}html.mkt-clean #v3,html.mkt-clean canvas{cursor:none!important;}
+      html.mkt-clean .toast,html.mkt-clean #hdr,html.mkt-clean #pname,html.mkt-clean #jumps button{visibility:hidden!important;display:none!important;}`;
+    window.toast=()=>{};
+  }
+  try{document.querySelectorAll('.tut,.toast,#tut,#tutx').forEach(e=>e.remove());localStorage.vkTut=1;localStorage.vkTut3=1;}catch(e){}
+  m.setWalk(false);wUI(false);jumpsUI(true);
+  if(cam&&m.playCam){await new Promise(r=>setTimeout(r,700));m.playCam(cam,speed,{loop:cam==='orbit',dur:cam==='orbit'?16:cam==='dollhouse'?4:12});}
+  else if(q.get('tour')==='1'){await new Promise(r=>setTimeout(r,800));tour();}
+}
+try{const _q=new URLSearchParams(location.search);if(_q.get('clean')==='1'||_q.get('demo')==='1'||_q.get('cam')){localStorage.vkTut=1;localStorage.vkTut3=1;}}catch(e){}
+setTimeout(()=>mktBoot().catch(e=>console.warn('mkt',e)),200);
+
 const TUT3=[['#walk','Prechádzka','Vstúpte dnu a kráčajte po dome. Na mobile joystickom, na počítači klávesmi W A S D.'],['#jumps','Miestnosti','Ťuknutím sa presuniete priamo do miestnosti.'],['#lookb','Vzhľad','Štýl interiéru jedným kliknutím, farby stien, fasády, strechy a podlahy.'],['#pres','Prezentácia','Čistý režim na celú obrazovku s automatickou prehliadkou a kontaktom makléra.'],['#share','Zdieľať','Odkaz pre klienta – otvorí sa rovno prezentácia.']];

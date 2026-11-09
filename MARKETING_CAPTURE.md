@@ -1,0 +1,44 @@
+# Marketing video capture — URL params (hidden, not in normal UI)
+
+Base (local): http://localhost:8765/
+Base (live):  https://adamskusaai.github.io/vkroc-studio-dfac2a/
+
+## Quick start (premium demo + clean portrait orbit)
+```
+?demo=1&clean=1&cam=orbit&speed=0.5&w=1080&h=1920
+```
+
+## Params
+| Param | Values | Effect |
+|-------|--------|--------|
+| `demo=1` | | Auto-open premium furnished demo house and switch to 3D |
+| `clean=1` | | No UI chrome, no cursor, toasts suppressed |
+| `cam` | `orbit` \| `dollhouse` \| `walk` \| `descend` | Fixed eased camera path |
+| `speed` | e.g. `0.5`, `1` | Path speed multiplier (lower = slower) |
+| `w`,`h` | e.g. `1080`/`1920` or `2160`/`3840` | Fixed canvas size for recording |
+| `tour=1` | | Start cinematic auto-tour after load |
+
+## Camera modes (`cam`)
+- **orbit** — slow exterior orbit (eased). Use `speed=0.4`–`0.6` for social.
+- **dollhouse** — roof fades out + cinematic top/isometric move.
+- **walk** — eased walk along path into the house.
+- **descend** — dollhouse roof-off + room-by-room high descent.
+
+## Also polished (no URL needed)
+- Wall-growth 2D→3D on `gen(anim)` / first 3D open with animation
+- Roof on/off and sun (`#sunh`) tween smoothly (no hard jumps)
+- Auto-prehliadka: exterior orbit → rooms → dollhouse peek → slow exterior finale
+- Dollhouse button in 3D toolbar + presentation bar
+
+## Example Social recipes
+Portrait Reels/TikTok:
+`?demo=1&clean=1&cam=orbit&speed=0.45&w=1080&h=1920`
+
+Dollhouse reveal:
+`?demo=1&clean=1&cam=dollhouse&speed=0.7&w=1080&h=1920`
+
+Walk-in:
+`?demo=1&clean=1&cam=walk&speed=0.55&w=1080&h=1920`
+
+4K portrait (if machine allows):
+`?demo=1&clean=1&cam=orbit&speed=0.4&w=2160&h=3840`

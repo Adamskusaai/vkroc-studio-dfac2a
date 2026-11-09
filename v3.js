@@ -5,6 +5,10 @@ import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
+
+export function setCanvasSize(w,h){if(w&&h){fixedSize=[w,h];}else{fixedSize=null;return;}if(!R)return;const el=R.domElement.parentElement||R.domElement;if(el&&el.id==='v3'){el.style.width=w+'px';el.style.height=h+'px';el.style.maxWidth='none';el.style.maxHeight='none';}R.setSize(w,h,false);if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();}DIRTY=Math.max(DIRTY,60);}
+export function stopCam(){camPath=null;if(orb)orb.enabled=true;}
+export function isDoll(){return DOLL;}
 export const geo=w=>{const[x0,z0]=w.start,[x1,z1]=w.end,L=Math.hypot(x1-x0,z1-z0)||1e-9;return{x0,z0,L,u:[(x1-x0)/L,(z1-z0)/L]};};
 export function stairRect(st){const L=st.length||3.6,W=st.width||1,d=st.dir||0,c=Math.cos(d),s=Math.sin(d),xs=[0,L*c,-W*s,L*c-W*s].map(v=>v+st.pos[0]),zs=[0,L*s,W*c,L*s+W*c].map(v=>v+st.pos[1]);return[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];}
 function tex(draw,n=256,rep=1){const c=document.createElement('canvas');c.width=c.height=n;draw(c.getContext('2d'),n);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep,rep);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=TCH?2:4;return t;}
@@ -38,13 +42,47 @@ export function init(){if(inited)return;inited=true;
  const je=()=>{jid=null;joy[0]=joy[1]=0;K.style.transform='';};J.addEventListener('pointerup',je);J.addEventListener('pointercancel',je);
  function jm(e){const r=J.getBoundingClientRect();let x=(e.clientX-r.left-r.width/2)/(r.width/2),y=(e.clientY-r.top-r.height/2)/(r.height/2);const l=Math.hypot(x,y);if(l>1){x/=l;y/=l;}joy[0]=x;joy[1]=y;K.style.transform=`translate(${x*35}px,${y*35}px)`;}
  R.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),.05),s=R.xr.getSession();if(!s&&(document.hidden||!$('vw').offsetWidth))return;
-  if(s&&loco)loco.update(dt,s.inputSources);else if(!s){if(walk)walkTick(dt);else{if(intro)introTick(dt);orb.update();}}
-  if(!s){const k=cam.matrixWorld.elements.join()+rig.position.x+rig.position.z;if(k===LK&&DIRTY<=0&&!walk)return;if(k!==LK)DIRTY=Math.max(DIRTY,2);LK=k;DIRTY--;
+  if(s&&loco)loco.update(dt,s.inputSources);else if(!s){if(walk)walkTick(dt);else{if(camPath)camPathTick(dt);else if(intro)introTick(dt);orb.update();}roofTweenTick(dt);if(sunTween)sunTweenTick(dt);if(wallGrow)wallGrowTick(dt);}
+  if(!s){const k=cam.matrixWorld.elements.join()+rig.position.x+rig.position.z;if(k===LK&&DIRTY<=0&&!walk&&!camPath&&!sunTween&&!wallGrow&&Math.abs(roofVis-roofTgt)<.01)return;if(k!==LK)DIRTY=Math.max(DIRTY,2);LK=k;DIRTY--;
    FT.push(dt);if(FT.length>90){const av=FT.reduce((a,b)=>a+b)/FT.length;FT=[];const pr=R.getPixelRatio();if(av>.028&&pr>1){R.setPixelRatio(Math.max(1,pr-.25));}else if(av<.014&&pr<PRMAX){R.setPixelRatio(Math.min(PRMAX,pr+.25));}}}
   R.render(scene,cam);});
- new ResizeObserver(()=>{const r=$('v3').getBoundingClientRect();if(!r.width)return;R.setSize(r.width,r.height);cam.aspect=r.width/r.height;cam.updateProjectionMatrix();DIRTY=Math.max(DIRTY,30);}).observe($('v3'));}
-const ease=t=>1-Math.pow(1-t,3);
+ new ResizeObserver(()=>{if(fixedSize)return;const r=$('v3').getBoundingClientRect();if(!r.width)return;R.setSize(r.width,r.height);cam.aspect=r.width/r.height;cam.updateProjectionMatrix();DIRTY=Math.max(DIRTY,30);}).observe($('v3'));}
+const ease=t=>1-Math.pow(1-t,3),easeInOut=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
 function introTick(dt){intro.t=Math.min(1,intro.t+dt/2.2);const k=ease(intro.t);cam.position.lerpVectors(intro.a,intro.b,k);if(intro.t>=1)intro=null;}
+let roofVis=1,roofTgt=1,sunTween=null,camPath=null,wallGrow=null,DOLL=false,doGrow=false,fixedSize=null;
+function camPathTick(dt){if(!camPath)return;const P=camPath;P.t=Math.min(1,P.t+dt/(P.dur||8));const u=easeInOut(P.t);
+ if(P.kind==='orbit'){const c=P.c,r=P.r,y=P.y,a0=P.a0,a1=P.a1,ang=a0+(a1-a0)*u;cam.position.set(c[0]+Math.cos(ang)*r,y,c[1]+Math.sin(ang)*r);orb.target.set(c[0],P.ty||1.2,c[1]);orb.update();}
+ else if(P.kind==='lerp'){cam.position.lerpVectors(P.a,P.b,u);orb.target.lerpVectors(P.ta,P.tb,u);orb.update();}
+ else if(P.kind==='walk'){const a=P.pts,n=a.length-1,x=u*n,i=Math.min(n-1,x|0),f=x-i;const p=a[i].clone().lerp(a[i+1],easeInOut(f));cam.position.copy(p);const look=a[Math.min(n,i+1)].clone();look.y=p.y;orb.target.lerp(look,.15);orb.update();}
+ if(P.t>=1){if(P.loop&&P.kind==='orbit'){P.t=0;}else{const n=P.next;camPath=null;if(n)startCam(n);}}}
+function startCam(o){DIRTY=Math.max(DIRTY,999);if(!world||!orb)return;orb.autoRotate=false;orb.enabled=!(o&&o.lock);
+ const fp=world.userData.fp||[0,0,10,10],c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],S=Math.max(fp[2]-fp[0],fp[3]-fp[1],8);
+ if(o.kind==='orbit'){camPath={kind:'orbit',c,r:o.r||S*1.35,y:o.y||S*.55,ty:o.ty||1.4,a0:o.a0||0,a1:o.a1||Math.PI*2,t:0,dur:(o.dur||14)/(o.speed||1),loop:!!o.loop};}
+ else if(o.kind==='dollhouse'){setWalk(false);DOLL=true;roofTgt=0;
+  const a=cam.position.clone(),b=new THREE.Vector3(c[0]-S*.15,S*1.85,c[1]+S*.55),ta=orb.target.clone(),tb=new THREE.Vector3(c[0],.4,c[1]);
+  camPath={kind:'lerp',a,b,ta,tb,t:0,dur:(o.dur||5)/(o.speed||1),next:o.next};}
+ else if(o.kind==='walk'){setWalk(false);const door=[c[0],fp[1]-2],y=1.55;
+  const pts=[new THREE.Vector3(door[0],y+1.2,door[1]-S*.4),new THREE.Vector3(door[0],y,door[1]-1.2),new THREE.Vector3(door[0],y,door[1]+1.5),new THREE.Vector3(c[0],y,c[1])];
+  camPath={kind:'walk',pts,t:0,dur:(o.dur||10)/(o.speed||1)};}
+ else if(o.kind==='descend'){setWalk(false);DOLL=true;roofTgt=0;
+  const rooms=(H.furn||[]).slice(0,6).map(f=>new THREE.Vector3(f.p[0],S*1.2,f.p[1]));
+  if(!rooms.length)rooms.push(new THREE.Vector3(c[0],S*1.2,c[1]));
+  const pts=[new THREE.Vector3(c[0],S*1.9,c[1]+S*.4),...rooms];
+  camPath={kind:'walk',pts,t:0,dur:(o.dur||12)/(o.speed||1)};}
+ DIRTY=Math.max(DIRTY,999);}
+function roofTweenTick(dt){if(Math.abs(roofVis-roofTgt)<.01){if(roofVis!==roofTgt){roofVis=roofTgt;DIRTY=Math.max(DIRTY,8);}return;}roofVis+=(roofTgt-roofVis)*Math.min(1,dt*2.2);DIRTY=Math.max(DIRTY,8);
+ if(!world)return;world.traverse(o=>{if(o.userData.roof&&o.material){if(!o.userData.roofMat){o.material=o.material.clone();o.userData.roofMat=1;}o.material.transparent=true;o.material.depthWrite=roofVis>.9;o.material.opacity=roofVis;o.visible=roofVis>.02;}});}
+function sunTweenTick(dt){if(!sunTween)return;sunTween.t=Math.min(1,sunTween.t+dt/(sunTween.dur||1.6));const k=easeInOut(sunTween.t);sunH=sunTween.a+(sunTween.b-sunTween.a)*k;if(lastFp)fitSun(lastFp);DIRTY=Math.max(DIRTY,10);if(sunTween.t>=1)sunTween=null;}
+function wallGrowTick(dt){if(!wallGrow)return;wallGrow.t=Math.min(1,wallGrow.t+dt/(wallGrow.dur||2.8));const k=ease(wallGrow.t);DIRTY=Math.max(DIRTY,12);
+ if(world)world.traverse(o=>{if(o.userData.grow){o.scale.y=Math.max(.001,k);o.position.y=o.userData.growBase+o.userData.growH*k*.5;o.visible=k>.01;}});
+ if(wallGrow.t>=1)wallGrow=null;}
+export function playCam(kind,speed=1,extra={}){startCam({kind,speed,...extra});}
+export function dollhouse(on){DIRTY=Math.max(DIRTY,180);DOLL=!!on;if(!world)return;
+ setWalk(false);roofTgt=on?0:1;
+ if(on){world.traverse(o=>{if(o.userData.roof){if(!o.userData.roofMat&&o.material){o.material=o.material.clone();o.userData.roofMat=1;}}});startCam({kind:'dollhouse',dur:3.2,speed:1});}
+ else{if(roof!=='none')world.traverse(o=>{if(o.userData.roof)o.visible=true;});place(false,false);}
+}
+
 function walkTick(dt){let f=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-joy[1],r=(keys.KeyD?1:0)-(keys.KeyA?1:0)+joy[0];
  if(keys.ArrowLeft)yaw-=dt*1.8;if(keys.ArrowRight)yaw+=dt*1.8;const sp=1.6*dt*(keys.ShiftLeft?2:1),p=rig.position;
  if(f||r){p.x+=(Math.sin(yaw)*f+Math.cos(yaw)*r)*sp;p.z+=(-Math.cos(yaw)*f+Math.sin(yaw)*r)*sp;if(body)body.resolve(p);}
@@ -58,7 +96,7 @@ function cells(ws,stairsHole){const C=.1;let xs=[],zs=[];ws.forEach(w=>{xs.push(
  const out=[];rects.forEach(r=>{const p=out.find(o=>o[0]===r[0]&&o[2]===r[2]&&Math.abs(o[3]-r[1])<1e-6);if(p)p[3]=r[3];else out.push(r);});return out;}
 function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.name]=l);let xs=[],zs=[];
  const add=(geom,mat,x,y,z,ry=0,nc)=>{const m=new THREE.Mesh(geom,mat);m.position.set(x,y,z);m.rotation.y=ry;m.castShadow=m.receiveShadow=mat!==M.glass;if(nc)m.userData.noCol=true;root.add(m);return m;};
- const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;return add(new THREE.BoxGeometry(s1-s0,y1-y0,t),mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);};
+ const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;const m=add(new THREE.BoxGeometry(s1-s0,y1-y0,t),mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);if(doGrow&&mat!==M.glass&&mat!==M.frame){const hh=y1-y0;m.userData.grow=1;m.userData.growBase=y0;m.userData.growH=hh;m.scale.y=.001;m.position.y=y0;m.visible=false;}return m;};
  H.walls.forEach(w=>{const L=geo(w).L,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0),h=w.height||2.8;xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);
   const ops=[...(w.openings||[])].sort((a,b)=>a.offset-b.offset);let s=0;
   ops.forEach(o=>{const sl=o.sill||0,a=o.offset,b=a+o.width,f=.06;box(w,s,a,e,e+h,M.wall);box(w,a,b,e,e+sl,M.wall);box(w,a,b,e+sl+o.height,e+h,M.wall);
@@ -98,9 +136,29 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
   if(roof==='flat'){add(new THREE.BoxGeometry(W,.22,D),M.roof,cx,th+.16,cz,0,1).userData.roof=1;add(new THREE.BoxGeometry(W+.04,.08,D+.04),M.roof,cx,th+.3,cz,0,1).userData.roof=1;}
   else{const rh=Math.min(W,D)*.35,lng=W>=D,a=lng?W:D,b=lng?D:W,sh=new THREE.Shape([new THREE.Vector2(-b/2,0),new THREE.Vector2(b/2,0),new THREE.Vector2(0,rh)]),gm=new THREE.ExtrudeGeometry(sh,{depth:a,bevelEnabled:false});gm.translate(0,0,-a/2);
    add(gm,M.roof,cx,th+.05,cz,lng?Math.PI/2:0,1).userData.roof=1;}}
- // plot: lawn, fence, path
+ // plot: lawn, fence, path, drive, terrace, trees, hedge
  const P=H.plot;if(P&&P.pts&&P.pts.length>2){const sh=new THREE.Shape(P.pts.map(p=>new THREE.Vector2(p[0],-p[1])));const lg=new THREE.ShapeGeometry(sh).rotateX(-Math.PI/2);const lm=new THREE.Mesh(lg,M.lawn);M.lawn.map.repeat.set(.5,.5);lm.position.y=-.015;lm.receiveShadow=true;lm.userData.noCol=true;root.add(lm);
-  const edge=new THREE.Mesh(new THREE.ShapeGeometry(sh).rotateX(-Math.PI/2),M.path);edge.scale.set(1,1,1);
+  // driveway from south edge to entrance
+  const cx=(Math.min(...P.pts.map(p=>p[0]))+Math.max(...P.pts.map(p=>p[0])))/2,zMin=Math.min(...P.pts.map(p=>p[1])),zMax=Math.max(...P.pts.map(p=>p[1])),xMin=Math.min(...P.pts.map(p=>p[0])),xMax=Math.max(...P.pts.map(p=>p[0]));
+  const hx=(xs.length? (Math.min(...xs)+Math.max(...xs))/2 : cx), hz=(zs.length? Math.min(...zs): zMin+2);
+  const drive=add(new THREE.BoxGeometry(3.2,.02,Math.max(4,hz-zMin+1.5)),M.path,hx,.005,(zMin+hz)/2-0.2,0,1);drive.receiveShadow=true;drive.userData.noCol=true;
+  // path to door + terrace (south of house)
+  const terr=add(new THREE.BoxGeometry(Math.min(8,Math.max(...xs)-Math.min(...xs)-1)||6,.04,3.2),M.path,(Math.min(...xs)+Math.max(...xs))/2,.02,Math.max(...zs)+1.7,0,1);terr.receiveShadow=true;terr.userData.noCol=true;
+  // hedge along sides
+  const hedgeMat=std({color:0x3f6b2e,roughness:1,map:grass});
+  const mkHedge=(x0,z0,x1,z1)=>{const L=Math.hypot(x1-x0,z1-z0),ang=-Math.atan2(z1-z0,x1-x0);add(new THREE.BoxGeometry(L,.9,.35),hedgeMat,(x0+x1)/2,.45,(z0+z1)/2,ang,1).castShadow=false;};
+  mkHedge(xMin+.4,zMin+.4,xMin+.4,zMax-.4);mkHedge(xMax-.4,zMin+.4,xMax-.4,zMax-.4);mkHedge(xMin+.4,zMax-.4,xMax-.4,zMax-.4);
+  // trees + shrubs (instanced-ish simple meshes, Quest-friendly count)
+  const trunk=std({color:0x5a3d22,roughness:1}),leaf=std({color:0x4a7a32,roughness:1,map:grass});
+  const tree=(x,z,s=1)=>{add(new THREE.CylinderGeometry(.12*s,.18*s,1.4*s,6),trunk,x,.7*s,z,0,1);const c=add(new THREE.SphereGeometry(.9*s,7,5),leaf,x,1.6*s,z,0,1);c.castShadow=true;};
+  const shrub=(x,z,s=.55)=>{add(new THREE.SphereGeometry(s,6,4),leaf,x,s*.7,z,0,1).castShadow=false;};
+  const seed=(x,z)=>{let h=Math.sin(x*12.9898+z*78.233)*43758.5453;return h-Math.floor(h);};
+  // place trees near plot corners / edges, avoid house bbox
+  const hx0=Math.min(...xs)-.8,hx1=Math.max(...xs)+.8,hz0=Math.min(...zs)-.8,hz1=Math.max(...zs)+.8;
+  [[xMin+1.5,zMin+1.5,1.1],[xMax-1.6,zMin+1.8,1],[xMin+1.8,zMax-1.5,1.2],[xMax-2,zMax-1.8,.95],[xMin+3,zMin+2.2,.85],[xMax-3.5,zMax-2.5,1.05]].forEach(t=>{
+   if(t[0]>hx0&&t[0]<hx1&&t[2]>hz0&&t[2]<hz1)return;tree(t[0],t[1],t[2]);});
+  for(let i=0;i<10;i++){const t=seed(i,7),u=seed(i,19),x=xMin+1+(xMax-xMin-2)*t,z=zMin+1+(zMax-zMin-2)*u;
+   if(x>hx0&&x<hx1&&z>hz0&&z<hz1)continue;shrub(x,z,.4+.3*seed(i,3));}
   if(P.fence!==false)P.pts.forEach((a,i)=>{const b=P.pts[(i+1)%P.pts.length],L=Math.hypot(b[0]-a[0],b[1]-a[1]),ang=-Math.atan2(b[1]-a[1],b[0]-a[0]),n=Math.max(1,Math.round(L/2.5));
    const rail=(y)=>{const m=add(new THREE.BoxGeometry(L,.04,.04),M.fence,(a[0]+b[0])/2,y,(a[1]+b[1])/2,ang,1);};rail(.35);rail(1.15);
    for(let k=0;k<=n;k++){const t=k/n;add(new THREE.BoxGeometry(.08,1.3,.08),M.fence,a[0]+(b[0]-a[0])*t,.65,a[1]+(b[1]-a[1])*t,0,1);}
@@ -113,12 +171,12 @@ function place(inside,anim){if(!world)return;const fp=world.userData.fp,c=[(fp[0
  else{cam.quaternion.identity();const el=R.domElement,ar=innerWidth/Math.max(1,innerHeight),S=Math.max(fp[2]-fp[0],fp[3]-fp[1],6)*(ar<1?Math.min(2,1/ar*.75):1),b=new THREE.Vector3(c[0]+S*.95,S*.75,c[1]+S*1.25);orb.target.set(c[0],1.2,c[1]);
   if(anim){const a=new THREE.Vector3(c[0]-S*1.6,S*2.2,c[1]+S*2.6);cam.position.copy(a);intro={a,b,t:0};}else cam.position.copy(b);orb.update();}}
 export function setWalk(v,xr){DIRTY=Math.max(DIRTY,90);walk=v;orb.enabled=!v;$('joy').style.display=v&&!xr&&TCH?'block':'none';world&&world.traverse(o=>{if(o.userData.roof)o.visible=!v&&!xr;if(o.userData.ceil)o.visible=v||!!xr;});place(v||xr);return walk;}
-export function setRoof(r){DIRTY=Math.max(DIRTY,90);roof=r;}
+export function setRoof(r,smooth){DIRTY=Math.max(DIRTY,90);const prev=roof;roof=r;if(smooth&&world){if(r==='none'||DOLL){roofTgt=0;}else{roofTgt=1;world.traverse(o=>{if(o.userData.roof)o.visible=true;});} }else{roofTgt=(r==='none'||DOLL)?0:1;roofVis=roofTgt;}}
 export const isWalk=()=>walk;
-export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();if(!world)return false;scene.add(world);fitSun(world.userData.fp);
+export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;scene.add(world);fitSun(world.userData.fp);
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
- walk=walk&&!anim;setWalk(walk);if(anim&&!walk)place(false,true);return true;}
+ walk=walk&&!anim;setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;return true;}
 export async function glb(){if(!world)return null;const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');return new Promise((res,rej)=>new GLTFExporter().parse(world,b=>res(new Blob([b],{type:'model/gltf-binary'})),rej,{binary:true}));}
 
 export function snap(){if(!R)return null;R.render(scene,cam);return R.domElement.toDataURL('image/png');}
@@ -133,9 +191,9 @@ const FM={};function fm(c,soft){const k=c+(soft?'~f':'');return FM[k]||(FM[k]=ne
 const FLO={dub:[0xffffff,'wood',.55],orech:[0x8a6448,'wood',.55],dlazba:[0xffffff,'tile',.35],beton:[0xb0aea8,'beton',.85],tmave:[0x5a4636,'wood',.6]};
 export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;M.wall.color.set(o.wall||'#f4f1ec');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#2b3442');const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;}
 let sunH=15,lastFp=null;
-export function setSun(h){DIRTY=Math.max(DIRTY,90);sunH=h;if(lastFp)fitSun(lastFp);}
+export function setSun(h,smooth){DIRTY=Math.max(DIRTY,90);if(smooth){sunTween={a:sunH,b:h,t:0,dur:1.8};}else{sunH=h;sunTween=null;if(lastFp)fitSun(lastFp);}}
 export function jump(x,z,e){DIRTY=Math.max(DIRTY,90);if(!walk)setWalk(true);rig.position.set(x,e,z);if(body&&body.resolve)body.resolve(rig.position);cam.position.set(0,1.6,0);}
 
 const WP=[M.wall,M.wall,M.wall,M.wall,M.fac,M.wall],WN=[M.wall,M.wall,M.wall,M.wall,M.wall,M.fac];
-export function setAuto(v){DIRTY=Math.max(DIRTY,90);if(!orb)return;orb.autoRotate=v;orb.autoRotateSpeed=1.6;}
+export function setAuto(v,spd){DIRTY=Math.max(DIRTY,90);if(!orb)return;orb.autoRotate=!!v;orb.autoRotateSpeed=spd!=null?spd:0.55;}
 export function spin(d){DIRTY=Math.max(DIRTY,90);yaw+=d;}
