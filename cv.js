@@ -2,8 +2,9 @@
 // detectWalls(img,{sens,mW,rect,site,aiPass}) -> {walls,canvas,w,guess,mode,needTrace?}
 // AI_HOOK: pass o.aiPass = (img, classicResult) => result|null for a future optional AI fallback.
 export function detectWalls(img,o={}){const sens=o.sens??.5;
- const c0=toCanvas(img,1400);if(o.site){const S=site(c0);return finish(S,img,o);}
- let paper=cropPaper(c0);paper=flatten(paper);paper=autoInvert(paper);
+ const c0=toCanvas(img,1400),cSite=cloneCanvas(c0);
+ if(o.site){const S=site(cSite);return finish(S,img,o);}
+ let paper=cropPaper(cloneCanvas(c0));paper=flatten(paper);paper=autoInvert(paper);
  const pipes=[];
  if(o.rect) pipes.push(paper);
  else{
@@ -34,7 +35,7 @@ export function detectWalls(img,o={}){const sens=o.sens??.5;
   }
  }
  // site footprint as alternative (plot drawings)
- const S=site(c0);if(S&&S.walls&&S.walls.length){S._sc=S.hip?12:6;S._n=S.walls.length;
+ const S=site(cSite);if(S&&S.walls&&S.walls.length){S._sc=S.src==='hot'?15:S.hip?12:(S.conf||0)>3?10:6;S._n=S.walls.length;
   // prefer site when plan looks like plot junk (many outer-boundary walls, few interiors) or plan missing
   if(!best||best._sc<6||siteBeatsPlan(best,S,c0)) best=S;
  }
@@ -57,7 +58,7 @@ function finish(R,img,o){delete R._sc;delete R._n;
  if(typeof o.aiPass==='function'){try{const A=o.aiPass(img,R);if(A&&A.walls&&A.walls.length)return A;}catch(e){}}
  return R;}
 function siteBeatsPlan(P,S,c){if(!P||P.mode!=='plan')return true;if(P.walls.length>24)return true;
- // if plan bbox is almost the full image and site found a smaller house, prefer site
+ if(S.src==='hot'||(S.conf||0)>=4)return true;if(S.hip&&P.walls.length>=10)return true;
  const xs=P.walls.flatMap(w=>[w.start[0],w.end[0]]),zs=P.walls.flatMap(w=>[w.start[1],w.end[1]]);
  const pw=Math.max(...xs)-Math.min(...xs),ph=Math.max(...zs)-Math.min(...zs);
  const sx=S.walls.flatMap(w=>[w.start[0],w.end[0]]),sz=S.walls.flatMap(w=>[w.start[1],w.end[1]]);
@@ -144,37 +145,146 @@ function flatten(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData
  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4,bg=sample(x,y)||1,s=mean/bg;for(let k=0;k<3;k++)p[i+k]=Math.max(0,Math.min(255,p[i+k]*s));}
  c.getContext('2d').putImageData(d,0,0);return c;}
 // site plan: find building footprint = axis rectangle with hip-roof diagonals from its corners
-function site(c){const W=c.width,H=c.height,g=gray(c),m=binar(g,W,H,.5),Dm=Math.max(W,H);
- const ss=segs(dil(m,W,H,3),W,H,2).filter(s=>s.t<.02*Dm),hs=ss.filter(s=>s.hz),vs=ss.filter(s=>!s.hz),tol=.008*Dm+3;
- const on=(x,y)=>{for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=Math.round(x)+dx,yy=Math.round(y)+dy;if(xx>=0&&yy>=0&&xx<W&&yy<H&&m[yy*W+xx])return 1;}return 0;};
- const D=c.getContext('2d').getImageData(0,0,W,H).data,sat=(x0,y0,x1,y1)=>{let n=0,k=0;for(let y=Math.max(0,y0|0);y<Math.min(H,y1);y+=3)for(let x=Math.max(0,x0|0);x<Math.min(W,x1);x+=3){const i=(y*W+x)*4,mx=Math.max(D[i],D[i+1],D[i+2]),mn=Math.min(D[i],D[i+1],D[i+2]);k++;if(mx-mn>35&&mx<250)n++;}return k?n/k:0;};
- const cover=(s,lo,hi)=>Math.max(0,Math.min(s.b+tol,hi)-Math.max(s.a-tol,lo))/(hi-lo);let best=null;
+function site(c){const W=c.width,H=c.height,Dm=Math.max(W,H),D=c.getContext('2d').getImageData(0,0,W,H).data;
+ // --- helpers ---
+ const pix=(x,y)=>{const i=((y|0)*W+(x|0))*4;return i>=0&&i<D.length?[D[i],D[i+1],D[i+2]]: [255,255,255];};
+ const isHot=(r,g,b)=>{const mx=Math.max(r,g,b),mn=Math.min(r,g,b);if(mx-mn<30)return 0;
+  if(r>140&&r>=b+25&&r>=g*.85&&(r-b)>30)return 1; // red / orange-red
+  if(r>160&&g>70&&g<210&&b<110&&r>g)return 1; // orange fill
+  if(r>140&&b>100&&r>g+20)return 1; // magenta
+  return 0;};
+ const isGreenish=(r,g,b)=>{const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+  if(g>r+15&&g>b+10&&g>90&&(g-mn)>25)return 1;
+  if(g>=r-5&&g>=b-5&&(g-mn)>8&&mx-mn>12&&g>55&&g<230&&mx<220)return 1;
+  return 0;};
+ const satFrac=(x0,y0,x1,y1)=>{let n=0,k=0;for(let y=Math.max(0,y0|0);y<Math.min(H,y1);y+=3)for(let x=Math.max(0,x0|0);x<Math.min(W,x1);x+=3){const[r,g,b]=pix(x,y);k++;const mx=Math.max(r,g,b),mn=Math.min(r,g,b);if(mx-mn>35&&mx<250)n++;}return k?n/k:0;};
+ const hotFrac=(x0,y0,x1,y1)=>{let n=0,k=0;for(let y=Math.max(0,y0|0);y<Math.min(H,y1);y+=2)for(let x=Math.max(0,x0|0);x<Math.min(W,x1);x+=2){const[r,g,b]=pix(x,y);k++;if(isHot(r,g,b))n++;}return k?n/k:0;};
+ const greenFrac=(x0,y0,x1,y1)=>{let n=0,k=0;for(let y=Math.max(0,y0|0);y<Math.min(H,y1);y+=3)for(let x=Math.max(0,x0|0);x<Math.min(W,x1);x+=3){const[r,g,b]=pix(x,y);k++;if(isGreenish(r,g,b))n++;}return k?n/k:0;};
+
+ // --- 1) inset / overview-map mask (exclude) ---
+ // Mark pixels that look like colored cadastral tiles; flood to components; keep large side-framed ones as insets.
+ const inset=new Uint8Array(W*H);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const[r,g,b]=pix(x,y);if(isGreenish(r,g,b)||(Math.max(r,g,b)-Math.min(r,g,b)>40&&Math.min(r,g,b)<200&&g>r&&g>80))inset[y*W+x]=1;}
+ // Dilate a bit then components
+ for(let pass=0;pass<3;pass++){const tmp=new Uint8Array(W*H);for(let y=2;y<H-2;y++)for(let x=2;x<W-2;x++){let v=inset[y*W+x];if(!v){for(let dy=-2;dy<=2&&!v;dy++)for(let dx=-2;dx<=2&&!v;dx++)if(inset[(y+dy)*W+x+dx])v=1;}tmp[y*W+x]=v;}inset.set(tmp);}
+ const{cs:incs}=comps(inset,W,H);const ban=[];
+ for(const q of incs){const bw=q.x1-q.x0+1,bh=q.y1-q.y0+1,ar=bw*bh;if(ar<.02*W*H||ar>.6*W*H)continue;
+  const onSide=q.x0>W*.42||q.x1<W*.58||q.y0>H*.5;const gf=greenFrac(q.x0,q.y0,q.x1,q.y1);const sf=satFrac(q.x0,q.y0,q.x1,q.y1);
+  if(onSide&&(gf>.06||sf>.14))ban.push(q);}
+ const banned=(x,y)=>ban.some(q=>x>=q.x0-4&&x<=q.x1+4&&y>=q.y0-4&&y<=q.y1+4);
+ const bannedBox=(x0,y0,x1,y1)=>{const cx=(x0+x1)/2,cy=(y0+y1)/2;return banned(cx,cy)||ban.some(q=>{const ix=Math.max(0,Math.min(x1,q.x1)-Math.max(x0,q.x0)),iy=Math.max(0,Math.min(y1,q.y1)-Math.max(y0,q.y0));return ix>0&&iy>0&&ix*iy>.35*(x1-x0)*(y1-y0);});};
+
+ // Main drawing = everything not inset; prefer left/largest white region
+ let mainX1=W;if(ban.length){const leftmost=Math.min(...ban.map(q=>q.x0));if(leftmost>W*.4)mainX1=leftmost-2;}
+ // Also: if the right (or left) strip is much greener/more chromatic than the main CAD sheet, treat it as an inset column
+ const stripGF=(x0,x1)=>greenFrac(x0,0,x1,H), stripSF=(x0,x1)=>satFrac(x0,0,x1,H);
+ const mid=W*.55, rGF=stripGF(W*.68,W), lGF=stripGF(0,W*.45), mGF=stripGF(W*.1,W*.55);
+ if(rGF>0.05&&rGF>mGF*2.5){ // colored inset column on the right
+  // find left edge of colored mass
+  let cut=W*.68;for(let x=W-1;x>W*.5;x-=4){if(greenFrac(x-6,H*.1,x,H*.9)>.06||satFrac(x-6,H*.1,x,H*.9)>.12)cut=x-8;else if(x<cut-20)break;}
+  mainX1=Math.min(mainX1,Math.max(W*.5,cut));}
+ if(lGF>0.05&&lGF>mGF*2.5){ban.push({x0:0,y0:0,x1:Math.round(W*.38),y1:H-1});}
+ // Framed panel / dense parcel grid on the right
+ {const ssF=segs(dil(binar(gray(c),W,H,.5),W,H,3),W,H,2);
+  const longV=ssF.filter(s=>!s.hz&&s.b-s.a>.4*H&&s.c>W*.55);
+  if(longV.length>=1){const x0=Math.min(...longV.map(s=>s.c));if(x0>W*.5&&x0<W*.92){ban.push({x0:x0-2,y0:0,x1:W-1,y1:H-1});mainX1=Math.min(mainX1,x0-2);}}
+  const short=ssF.filter(s=>(s.b-s.a)>6&&(s.b-s.a)<.1*Dm);let right=0,left=0;
+  short.forEach(s=>{const x=s.hz?(s.a+s.b)/2:s.c;if(x>W*.62)right++;else left++;});
+  if(right>left*1.8&&right>40){const cut=Math.round(W*.62);ban.push({x0:cut,y0:0,x1:W-1,y1:H-1});mainX1=Math.min(mainX1,cut);}}
+
+
+ // --- 2) red/orange highlight candidates (stroke clusters) ---
+ const hot=new Uint8Array(W*H);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(x>=mainX1||banned(x,y))continue;const[r,g,b]=pix(x,y);if(isHot(r,g,b))hot[y*W+x]=1;}
+ // dilate hot strokes so thin outlines become components
+ {const tmp=new Uint8Array(W*H);for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){let v=0;for(let dy=-2;dy<=2&&!v;dy++)for(let dx=-2;dx<=2&&!v;dx++)if(hot[(y+dy)*W+x+dx])v=1;tmp[y*W+x]=v;}hot.set(tmp);}
+ const{cs:hots}=comps(hot,W,H);let cands=[];
+ for(const q of hots){const bw=q.x1-q.x0+1,bh=q.y1-q.y0+1;
+  // House outlines are substantial — reject ticks, stamps, tiny marks
+  if(Math.min(bw,bh)<.055*Dm)continue;if(Math.max(bw,bh)<.08*Dm)continue;if(bw>.55*W||bh>.55*H)continue;
+  if(bw*bh<.004*W*H)continue;if(bannedBox(q.x0,q.y0,q.x1,q.y1))continue;
+  // reject very sparse "hot" (noise) — need a real outline ring or fill
+  const hf0=hotFrac(q.x0,q.y0,q.x1,q.y1);if(hf0<.008)continue;
+  const pad=Math.max(2,Math.round(.008*Dm));
+  cands.push({x0:Math.max(0,q.x0-pad),x1:Math.min(W-1,q.x1+pad),y0:Math.max(0,q.y0-pad),y1:Math.min(H-1,q.y1+pad),src:'hot',hf:hf0});}
+
+ // --- 3) classic hip-roof + edge rectangles in main area ---
+ const g=gray(c),m=binar(g,W,H,.5);
+ // zero out banned / right inset in mask copy
+ const m2=m.slice();for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(x>=mainX1||banned(x,y))m2[y*W+x]=0;
+ const ss=segs(dil(m2,W,H,3),W,H,2).filter(s=>s.t<.02*Dm),hs=ss.filter(s=>s.hz),vs=ss.filter(s=>!s.hz),tol=.008*Dm+3;
+ const on=(x,y)=>{for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=Math.round(x)+dx,yy=Math.round(y)+dy;if(xx>=0&&yy>=0&&xx<W&&yy<H&&m2[yy*W+xx])return 1;}return 0;};
+ const cover=(s,lo,hi)=>Math.max(0,Math.min(s.b+tol,hi)-Math.max(s.a-tol,lo))/(hi-lo||1);
+ const hatchScore=(x0,y0,x1,y1)=>{ // diagonal ink relative to axis ink inside box
+  let diag=0,ax=0,k=0;for(let y=y0|0;y<y1;y+=2)for(let x=x0|0;x<x1;x+=2){if(x<0||y<0||x>=W||y>=H)continue;k++;
+   if(!m2[y*W+x])continue;const n4=(m2[y*W+Math.max(0,x-1)]?1:0)+(m2[y*W+Math.min(W-1,x+1)]?1:0)+(m2[Math.max(0,y-1)*W+x]?1:0)+(m2[Math.min(H-1,y+1)*W+x]?1:0);
+   const nd=(m2[Math.max(0,y-1)*W+Math.max(0,x-1)]?1:0)+(m2[Math.max(0,y-1)*W+Math.min(W-1,x+1)]?1:0)+(m2[Math.min(H-1,y+1)*W+Math.max(0,x-1)]?1:0)+(m2[Math.min(H-1,y+1)*W+Math.min(W-1,x+1)]?1:0);
+   if(nd>=2&&n4<=2)diag++;if(n4>=2)ax++;}
+  return k?diag/k:0;};
+
  for(const t of hs)for(const b of hs){const h=b.c-t.c;if(h<.03*Dm||h>.5*H)continue;
-  const L=vs.filter(v=>cover(v,t.c,b.c)>.8&&v.c>Math.max(t.a,b.a)-tol&&v.c<Math.min(t.b,b.b)+tol);
-  for(const l of L)for(const r of L){const w=r.c-l.c;if(w<.03*Dm||w>.5*W||w/h>4||h/w>4)continue;if(cover(t,l.c,r.c)<.8||cover(b,l.c,r.c)<.8)continue;
-   if(l.c<5||t.c<5||r.c>W-5||b.c>H-5)continue;
+  const L=vs.filter(v=>cover(v,t.c,b.c)>.75&&v.c>Math.max(t.a,b.a)-tol&&v.c<Math.min(t.b,b.b)+tol);
+  for(const l of L)for(const r of L){const w=r.c-l.c;if(w<.03*Dm||w>.5*W||w/h>4||h/w>4)continue;if(cover(t,l.c,r.c)<.75||cover(b,l.c,r.c)<.75)continue;
+   if(l.c<3||t.c<3||r.c>W-3||b.c>H-3)continue;if(bannedBox(l.c,t.c,r.c,b.c))continue;if(l.c>=mainX1)continue;
    const d=Math.min(w,h)*.4;let hit=0;for(const[cx,cy,sx,sy]of[[l.c,t.c,1,1],[r.c,t.c,-1,1],[r.c,b.c,-1,-1],[l.c,b.c,1,-1]])for(let k=3;k<=20;k++)hit+=on(cx+sx*d*k/20,cy+sy*d*k/20);
-   const diag=hit/72;if(diag<.55||sat(l.c-.3*w,t.c-.3*h,r.c+.3*w,b.c+.3*h)>.12)continue;const cd=Math.hypot((l.c+r.c)/2-W/2,(t.c+b.c)/2-H/2)/Dm,sc=diag-.3*cd+.05*Math.min(w,h)/Dm;
-   if(!best||sc>best.sc)best={sc,x0:l.c,x1:r.c,y0:t.c,y1:b.c,hip:1};}}
- if(!best){
-  // fallback: house-sized rectangle with strong edges, low chroma, not a busy map interior
-  const ss2=segs(dil(m,W,H,3),W,H,2).filter(s=>s.t<.025*Dm);const hs2=ss2.filter(s=>s.hz),vs2=ss2.filter(s=>!s.hz),tol2=.01*Dm+3;
+   const diag=hit/72;const hf=hotFrac(l.c,t.c,r.c,b.c);const hs2=hatchScore(l.c+w*.1,t.c+h*.1,r.c-w*.1,b.c-h*.1);
+   // Allow colored (red) houses — do NOT reject on sat anymore; reject only heavy green cadastral fill
+   if(greenFrac(l.c,t.c,r.c,b.c)>.18)continue;
+   if(diag<.55&&hf<.015&&hs2<.015)continue; // need clear building cue
+   cands.push({x0:l.c,x1:r.c,y0:t.c,y1:b.c,src:'hip',diag,hf,hatch:hs2,hip:diag>=.5});}}
+
+ // fallback edge rectangles if still empty
+ if(cands.length<2){const ss2=segs(dil(m2,W,H,3),W,H,2).filter(s=>s.t<.025*Dm),hs2=ss2.filter(s=>s.hz),vs2=ss2.filter(s=>!s.hz),tol2=.01*Dm+3;
   const cover2=(s,lo,hi)=>Math.max(0,Math.min(s.b+tol2,hi)-Math.max(s.a-tol2,lo))/(hi-lo||1);
-  const inkIn=(x0,y0,x1,y1)=>{let n=0,k=0;for(let y=y0|0;y<y1;y+=4)for(let x=x0|0;x<x1;x+=4){if(x<0||y<0||x>=W||y>=H)continue;k++;if(m[y*W+x])n++;}return k?n/k:1;};
-  for(const t of hs2)for(const b of hs2){const h=b.c-t.c;if(h<.06*Dm||h>.45*H)continue;
-   const L=vs2.filter(v=>cover2(v,t.c,b.c)>.8&&v.c>Math.max(t.a,b.a)-tol2&&v.c<Math.min(t.b,b.b)+tol2);
-   for(const l of L)for(const r of L){const w=r.c-l.c;if(w<.06*Dm||w>.45*W||w/h>3.2||h/w>3.2)continue;
-    if(cover2(t,l.c,r.c)<.8||cover2(b,l.c,r.c)<.8)continue;
-    if(l.c<4||t.c<4||r.c>W-4||b.c>H-4)continue;
-    if(w*h>.4*W*H)continue;
-    if(sat(l.c,t.c,r.c,b.c)>.1)continue;
-    const inner=inkIn(l.c+w*.15,t.c+h*.15,r.c-w*.15,b.c-h*.15);if(inner>.22)continue; // busy interior = map/hatching
-    const sc=.08*Math.min(w,h)/Dm+(inner<.08?.05:0);if(!best||sc>best.sc)best={sc,x0:l.c,x1:r.c,y0:t.c,y1:b.c,hip:0};}}
- }
- if(!best)return{walls:[],canvas:c,w:15,mode:'none',guess:true,needTrace:1};
- const lp=Math.max(best.x1-best.x0,best.y1-best.y0),ppm=lp/12,r=v=>Math.round(v/ppm*100)/100,{x0,x1,y0,y1}=best,T=.3;
+  const inkIn=(x0,y0,x1,y1)=>{let n=0,k=0;for(let y=y0|0;y<y1;y+=4)for(let x=x0|0;x<x1;x+=4){if(x<0||y<0||x>=W||y>=H)continue;k++;if(m2[y*W+x])n++;}return k?n/k:1;};
+  for(const t of hs2)for(const b of hs2){const h=b.c-t.c;if(h<.05*Dm||h>.45*H)continue;
+   const L=vs2.filter(v=>cover2(v,t.c,b.c)>.75&&v.c>Math.max(t.a,b.a)-tol2&&v.c<Math.min(t.b,b.b)+tol2);
+   for(const l of L)for(const r of L){const w=r.c-l.c;if(w<.05*Dm||w>.45*W||w/h>3.5||h/w>3.5)continue;
+    if(cover2(t,l.c,r.c)<.75||cover2(b,l.c,r.c)<.75)continue;if(l.c<4||t.c<4||r.c>W-4||b.c>H-4)continue;
+    if(bannedBox(l.c,t.c,r.c,b.c)||l.c>=mainX1)continue;if(w*h>.4*W*H)continue;if(greenFrac(l.c,t.c,r.c,b.c)>.15)continue;
+    const inner=inkIn(l.c+w*.15,t.c+h*.15,r.c-w*.15,b.c-h*.15);if(inner>.28)continue;
+    cands.push({x0:l.c,x1:r.c,y0:t.c,y1:b.c,src:'box',hf:hotFrac(l.c,t.c,r.c,b.c),hatch:hatchScore(l.c,t.c,r.c,b.c),inner});}}}
+
+ // --- 4) score ---
+ const pageGF=greenFrac(0,0,W,H), pageSF=satFrac(0,0,W,H);
+ // Whole-sheet cadastral/map: only trust a color-highlighted building, not random hip hits
+ // If the MAIN drawing (excluding inset) is itself a colored map, only trust hot highlights
+ const mainGF=greenFrac(0,0,mainX1||W,H), mainSF=satFrac(0,0,mainX1||W,H);
+ if(mainGF>.05||(mainSF>.12&&mainGF>.03)){const hotOnly=cands.filter(q=>q.src==='hot'||(q.hf||0)>.025);cands=hotOnly.length?hotOnly:[];}
+ cands=cands.filter(q=>{if(q.src==='hot')return 1;const gf=greenFrac(q.x0,q.y0,q.x1,q.y1);if(gf>.1)return 0;return 1;});
+ if(!cands.length)return{walls:[],canvas:c,w:15,mode:'none',guess:true,needTrace:1};
+ // plausible house size vs sheet: typically a few % to ~25% of main drawing area
+ const mainA=(mainX1||W)*H;
+ // Boost hip/box candidates that sit inside/near a hot outline
+ for(const q of cands){if(q.src==='hot')continue;for(const h of cands){if(h.src!=='hot')continue;
+  const ix=Math.max(0,Math.min(q.x1,h.x1)-Math.max(q.x0,h.x0)),iy=Math.max(0,Math.min(q.y1,h.y1)-Math.max(q.y0,h.y0));
+  const oa=Math.max(q.x1-q.x0,1)*Math.max(q.y1-q.y0,1);if(ix*iy>.5*oa){q.hf=Math.max(q.hf||0,h.hf||0);q.nearHot=1;}}}
+ for(const q of cands){const bw=q.x1-q.x0,bh=q.y1-q.y0,ar=bw*bh,asp=Math.max(bw/(bh||1),bh/(bw||1));
+  q.hf=q.hf??hotFrac(q.x0,q.y0,q.x1,q.y1);q.hatch=q.hatch??hatchScore(q.x0,q.y0,q.x1,q.y1);q.diag=q.diag||0;
+  let sc=0;
+  sc+=Math.min(1,q.hf*18)*3.2;           // red/orange highlight (capped)
+  sc+=Math.min(1,q.diag)*2.8;            // hip diagonals — strong for SO boxes
+  sc+=Math.min(1,q.hatch*28)*1.8;        // hatching / roof lines
+  if(q.src==='hot')sc+=0.6;              // hot alone is weaker than hot+hip
+  if(q.nearHot)sc+=2.5;                  // best: geometry under a red mark
+  if(q.hip)sc+=1.2;
+  const rel=ar/mainA;sc+=rel>.006&&rel<.22?2.0:rel>.003&&rel<.35?0.6:-2.0;
+  if(asp>3.5)sc-=1.2;else if(asp>=1.05&&asp<=2.8)sc+=.5;
+  const cx=(q.x0+q.x1)/2/W,cy=(q.y0+q.y1)/2/H;
+  sc+=cx<.72?0.7:cx>.85?-2.0:-0.3;
+  if(cy>.88&&rel<.02)sc-=2;              // bottom watermark crumbs
+  if(bw>10&&bh>10)sc+=.3;
+  if(bannedBox(q.x0,q.y0,q.x1,q.y1))sc-=6;
+  // pure-hot without size/hip support gets cut
+  if(q.src==='hot'&&!q.hip&&q.diag<.35&&rel<.01)sc-=3;
+  q.sc=sc;}
+ cands.sort((a,b)=>b.sc-a.sc);const best=cands[0];
+ const conf=best.sc;const low=conf<2.2;
+ const lp=Math.max(best.x1-best.x0,best.y1-best.y0),ppm=lp/12,r=v=>Math.round(v*100/ppm)/100,{x0,x1,y0,y1}=best,T=.3;
  const walls=[[x0,y0,x1,y0],[x1,y0,x1,y1],[x1,y1,x0,y1],[x0,y1,x0,y0]].map(q=>({start:[r(q[0]),r(q[1])],end:[r(q[2]),r(q[3])],thickness:T}));
- return{walls,canvas:c,w:Math.round(W/ppm*100)/100,guess:true,mode:'site',longPx:lp,ppm,hip:!!best.hip};}
+ return{walls,canvas:c,w:Math.round(W/ppm*100)/100,guess:true,mode:low?'none':'site',longPx:lp,ppm,hip:!!best.hip||best.src==='hip',needTrace:low?1:0,conf,src:best.src,_guessBox:best};}
+
+function cloneCanvas(c){const o=document.createElement('canvas');o.width=c.width;o.height=c.height;o.getContext('2d').drawImage(c,0,0);return o;}
 function toCanvas(img,M){const S=Math.min(1,M/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*S);c.height=Math.round(img.height*S);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;}
 function gray(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Uint8Array(W*H);for(let i=0;i<W*H;i++)g[i]=(d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11)|0;return g;}
 function otsu(g){const h=new Array(256).fill(0);g.forEach(v=>h[v]++);let s=0,sB=0,wB=0,b=0,t=128;for(let i=0;i<256;i++)s+=i*h[i];for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=g.length-wB;if(!wF)break;sB+=i*h[i];const v=wB*wF*(sB/wB-(s-sB)/wF)**2;if(v>b){b=v;t=i;}}return t;}
