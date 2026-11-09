@@ -1,4 +1,4 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261109ar';
+import {detectWalls,gapMerge} from './cv.js?v=20261109bg';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -6,7 +6,7 @@ function stairRect(st){const L=st.length||3.6,W=st.width||1,d=st.dir||0,c=Math.c
 function toast(m,k='info',ms=3800){const t=document.createElement('div');t.className='toast '+k;t.innerHTML=I[k==='ok'?'check':k==='err'||k==='warn'?'warn':'info']+'<div>'+m+'</div>';$('toasts').appendChild(t);while($('toasts').children.length>3)$('toasts').firstChild.remove();setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),300);},ms);}
 window.__toast=()=>[...document.querySelectorAll('.toast')].map(t=>t.textContent).join(' | ');
 const $=id=>document.getElementById(id),KEY='vkroc_studio_project';
-const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f4f1ec',floor:'dub',fac:'#ece3d3',roof:'#a0a8b0'},
+const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',floor:'dub',fac:'#ece3d3',roof:'#3e444c'},
  levels:[{name:'1NP',elevation:0,height:2.85}],walls:[],furn:[],plot:{pts:[[-4,-5],[20,-5],[20,15],[-4,15]],fence:1},roof:'gable'};
 (()=>{const L='1NP',h=2.85,W=(a,b,o=[],t=.3)=>DEMO.walls.push({id:'w'+DEMO.walls.length,level:L,start:a,end:b,thickness:t,base:0,height:h,openings:o});
  // Outer 15×10.5 m ≈ 157 m² footprint (+ terrace/carport outside)
@@ -32,18 +32,18 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f4f1ec',
  // Kitchen peninsula hint wall short
  W([0,7.2],[3.8,7.2],[],.12);
  // Furniture — overlap-checked modern Scandi, readable from dollhouse
- const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.2,.95],armch:[.85,.85],table:[1.6,.9],ctable:[1.1,.6],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.4,.62],fridge:[.6,.65],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.2,1.6],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4]};
+ const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.2,.95],armch:[.85,.85],table:[1.6,.9],ctable:[1.1,.6],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.4,.62],fridge:[.6,.65],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.2,1.6],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4],bench:[1.2,.4]};
  const soft=new Set(['rug','curtain','plant','lamp','art','chair']); // may overlap solids / each other
  const placed=[];
  const dim=(t,r)=>{const d=FD[t]||[1,1];return (r||0)%2?[d[1],d[0]]:d;};
  const hit=(t,x,z,r)=>{if(soft.has(t))return 0;const[w,d]=dim(t,r);for(const p of placed){if(soft.has(p.t))continue;const[pw,pd]=dim(p.t,p.r);if(Math.abs(x-p.p[0])<(w+pw)/2+.05&&Math.abs(z-p.p[1])<(d+pd)/2+.05)return 1;}return 0;};
  const F=(t,x,z,r=0)=>{if(!FD[t]||hit(t,x,z,r))return;const it={t,p:[x,z],r,level:L};DEMO.furn.push(it);placed.push(it);};
  // predsieň / hallway
- F('shoe',0.7,1.6); F('shelf',4.5,0.55,1); F('lamp',2.4,2.0); F('plant',0.6,3.1);
+ F('shoe',0.7,1.6); F('bench',2.5,1.5); F('shelf',4.5,0.55,1); F('lamp',2.4,2.0); F('plant',0.6,3.1);
  // wc
  F('wc',6.3,0.7); F('sink',6.9,1.35,1);
  // kúpeľňa
- F('shower',6.9,2.45); F('sink',5.6,3.2,1); F('wc',5.55,2.25); F('shelf',7.05,3.2,2);
+ F('bath',6.3,2.35); F('wc',5.55,3.2); F('sink',7.0,3.2,1);
  // kitchen line along west wall (worktop), then dining, then living — no solid overlaps
  F('fridge',0.45,7.35); F('kitch',0.45,9.0,1);
  F('table',2.6,6.55); F('chair',1.8,6.55,1); F('chair',3.4,6.55,3); F('chair',2.6,5.75); F('chair',2.6,7.35,2);
@@ -52,6 +52,7 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f4f1ec',
  F('armch',7.15,6.4,3); F('lamp',4.15,4.85); F('lamp',7.15,7.55);
  F('plant',1.05,9.85); F('plant',7.5,9.7); F('plant',7.4,4.9);
  F('curtain',5.5,10.35,2); F('curtain',0.15,8.5,1); F('curtain',0.15,5.2,1);
+ F('shelf',7.4,9.85,1);
  // master bedroom
  F('bed',11.6,1.95); F('ward',14.15,0.95,3); F('rug',11.6,2.45); F('lamp',9.55,2.7); F('plant',9.15,0.75); F('curtain',12.2,0.2); F('art',9.0,2.0,1);
  // izba 1
@@ -106,7 +107,7 @@ function nameR(R,L){const mx=Math.max(0,...R.r.map(r=>r.a));R.r.forEach(r=>{cons
 async function nameDlg(r){const v=await dlg('Názov miestnosti','<p>'+r.a.toFixed(1).replace('.',',')+' m² · návrh: '+esc(r.n)+'</p><label>Názov<input type="text" name="n" list="rnl" value="'+esc(r.n)+'"></label><datalist id="rnl">'+RN.map(n=>'<option value="'+n+'">').join('')+'</datalist>',[['Zrušiť',0],['Uložiť',1,'go','check']]);
  if(!v||!v.v)return;const n=String(v.f.n||'').trim().slice(0,40);if(!n)return;snap();H.rn=(H.rn||[]).filter(e=>!(e.level===lvl&&roomAt(RC[lvl],e.p)===r.id));H.rn.push({level:lvl,p:[...r.p],n});save();draw();toast('Miestnosť: '+n,'ok');}
 function WC(){const ws=WL();let x=0,z=0;ws.forEach(w=>{x+=w.start[0]+w.end[0];z+=w.start[1]+w.end[1];});const n=ws.length*2||1;return[x/n,z/n];}
-const FUR={bed:['Manželská posteľ',1.6,2.05],bed1:['Posteľ',.9,2],sofa:['Pohovka',2.2,.95],armch:['Kreslo',.85,.85],table:['Jedálenský stôl',1.6,.9],ctable:['Konferenčný stolík',1.1,.6],desk:['Písací stôl',1.2,.6],tv:['TV skrinka',1.8,.42],ward:['Šatníková skriňa',1.8,.62],kitch:['Kuchynská linka',2.4,.62],fridge:['Chladnička',.6,.65],bath:['Vaňa',1.7,.75],shower:['Sprchovací kút',.9,.9],sink:['Umývadlo',.6,.45],wc:['WC',.4,.65],shelf:['Polica',.9,.35],plant:['Rastlina',.45,.45],rug:['Koberec',2.2,1.6],lamp:['Lampa',.35,.35],chair:['Stolička',.45,.5],art:['Obraz',.9,.04],curtain:['Záves',1.4,.08],shoe:['Botník',1.0,.4]};
+const FUR={bed:['Manželská posteľ',1.6,2.05],bed1:['Posteľ',.9,2],sofa:['Pohovka',2.2,.95],armch:['Kreslo',.85,.85],table:['Jedálenský stôl',1.6,.9],ctable:['Konferenčný stolík',1.1,.6],desk:['Písací stôl',1.2,.6],tv:['TV skrinka',1.8,.42],ward:['Šatníková skriňa',1.8,.62],kitch:['Kuchynská linka',2.4,.62],fridge:['Chladnička',.6,.65],bath:['Vaňa',1.7,.75],shower:['Sprchovací kút',.9,.9],sink:['Umývadlo',.6,.45],wc:['WC',.4,.65],shelf:['Polica',.9,.35],plant:['Rastlina',.45,.45],rug:['Koberec',2.2,1.6],lamp:['Lampa',.35,.35],chair:['Stolička',.45,.5],art:['Obraz',.9,.04],curtain:['Záves',1.4,.08],shoe:['Botník',1.0,.4],bench:['Lavica',1.2,.4]};
 const fdim=f=>{const F=FUR[f.t];return (f.r||0)%2?[F[2],F[1]]:[F[1],F[2]];};
 const FL=()=>(H.furn||[]).filter(f=>f.level===lvl);
 function hitFurn(p){const fs=FL();for(let i=fs.length-1;i>=0;i--){const f=fs[i],[w,d]=fdim(f);if(Math.abs(p[0]-f.p[0])<=w/2&&Math.abs(p[1]-f.p[1])<=d/2)return f;}return null;}
@@ -298,7 +299,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109ar');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam()};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109bg');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam()};}return V;};
 function wUI(v){jumpsUI(v);$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
@@ -483,7 +484,7 @@ async function mktBoot(){
   try{document.querySelectorAll('.tut,.toast,#tut,#tutx').forEach(e=>e.remove());localStorage.vkTut=1;localStorage.vkTut3=1;}catch(e){}
   m.setWalk(false);wUI(false);jumpsUI(true);
   if(cam&&m.playCam){await new Promise(r=>setTimeout(r,900));
-    if(cam==='interior'){m.playCam('interior',speed,{x:4.2,z:8.4,tx:6.0,tz:5.1});}
+    if(cam==='interior'){m.playCam('interior',speed,{x:4.0,z:7.2,tx:6.2,tz:5.0});}
     else m.playCam(cam,speed,{loop:cam==='orbit',dur:cam==='orbit'?16:cam==='dollhouse'?4:cam==='walk'?12:12});
   }
   else if(q.get('tour')==='1'){await new Promise(r=>setTimeout(r,800));tour();}

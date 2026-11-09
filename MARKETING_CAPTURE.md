@@ -51,3 +51,11 @@ Walk-in:
 ## door=closed
 With `cam=walk&door=closed`, the front door starts shut and opens smoothly as the camera approaches (~1.5 m). Demo/clean uses tinted glass.
 Example: `?demo=1&clean=1&cam=walk&door=closed&w=1080&h=1920`
+
+## prem5 shots (2026-11-09)
+Cache: `v=20261109bg` (prem5: furnished dollhouse cutaway, light oak, anthracite roof, dark plinth, door=closed). Files: `/workspace/shots_studio/prem5_*.png`.
+Old prem4 URLs keep working (no tour page changes).
+Key recipes:
+- Orbit: `?demo=1&clean=1&cam=orbit&speed=0.4&w=1080&h=1920&v=20261109bg`
+- Dollhouse: `?demo=1&clean=1&cam=dollhouse&w=1080&h=1920&v=20261109bg`
+- Walk door closed: `?demo=1&clean=1&cam=walk&door=closed&w=1080&h=1920&v=20261109bg`
