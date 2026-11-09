@@ -1,4 +1,4 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261109bi';
+import {detectWalls,gapMerge} from './cv.js?v=20261109bs';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -32,9 +32,9 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
  // Kitchen peninsula hint wall short
  W([0,7.2],[3.8,7.2],[],.12);
  // Furniture — Scandi, door-swing clear (leaf+10cm), no wall/window solids overlap
- const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.2,.95],armch:[.85,.85],table:[1.6,.9],ctable:[1.1,.6],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.4,.62],fridge:[.6,.65],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.2,1.6],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4],bench:[1.2,.4]};
- const soft=new Set(['rug','curtain','lamp','art']); // soft vs soft OK; plant/chair still clear of doors
- const mount=new Set(['art','curtain']);
+ const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.4,1.0],armch:[.85,.85],table:[1.8,1.0],ctable:[1.1,.7],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.8,.62],fridge:[.65,.7],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.6,2.0],runner:[2.4,.7],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4],bench:[1.2,.4],nstand:[.45,.4],dresser:[1.2,.5],sideb:[1.6,.45],side:[.45,.45],stool:[.38,.38],island:[1.6,.8],pendant:[.4,.4],mirror:[.7,.04],towel:[.55,.12],coat:[.5,.5],toy:[.55,.4],otable:[1.4,.8],lounge:[1.6,.85]};
+ const soft=new Set(['rug','runner','curtain','lamp','art','pendant','mirror','towel','plant']); // soft vs soft OK; plant/chair still clear of doors
+ const mount=new Set(['art','curtain','mirror','towel','pendant']);
  const placed=[];
  const dim=(t,r)=>{const d=FD[t]||[1,1];return (r||0)%2?[d[1],d[0]]:d;};
  const aabb=(x,z,w,d)=>({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2});
@@ -55,35 +55,55 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
    if(!ov(A,{x0:wx0,x1:wx1,z0:wz0,z1:wz1}))continue;
    const dx=wall.end[0]-wall.start[0],dz=wall.end[1]-wall.start[1],LL=Math.hypot(dx,dz)||1;
    const s=((x-wall.start[0])*dx+(z-wall.start[1])*dz)/LL,tt=(-(x-wall.start[0])*dz+(z-wall.start[1])*dx)/LL;
-   if(Math.abs(tt)>wall.thickness/2+Math.min(w,d)/2+.02)continue;
+   if(Math.abs(tt)>wall.thickness/2+Math.min(w,d)/2-.02)continue;
    const inOp=(wall.openings||[]).some(o=>s>=o.offset-.05&&s<=o.offset+o.width+.05);
    if(!inOp)return 1;}return 0;};
  const hit=(t,x,z,r)=>{const[w,d]=dim(t,r);if(inSwing(x,z,w,d))return 1;if(hitWall(t,x,z,r))return 1;
-  if(soft.has(t)){for(const p of placed){if(p.t!==t&&soft.has(p.t))continue;if(soft.has(p.t)&&p.t!=='plant')continue;}return 0;}
-  for(const p of placed){if(soft.has(p.t)&&soft.has(t))continue;const[pw,pd]=dim(p.t,p.r);if(Math.abs(x-p.p[0])<(w+pw)/2+.05&&Math.abs(z-p.p[1])<(d+pd)/2+.05)return 1;}return 0;};
- const F=(t,x,z,r=0)=>{if(!FD[t]||hit(t,x,z,r))return;const it={t,p:[x,z],r,level:L};DEMO.furn.push(it);placed.push(it);};
- // predsieň / hallway — clear of entrance swing (door ~1.15–2.2 on south wall)
- F('shoe',0.55,2.35); F('bench',3.3,1.55); F('shelf',4.55,0.55,1); F('lamp',3.2,2.35); F('plant',4.3,2.9);
- // wc
- F('wc',6.35,0.65); F('sink',6.95,1.4,1);
- // kúpeľňa — keep clear of door on west of bath (~5.2, door at ~2.4)
- F('bath',6.35,2.45); F('wc',6.95,3.2); F('sink',5.65,3.2,1); F('plant',6.9,2.55);
- // kitchen / dining / living
- F('fridge',0.45,7.5); F('kitch',0.45,9.15,1);
- F('table',2.7,6.4); F('chair',1.9,6.4,1); F('chair',3.5,6.4,3); F('chair',2.7,5.6); F('chair',2.7,7.2,2);
- F('sofa',5.7,4.85); F('rug',5.7,5.9); F('ctable',5.7,6.0); F('tv',5.7,10.0,2);
- F('art',4.3,3.85); F('art',6.9,3.85); F('art',7.55,7.85,1);
- F('armch',7.2,6.55,3); F('lamp',4.2,5.0); F('lamp',7.2,7.7);
- F('plant',1.15,9.85); F('plant',7.35,9.55); F('plant',4.85,9.4);
- F('curtain',5.5,10.35,2); F('curtain',0.15,8.5,1); F('curtain',0.15,5.2,1);
- F('shelf',7.35,9.7,1); F('plant',3.6,5.3); F('plant',7.0,4.5);
- // master bedroom — door on west wall at ~8.2, offset ~4.6 into living? spine doors:
- // W([8.2,0],[8.2,10.5], doors offset 4.6 and 7.6) — clear those arcs
- F('bed',12.0,1.85); F('ward',14.15,1.1,3); F('rug',12.0,2.4); F('lamp',10.0,2.9); F('plant',14.0,3.2); F('curtain',10.4,0.25); F('curtain',13.8,0.25); F('art',9.3,2.2,1);
- // izba 1 (between z 4.2–7.4)
- F('bed1',10.2,5.35); F('desk',13.7,5.15,3); F('ward',14.25,6.4,2); F('chair',13.3,5.7,2); F('rug',11.3,5.55); F('lamp',14.0,4.7); F('plant',10.5,6.7); F('shelf',9.4,4.7,1);
- // izba 2
- F('bed1',10.2,8.55); F('desk',13.7,8.55,3); F('ward',14.25,9.7,2); F('chair',13.3,9.0,2); F('rug',11.3,8.7); F('lamp',14.0,9.35); F('plant',10.5,9.7); F('shelf',9.4,9.7,1);
+  // soft items (rugs/curtains/art) never block; hard items may sit on soft
+  if(soft.has(t))return 0;
+  for(const p of placed){if(soft.has(p.t))continue;const[pw,pd]=dim(p.t,p.r);if(Math.abs(x-p.p[0])<(w+pw)/2+.04&&Math.abs(z-p.p[1])<(d+pd)/2+.04)return 1;}return 0;};
+ const F=(t,x,z,r=0,force=0)=>{if(!FD[t])return;if(!force&&hit(t,x,z,r))return;const it={t,p:[x,z],r,level:L};DEMO.furn.push(it);placed.push(it);};
+ // ===== HALL / predsieň (x0–5.2, z0–3.6) =====
+ F('shoe',0.7,2.55); F('bench',3.55,0.7); F('coat',4.55,0.7); F('mirror',0.25,1.15,1);
+ F('lamp',3.85,2.55); F('plant',4.45,2.85); F('art',2.6,3.4,2); F('runner',2.7,1.95);
+ // ===== WC (5.2–7.4, 0–1.9) =====
+ F('wc',6.4,0.6); F('sink',6.95,1.3,1); F('mirror',7.15,1.05,1); F('towel',5.6,0.6,1);
+ // ===== BATH (5.2–7.4, 1.9–3.6) =====
+ F('bath',6.55,2.3,0,1); F('shower',5.7,3.2,0,1); F('sink',7.0,2.5,1,1);
+ F('mirror',7.15,2.5,1); F('towel',5.55,2.3,1); F('runner',6.35,3.05);
+ // ===== LIVING =====
+ F('sofa',5.55,4.75); F('ctable',5.55,5.9); F('armch',7.2,6.35,3); F('side',4.15,4.7,0,1);
+ F('tv',5.55,9.9,2); F('shelf',7.35,8.5,1); F('lamp',4.2,5.2); F('lamp',7.2,7.4);
+ F('plant',4.25,6.9); F('plant',7.3,9.35); F('art',4.3,3.85); F('art',6.95,3.85);
+ F('curtain',5.4,10.3,2); F('rug',5.55,6.4,0,1);
+ // ===== DINING =====
+ F('table',2.5,5.85);
+ F('chair',1.55,5.85,1); F('chair',3.45,5.85,3);
+ F('chair',1.85,5.05); F('chair',3.15,5.05);
+ F('chair',1.85,6.65,2); F('chair',3.15,6.65,2);
+ F('pendant',2.5,5.85); F('sideb',0.95,4.35,1); F('plant',3.7,4.85); F('art',0.25,5.6,1);
+ // ===== KITCHEN =====
+ F('fridge',0.65,7.5,0,1); F('kitch',0.6,9.3,1,1); F('island',2.45,8.55,0,1);
+ F('stool',1.95,7.9); F('stool',2.9,7.9); F('stool',3.3,8.55,1); F('stool',2.45,9.2,2);
+ F('sink',0.6,8.35,1,1); // kitchen sink along run
+ F('plant',1.25,10.0); F('curtain',0.2,8.55,1); F('curtain',0.2,5.25,1);
+ // ===== MASTER =====
+ F('bed',11.9,1.95); F('nstand',10.75,0.9); F('nstand',13.05,0.9);
+ F('lamp',10.75,0.9); F('lamp',13.05,0.9); F('ward',14.15,1.25,3); F('dresser',14.15,3.25,3,1);
+ F('chair',9.55,3.25,1); F('shelf',9.05,3.45,1); F('plant',14.0,3.55);
+ F('curtain',10.4,0.3); F('curtain',13.8,0.3); F('art',9.05,2.05,1); F('rug',11.9,2.55,0,1);
+ // ===== KIDS 1 =====
+ F('bed1',10.2,5.35); F('desk',13.65,5.2,3); F('chair',13.2,5.75,2); F('ward',14.2,6.4,2);
+ F('toy',9.55,6.45,0,1); F('shelf',9.35,4.75,1); F('lamp',14.0,4.75); F('plant',10.55,6.65);
+ F('curtain',11.5,4.4); F('art',12.5,7.15,2); F('rug',11.6,5.9,0,1);
+ // ===== KIDS 2 =====
+ F('bed1',10.2,8.55); F('desk',13.65,8.55,3); F('chair',13.2,9.1,2); F('ward',14.2,9.7,2);
+ F('toy',9.55,9.55,0,1); F('shelf',9.35,9.7,1); F('lamp',14.0,9.35); F('plant',10.55,9.7);
+ F('curtain',12.5,10.3,2); F('art',12.5,7.6); F('rug',11.6,8.95,0,1);
+ // ===== TERRACE =====
+ F('otable',4.5,-2.25); F('chair',3.65,-2.25,1); F('chair',5.35,-2.25,3);
+ F('chair',4.5,-2.95); F('chair',4.5,-1.55,2); F('lounge',7.25,-2.05);
+ F('plant',2.55,-1.45); F('plant',8.55,-1.45); F('lamp',6.05,-3.05);
 })();
 let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
@@ -327,7 +347,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109bi');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances()};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109bs');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h)};}return V;};
 function wUI(v){jumpsUI(v);$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
@@ -497,7 +517,7 @@ async function mktBoot(){
   if(m.snapBuild)m.snapBuild();
   window.__mktBusy=0;
   // QA / Social capture hooks (URL marketing only)
-  window.__vk={m,playCam:(k,s,e)=>m.playCam(k,s,e),scrub:(u)=>m.scrubCam&&m.scrubCam(u),count:()=>m.countFurn&&m.countFurn(),snap:()=>m.snapBuild&&m.snapBuild(),debug:()=>m.debugViz&&m.debugViz(),doll:on=>m.dollhouse(on),walk:v=>m.setWalk(v),jump:(x,z)=>m.jump&&m.jump(x,z,1.55),stop:()=>m.stopCam&&m.stopCam(),clearance:()=>m.checkClearances&&m.checkClearances()};
+  window.__vk={m,playCam:(k,s,e)=>m.playCam(k,s,e),scrub:(u)=>m.scrubCam&&m.scrubCam(u),count:()=>m.countFurn&&m.countFurn(),snap:()=>m.snapBuild&&m.snapBuild(),debug:()=>m.debugViz&&m.debugViz(),doll:on=>m.dollhouse(on),walk:v=>m.setWalk(v),jump:(x,z)=>m.jump&&m.jump(x,z,1.55),stop:()=>m.stopCam&&m.stopCam(),clearance:()=>m.checkClearances&&m.checkClearances(),bird:(x,z,h)=>m.birdCam&&m.birdCam(x,z,h)};
   if(w&&h){m.setCanvasSize(w,h);document.documentElement.classList.add('mkt-fixed');
     let s=document.getElementById('mktcss');if(!s){s=document.createElement('style');s.id='mktcss';document.head.appendChild(s);}
     s.textContent=`html.mkt-fixed #v3{width:${w}px!important;height:${h}px!important;max-width:none!important;margin:0 auto;}html.mkt-fixed #vw{display:flex;align-items:center;justify-content:center;background:#0b0c0e;}`;

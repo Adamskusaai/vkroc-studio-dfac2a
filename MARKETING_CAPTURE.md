@@ -67,3 +67,12 @@ Cache `v=20261109bi`. Full-height dollhouse (roof only off). `cam=reveal` ~8s ro
 - Walk door=closed: `?demo=1&clean=1&cam=walk&door=closed&w=1080&h=1920&v=20261109bi`
 
 Site import: `detectParcel` → `H.plot` when situation drawing has parcel lines.
+
+## prem7
+Cache `v=20261109bl`. Computed exterior fit (bbox+FOV+aspect). White gables, tile courses, no car. Kitchen/bath readable in dollhouse.
+
+## Prem7 (cache `20261109bs`)
+- Full Scandi furnishing per room + `birdCam` room crops (`prem7_room_*`)
+- `fitExteriorCam` for 9:16/16:9 exterior/reveal start
+- Walk: centripetal spline through door centre, `aimWalkCam` (no Orbit fight), wall clear ≥0.4 m, door opens on approach
+- White facade gables, roof tile courses + bump, car removed from demo plot
