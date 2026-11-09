@@ -1,4 +1,4 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261109bg';
+import {detectWalls,gapMerge} from './cv.js?v=20261109bi';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -31,34 +31,59 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
  W([8.2,7.4],[15,7.4],[{type:'door',offset:2.8,width:.85,height:2.05}],.15);
  // Kitchen peninsula hint wall short
  W([0,7.2],[3.8,7.2],[],.12);
- // Furniture — overlap-checked modern Scandi, readable from dollhouse
+ // Furniture — Scandi, door-swing clear (leaf+10cm), no wall/window solids overlap
  const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.2,.95],armch:[.85,.85],table:[1.6,.9],ctable:[1.1,.6],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.4,.62],fridge:[.6,.65],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.2,1.6],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4],bench:[1.2,.4]};
- const soft=new Set(['rug','curtain','plant','lamp','art','chair']); // may overlap solids / each other
+ const soft=new Set(['rug','curtain','lamp','art']); // soft vs soft OK; plant/chair still clear of doors
+ const mount=new Set(['art','curtain']);
  const placed=[];
  const dim=(t,r)=>{const d=FD[t]||[1,1];return (r||0)%2?[d[1],d[0]]:d;};
- const hit=(t,x,z,r)=>{if(soft.has(t))return 0;const[w,d]=dim(t,r);for(const p of placed){if(soft.has(p.t))continue;const[pw,pd]=dim(p.t,p.r);if(Math.abs(x-p.p[0])<(w+pw)/2+.05&&Math.abs(z-p.p[1])<(d+pd)/2+.05)return 1;}return 0;};
+ const aabb=(x,z,w,d)=>({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2});
+ const ov=(A,B)=>!(A.x1<=B.x0||A.x0>=B.x1||A.z1<=B.z0||A.z0>=B.z1);
+ // door swing zones from DEMO.walls (quarter-circle AABB, radius=width+0.10)
+ const swings=[];
+ DEMO.walls.forEach(w=>{const dx=w.end[0]-w.start[0],dz=w.end[1]-w.start[1],L=Math.hypot(dx,dz)||1,ux=dx/L,uz=dz/L;
+  (w.openings||[]).forEach(o=>{if(o.type!=='door')return;const rad=o.width+.1,Rh=o.hinge==='R',hs=Rh?o.offset+o.width-.05:o.offset+.05;
+   const hx=w.start[0]+ux*hs,hz=w.start[1]+uz*hs,sd=o.out?-1:1,px=-uz*sd,pz=ux*sd,along=Rh?-1:1;
+   const pts=[[hx,hz]];for(let i=0;i<=8;i++){const ang=(i/8)*(Math.PI/2),ca=Math.cos(ang),sa=Math.sin(ang);
+    pts.push([hx+ux*along*rad*ca+px*rad*sa,hz+uz*along*rad*ca+pz*rad*sa]);}
+   const xs=pts.map(p=>p[0]),zs=pts.map(p=>p[1]);
+   swings.push({x0:Math.min(...xs),x1:Math.max(...xs),z0:Math.min(...zs),z1:Math.max(...zs)});});});
+ const inSwing=(x,z,w,d)=>{const A=aabb(x,z,w,d);return swings.some(Z=>ov(A,Z));};
+ const hitWall=(t,x,z,r)=>{if(mount.has(t))return 0;const[w,d]=dim(t,r);const A=aabb(x,z,w,d);
+  for(const wall of DEMO.walls){const t0=wall.thickness/2+.02;const wx0=Math.min(wall.start[0],wall.end[0])-t0,wx1=Math.max(wall.start[0],wall.end[0])+t0;
+   const wz0=Math.min(wall.start[1],wall.end[1])-t0,wz1=Math.max(wall.start[1],wall.end[1])+t0;
+   if(!ov(A,{x0:wx0,x1:wx1,z0:wz0,z1:wz1}))continue;
+   const dx=wall.end[0]-wall.start[0],dz=wall.end[1]-wall.start[1],LL=Math.hypot(dx,dz)||1;
+   const s=((x-wall.start[0])*dx+(z-wall.start[1])*dz)/LL,tt=(-(x-wall.start[0])*dz+(z-wall.start[1])*dx)/LL;
+   if(Math.abs(tt)>wall.thickness/2+Math.min(w,d)/2+.02)continue;
+   const inOp=(wall.openings||[]).some(o=>s>=o.offset-.05&&s<=o.offset+o.width+.05);
+   if(!inOp)return 1;}return 0;};
+ const hit=(t,x,z,r)=>{const[w,d]=dim(t,r);if(inSwing(x,z,w,d))return 1;if(hitWall(t,x,z,r))return 1;
+  if(soft.has(t)){for(const p of placed){if(p.t!==t&&soft.has(p.t))continue;if(soft.has(p.t)&&p.t!=='plant')continue;}return 0;}
+  for(const p of placed){if(soft.has(p.t)&&soft.has(t))continue;const[pw,pd]=dim(p.t,p.r);if(Math.abs(x-p.p[0])<(w+pw)/2+.05&&Math.abs(z-p.p[1])<(d+pd)/2+.05)return 1;}return 0;};
  const F=(t,x,z,r=0)=>{if(!FD[t]||hit(t,x,z,r))return;const it={t,p:[x,z],r,level:L};DEMO.furn.push(it);placed.push(it);};
- // predsieň / hallway
- F('shoe',0.7,1.6); F('bench',2.5,1.5); F('shelf',4.5,0.55,1); F('lamp',2.4,2.0); F('plant',0.6,3.1);
+ // predsieň / hallway — clear of entrance swing (door ~1.15–2.2 on south wall)
+ F('shoe',0.55,2.35); F('bench',3.3,1.55); F('shelf',4.55,0.55,1); F('lamp',3.2,2.35); F('plant',4.3,2.9);
  // wc
- F('wc',6.3,0.7); F('sink',6.9,1.35,1);
- // kúpeľňa
- F('bath',6.3,2.35); F('wc',5.55,3.2); F('sink',7.0,3.2,1);
- // kitchen line along west wall (worktop), then dining, then living — no solid overlaps
- F('fridge',0.45,7.35); F('kitch',0.45,9.0,1);
- F('table',2.6,6.55); F('chair',1.8,6.55,1); F('chair',3.4,6.55,3); F('chair',2.6,5.75); F('chair',2.6,7.35,2);
- F('sofa',5.6,4.7); F('rug',5.6,5.75); F('ctable',5.6,5.85); F('tv',5.6,10.0,2);
- F('art',4.2,3.78); F('art',6.8,3.78); F('art',7.55,7.7,1);
- F('armch',7.15,6.4,3); F('lamp',4.15,4.85); F('lamp',7.15,7.55);
- F('plant',1.05,9.85); F('plant',7.5,9.7); F('plant',7.4,4.9);
+ F('wc',6.35,0.65); F('sink',6.95,1.4,1);
+ // kúpeľňa — keep clear of door on west of bath (~5.2, door at ~2.4)
+ F('bath',6.35,2.45); F('wc',6.95,3.2); F('sink',5.65,3.2,1); F('plant',6.9,2.55);
+ // kitchen / dining / living
+ F('fridge',0.45,7.5); F('kitch',0.45,9.15,1);
+ F('table',2.7,6.4); F('chair',1.9,6.4,1); F('chair',3.5,6.4,3); F('chair',2.7,5.6); F('chair',2.7,7.2,2);
+ F('sofa',5.7,4.85); F('rug',5.7,5.9); F('ctable',5.7,6.0); F('tv',5.7,10.0,2);
+ F('art',4.3,3.85); F('art',6.9,3.85); F('art',7.55,7.85,1);
+ F('armch',7.2,6.55,3); F('lamp',4.2,5.0); F('lamp',7.2,7.7);
+ F('plant',1.15,9.85); F('plant',7.35,9.55); F('plant',4.85,9.4);
  F('curtain',5.5,10.35,2); F('curtain',0.15,8.5,1); F('curtain',0.15,5.2,1);
- F('shelf',7.4,9.85,1);
- // master bedroom
- F('bed',11.6,1.95); F('ward',14.15,0.95,3); F('rug',11.6,2.45); F('lamp',9.55,2.7); F('plant',9.15,0.75); F('curtain',12.2,0.2); F('art',9.0,2.0,1);
- // izba 1
- F('bed1',10.0,5.4); F('desk',13.6,5.0,3); F('ward',14.25,6.55,2); F('chair',13.2,5.55,2); F('rug',11.2,5.6); F('lamp',14.0,4.55); F('plant',9.15,6.7); F('shelf',9.15,4.6,1);
+ F('shelf',7.35,9.7,1); F('plant',3.6,5.3); F('plant',7.0,4.5);
+ // master bedroom — door on west wall at ~8.2, offset ~4.6 into living? spine doors:
+ // W([8.2,0],[8.2,10.5], doors offset 4.6 and 7.6) — clear those arcs
+ F('bed',12.0,1.85); F('ward',14.15,1.1,3); F('rug',12.0,2.4); F('lamp',10.0,2.9); F('plant',14.0,3.2); F('curtain',10.4,0.25); F('curtain',13.8,0.25); F('art',9.3,2.2,1);
+ // izba 1 (between z 4.2–7.4)
+ F('bed1',10.2,5.35); F('desk',13.7,5.15,3); F('ward',14.25,6.4,2); F('chair',13.3,5.7,2); F('rug',11.3,5.55); F('lamp',14.0,4.7); F('plant',10.5,6.7); F('shelf',9.4,4.7,1);
  // izba 2
- F('bed1',10.0,8.65); F('desk',13.6,8.55,3); F('ward',14.25,9.85,2); F('chair',13.2,9.0,2); F('rug',11.2,8.8); F('lamp',14.0,9.5); F('plant',9.15,7.95); F('shelf',9.15,9.85,1);
+ F('bed1',10.2,8.55); F('desk',13.7,8.55,3); F('ward',14.25,9.7,2); F('chair',13.3,9.0,2); F('rug',11.3,8.7); F('lamp',14.0,9.35); F('plant',10.5,9.7); F('shelf',9.4,9.7,1);
 })();
 let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
@@ -299,7 +324,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109bg');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam()};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109bi');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances()};}return V;};
 function wUI(v){jumpsUI(v);$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
@@ -441,7 +466,7 @@ function tutWait(n=0,T=TUT,key='vkTut'){if(localStorage[key]||document.getElemen
 
 /* Marketing / Social capture — URL params only (hidden from normal UI)
    ?clean=1          hide all UI, cursor, toasts
-   &cam=orbit|dollhouse|walk|descend|interior
+   &cam=orbit|dollhouse|walk|descend|interior|reveal
    &speed=0.5        camera path speed multiplier
    &w=1080&h=1920    fixed canvas (portrait 1080x1920 or 2160x3840)
    &demo=1           auto-open premium demo + 3D
@@ -469,7 +494,7 @@ async function mktBoot(){
   if(m.snapBuild)m.snapBuild();
   window.__mktBusy=0;
   // QA / Social capture hooks (URL marketing only)
-  window.__vk={m,playCam:(k,s,e)=>m.playCam(k,s,e),scrub:(u)=>m.scrubCam&&m.scrubCam(u),count:()=>m.countFurn&&m.countFurn(),snap:()=>m.snapBuild&&m.snapBuild(),debug:()=>m.debugViz&&m.debugViz(),doll:on=>m.dollhouse(on),walk:v=>m.setWalk(v),jump:(x,z)=>m.jump&&m.jump(x,z,1.55),stop:()=>m.stopCam&&m.stopCam()};
+  window.__vk={m,playCam:(k,s,e)=>m.playCam(k,s,e),scrub:(u)=>m.scrubCam&&m.scrubCam(u),count:()=>m.countFurn&&m.countFurn(),snap:()=>m.snapBuild&&m.snapBuild(),debug:()=>m.debugViz&&m.debugViz(),doll:on=>m.dollhouse(on),walk:v=>m.setWalk(v),jump:(x,z)=>m.jump&&m.jump(x,z,1.55),stop:()=>m.stopCam&&m.stopCam(),clearance:()=>m.checkClearances&&m.checkClearances()};
   if(w&&h){m.setCanvasSize(w,h);document.documentElement.classList.add('mkt-fixed');
     let s=document.getElementById('mktcss');if(!s){s=document.createElement('style');s.id='mktcss';document.head.appendChild(s);}
     s.textContent=`html.mkt-fixed #v3{width:${w}px!important;height:${h}px!important;max-width:none!important;margin:0 auto;}html.mkt-fixed #vw{display:flex;align-items:center;justify-content:center;background:#0b0c0e;}`;
@@ -484,8 +509,8 @@ async function mktBoot(){
   try{document.querySelectorAll('.tut,.toast,#tut,#tutx').forEach(e=>e.remove());localStorage.vkTut=1;localStorage.vkTut3=1;}catch(e){}
   m.setWalk(false);wUI(false);jumpsUI(true);
   if(cam&&m.playCam){await new Promise(r=>setTimeout(r,900));
-    if(cam==='interior'){m.playCam('interior',speed,{x:4.0,z:7.2,tx:6.2,tz:5.0});}
-    else m.playCam(cam,speed,{loop:cam==='orbit',dur:cam==='orbit'?16:cam==='dollhouse'?4:cam==='walk'?12:12});
+    if(cam==='interior'){const bed=q.get('room')==='bed';m.playCam('interior',speed,bed?{x:11.2,z:3.2,tx:12.5,tz:1.6}:{x:4.0,z:7.2,tx:6.2,tz:5.0});}
+    else m.playCam(cam,speed,{loop:cam==='orbit',dur:cam==='orbit'?16:cam==='dollhouse'?4:cam==='reveal'?8:cam==='walk'?12:12});
   }
   else if(q.get('tour')==='1'){await new Promise(r=>setTimeout(r,800));tour();}
 }

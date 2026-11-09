@@ -59,3 +59,9 @@ Key recipes:
 - Orbit: `?demo=1&clean=1&cam=orbit&speed=0.4&w=1080&h=1920&v=20261109bg`
 - Dollhouse: `?demo=1&clean=1&cam=dollhouse&w=1080&h=1920&v=20261109bg`
 - Walk door closed: `?demo=1&clean=1&cam=walk&door=closed&w=1080&h=1920&v=20261109bg`
+
+## prem6 (2026-11-09)
+Cache `v=20261109bi`. Full-height dollhouse (roof only off). `cam=reveal` ~8s roof-lift. Door-swing clearances.
+- Reveal: `?demo=1&clean=1&cam=reveal&w=1080&h=1920&v=20261109bi`
+- Dollhouse: `?demo=1&clean=1&cam=dollhouse&w=1080&h=1920&v=20261109bi`
+- Walk door=closed: `?demo=1&clean=1&cam=walk&door=closed&w=1080&h=1920&v=20261109bi`
