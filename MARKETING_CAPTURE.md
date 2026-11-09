@@ -24,6 +24,10 @@ Base (live):  https://adamskusaai.github.io/vkroc-studio-dfac2a/
 - **walk** — eased walk along path into the house.
 - **descend** — dollhouse roof-off + room-by-room high descent.
 
+## Notes for capture
+- `cam=*` always snaps a finished full-height house (no mid wall-growth / dollhouse leak into orbit or walk).
+- Prefer `gen` without `grow=1` for recording.
+
 ## Also polished (no URL needed)
 - Wall-growth 2D→3D on `gen(anim)` / first 3D open with animation
 - Roof on/off and sun (`#sunh`) tween smoothly (no hard jumps)

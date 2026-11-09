@@ -1,4 +1,4 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261109f';
+import {detectWalls,gapMerge} from './cv.js?v=20261109m';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -12,10 +12,10 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f4f1ec',
  // Outer 15×10.5 m ≈ 157 m² footprint (+ terrace/carport outside)
  // South facade z=0, north z=10.5, west x=0, east x=15
  W([0,0],[15,0],[
-  {type:'door',offset:1.2,width:1.1,sill:0,height:2.15,out:1}, // vstup
-  {type:'window',offset:4.2,width:2.2,sill:.4,height:2.1}, // obývačka
-  {type:'window',offset:8.2,width:1.8,sill:.9,height:1.4},
-  {type:'window',offset:11.5,width:1.6,sill:.9,height:1.4}]);
+  {type:'door',offset:1.15,width:1.05,sill:0,height:2.15,out:1,kind:'entrance'}, // vstup
+  {type:'window',offset:4.0,width:2.4,sill:.55,height:1.85}, // obývačka
+  {type:'window',offset:8.0,width:1.6,sill:.95,height:1.35},
+  {type:'window',offset:11.4,width:1.5,sill:.95,height:1.35}]);
  W([15,0],[15,10.5],[{type:'window',offset:2.2,width:1.4,sill:.9,height:1.4},{type:'window',offset:6.5,width:1.4,sill:.9,height:1.4}]);
  W([15,10.5],[0,10.5],[{type:'window',offset:2,width:1.5,sill:.9,height:1.4},{type:'window',offset:6,width:2,sill:.9,height:1.4},{type:'window',offset:11,width:1.5,sill:.9,height:1.4}]);
  W([0,10.5],[0,0],[{type:'window',offset:3.5,width:1.2,sill:.9,height:1.4},{type:'window',offset:7.2,width:1.2,sill:.9,height:1.4}]);
@@ -281,7 +281,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109f');}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109m');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam()};}return V;};
 function wUI(v){jumpsUI(v);$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(n!==genN)return;m.setRoof(roof);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#2b3442';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
@@ -295,7 +295,7 @@ $('share').onclick=async()=>{const base=location.href.split('#')[0]+'#t='+await 
  if(r&&r.v==='f')dl(new Blob(['<!doctype html><meta charset="utf-8"><title>'+esc(H.name)+' – prehliadka</title><meta http-equiv="refresh" content="0;url='+esc(url)+'"><a href="'+esc(url)+'">Otvoriť prehliadku</a>'],{type:'text/html'}),(H.name||'dom')+' - prehliadka.html');};
 $('roof').onchange=async e=>{const v=e.target.value,prev=roof;roof=v;if(H)H.roof=roof;if((v==='none')!==(prev==='none')&&prev&&v){const m=await v3();if(m.setRoof){m.setRoof(v,true);if(v!=='none')gen(false);else return;}}gen(false);};
 function show(s,nopush){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.s===s));document.querySelectorAll('.scr').forEach(x=>x.classList.toggle('on',x.id===s));
- $('tbed').classList.toggle('on',s==='ed');if(s==='home'){home();}$('tbvw').classList.toggle('on',s==='vw');document.querySelector('.seg').style.visibility=s==='home'?'hidden':'';$('pname').style.display=s==='home'?'none':'';const vb=$('VRButton');if(vb)vb.style.display=s==='vw'&&!/NOT|ONLY/i.test(vb.textContent)?'':'none';if(s==='vw'){gen(true);if(!localStorage.vkTut3)tutWait(0,TUT3,'vkTut3');}else if(s==='ed'){requestAnimationFrame(fit);if(!localStorage.vkTut)tutWait();}
+ $('tbed').classList.toggle('on',s==='ed');if(s==='home'){home();}$('tbvw').classList.toggle('on',s==='vw');document.querySelector('.seg').style.visibility=s==='home'?'hidden':'';$('pname').style.display=s==='home'?'none':'';const vb=$('VRButton');if(vb)vb.style.display=s==='vw'&&!/NOT|ONLY/i.test(vb.textContent)?'':'none';if(s==='vw'){if(!window.__mktBusy)gen(true);if(!localStorage.vkTut3&&!window.__mktBusy)tutWait(0,TUT3,'vkTut3');}else if(s==='ed'){requestAnimationFrame(fit);if(!localStorage.vkTut)tutWait();}
  if(H&&s!=='home')$('pname').textContent=H.name;
  if(s!=='vw')$('jumps').hidden=true;
  if(!nopush&&!TH){const h=s==='home'?'':'#p='+PID+(s==='vw'?'&v=3d':'');if(location.hash!==h)history.pushState(null,'',h||location.pathname);}}
@@ -386,9 +386,9 @@ async function presOn(auto){document.body.classList.add('pres');$('prn').textCon
 async function presOff(){stopTour();document.body.classList.remove('pres');dispatchEvent(new Event('resize'));const m=await v3();if(m.isWalk()){m.setWalk(false);wUI(false);}else jumpsUI(false);m.resize&&m.resize();}
 function stopTour(){TOUR++;TON=false;$('ptour').innerHTML=I.next+'<span>Auto-prehliadka</span>';v3().then(m=>m.setAuto(false));}
 async function tour(){const id=++TOUR,m=await v3(),wait=ms=>new Promise(r=>setTimeout(r,ms)),alive=()=>id===TOUR;TON=true;$('ptour').innerHTML=I.x+'<span>Zastaviť</span>';
- m.setWalk(false);wUI(false);jumpsUI(true);
+ m.setWalk(false);wUI(false);jumpsUI(true);if(m.snapBuild)m.snapBuild();
  // slow exterior orbit intro
- if(m.playCam)m.playCam('orbit',0.55,{dur:10,loop:false,y:null});else m.setAuto(true,0.45);
+ if(m.playCam)m.playCam('orbit',0.55,{dur:10,loop:false});else m.setAuto(true,0.45);
  await wait(10000);if(m.stopCam)m.stopCam();m.setAuto(false);if(!alive())return;
  // room jumps with gentle spin
  const bs=[...$('jumps').querySelectorAll('button')];for(const b of bs){if(!alive())return;b.click();bs.forEach(x=>x.classList.toggle('on',x===b));const t0=performance.now();while(alive()&&performance.now()-t0<4800){m.spin(.008);await wait(16);}}
@@ -434,10 +434,17 @@ async function mktBoot(){
   try{localStorage.vkTut=1;localStorage.vkTut3=1;document.getElementById('tutx')?.remove();}catch(e){}
   const clean=q.get('clean')==='1',cam=q.get('cam'),speed=+q.get('speed')||1,w=+q.get('w')||0,h=+q.get('h')||0;
   if(q.get('demo')==='1'||cam||clean||(w&&h)){
+    window.__mktBusy=1;
     try{const D=JSON.parse(JSON.stringify(DEMO));newP(D.name,D.walls,null,D.plot);H.furn=D.furn||[];H.style=D.style;H.mat=D.mat||H.mat;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}save();}catch(e){}
-    show('vw');await gen(true);
+    show('vw');
+    // Finished house for capture — never leave mid wall-growth
+    await gen(false);
   }
   const m=await v3();
+  if(m.snapBuild)m.snapBuild();
+  window.__mktBusy=0;
+  // QA / Social capture hooks (URL marketing only)
+  window.__vk={m,playCam:(k,s,e)=>m.playCam(k,s,e),snap:()=>m.snapBuild&&m.snapBuild(),debug:()=>m.debugViz&&m.debugViz(),doll:on=>m.dollhouse(on),walk:v=>m.setWalk(v),jump:(x,z)=>m.jump&&m.jump(x,z,1.55),stop:()=>m.stopCam&&m.stopCam()};
   if(w&&h){m.setCanvasSize(w,h);document.documentElement.classList.add('mkt-fixed');
     let s=document.getElementById('mktcss');if(!s){s=document.createElement('style');s.id='mktcss';document.head.appendChild(s);}
     s.textContent=`html.mkt-fixed #v3{width:${w}px!important;height:${h}px!important;max-width:none!important;margin:0 auto;}html.mkt-fixed #vw{display:flex;align-items:center;justify-content:center;background:#0b0c0e;}`;
