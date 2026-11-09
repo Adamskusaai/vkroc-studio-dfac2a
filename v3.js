@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261109bs';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261109ca';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -38,7 +38,7 @@ const plaster=tex((x,n)=>{x.fillStyle='#f2efe8';x.fillRect(0,0,n,n);for(let i=0;
 const grass=tex((x,n)=>{x.fillStyle='#6d7a58';x.fillRect(0,0,n,n);for(let i=0;i<4200;i++){const g=95+rnd()*55;x.fillStyle=`rgba(${(g*.62)|0},${g|0},${(g*.48)|0},${.35+rnd()*.35})`;x.fillRect(rnd()*n,rnd()*n,1+rnd()*2,2+rnd()*3);}for(let i=0;i<80;i++){x.fillStyle=`rgba(90,100,70,${.08+rnd()*.12})`;x.beginPath();x.ellipse(rnd()*n,rnd()*n,8+rnd()*18,5+rnd()*12,rnd()*3,0,6.3);x.fill();}},256);
 const earth=tex((x,n)=>{x.fillStyle='#8a8478';x.fillRect(0,0,n,n);for(let i=0;i<3000;i++){const g=110+rnd()*40;x.fillStyle=`rgba(${g|0},${(g*.92)|0},${(g*.78)|0},.4)`;x.fillRect(rnd()*n,rnd()*n,2,2);}},128,4);
 const pave=tex((x,n)=>{x.fillStyle='#c9c2b4';x.fillRect(0,0,n,n);for(let i=0;i<n;i+=32){x.fillStyle='rgba(110,105,95,.28)';x.fillRect(i,0,1,n);x.fillRect(0,i,n,1);}for(let i=0;i<800;i++){const g=180+rnd()*40;x.fillStyle=`rgba(${g|0},${(g*.96)|0},${(g*.88)|0},.25)`;x.fillRect(rnd()*n,rnd()*n,2,2);}},256,2);
-const roofTex=tex((x,n)=>{x.fillStyle='#5c646e';x.fillRect(0,0,n,n);for(let row=0;row<n;row+=16){const odd=((row/16)|0)%2;for(let col=odd?11:0;col<n;col+=22){x.fillStyle='#7e8792';x.fillRect(col+1,row+1,19,12);x.fillStyle='rgba(255,255,255,.18)';x.fillRect(col+2,row+2,17,1);x.fillStyle='rgba(0,0,0,.42)';x.fillRect(col+1,row+11,19,2);x.fillStyle='rgba(0,0,0,.28)';x.fillRect(col+19,row+1,1,12);}x.fillStyle='rgba(0,0,0,.55)';x.fillRect(0,row+14,n,2);}},256,5);
+const roofTex=tex((x,n)=>{x.fillStyle='#7a848e';x.fillRect(0,0,n,n);for(let row=0;row<n;row+=16){const odd=((row/16)|0)%2;for(let col=odd?11:0;col<n;col+=22){x.fillStyle='#7e8792';x.fillRect(col+1,row+1,19,12);x.fillStyle='rgba(255,255,255,.18)';x.fillRect(col+2,row+2,17,1);x.fillStyle='rgba(0,0,0,.42)';x.fillRect(col+1,row+11,19,2);x.fillStyle='rgba(0,0,0,.28)';x.fillRect(col+19,row+1,1,12);}x.fillStyle='rgba(0,0,0,.55)';x.fillRect(0,row+14,n,2);}},256,5);
 roofTex.wrapS=roofTex.wrapT=THREE.RepeatWrapping;roofTex.repeat.set(5,3);roofTex.colorSpace=THREE.SRGBColorSpace;
 const roofBump=tex((x,n)=>{x.fillStyle='#808080';x.fillRect(0,0,n,n);for(let row=0;row<n;row+=16){const odd=((row/16)|0)%2;for(let col=odd?11:0;col<n;col+=22){x.fillStyle='#b0b0b0';x.fillRect(col+1,row+1,19,10);x.fillStyle='#606060';x.fillRect(col+1,row+11,19,2);x.fillStyle='#505050';x.fillRect(col+19,row+1,1,12);}x.fillStyle='#404040';x.fillRect(0,row+14,n,2);}},256,5);
 roofBump.wrapS=roofBump.wrapT=THREE.RepeatWrapping;roofBump.repeat.set(5,3);
@@ -46,7 +46,7 @@ roofBump.wrapS=roofBump.wrapT=THREE.RepeatWrapping;roofBump.repeat.set(5,3);
 const std=(o)=>new THREE.MeshStandardMaterial(o);
 const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood,roughness:.55}),ceil:std({color:0xfaf6ef,roughness:1,emissive:0xd4c4a8,emissiveIntensity:.25}),
  glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),
- door:std({color:0xcdb89a,map:wood,roughness:.55}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x8a929c,roughness:.7,metalness:.08}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
+ door:std({color:0xcdb89a,map:wood,roughness:.55}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x9aa3ab,roughness:.72,metalness:.05}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
  fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:pave,color:0xcfc8bb,roughness:.92}),plinth:std({color:0x2f3135,roughness:.92}),
  tile:std({map:tile,roughness:.35}),beton:std({map:beton,roughness:.85}),fab:fabric};
 if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(2,2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
@@ -344,8 +344,13 @@ function cells(ws,stairsHole){const C=.1;let xs=[],zs=[];ws.forEach(w=>{xs.push(
   if(v&&s<0)s=x;if(!v&&s>=0){rects.push([x0+s*C,z0+z*C,x0+x*C,z0+(z+1)*C]);s=-1;}}}
  const out=[];rects.forEach(r=>{const p=out.find(o=>o[0]===r[0]&&o[2]===r[2]&&Math.abs(o[3]-r[1])<1e-6);if(p)p[3]=r[3];else out.push(r);});return out;}
 function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.name]=l);let xs=[],zs=[];doorPivs=[];
+ const Rroof=(H&&H.roof)||roof; if(Rroof&&Rroof!==roof) roof=Rroof;
  const add=(geom,mat,x,y,z,ry=0,nc)=>{const m=new THREE.Mesh(geom,mat);m.position.set(x,y,z);m.rotation.y=ry;m.castShadow=m.receiveShadow=mat!==M.glass;if(nc)m.userData.noCol=true;root.add(m);return m;};
- const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;const m=add(new THREE.BoxGeometry(s1-s0,y1-y0,t),mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);const hh=y1-y0;if(hh>0.4&&mat!==M.glass){m.userData.wallCut={base:y0,h:hh};}if(doGrow&&mat!==M.glass&&mat!==M.frame){m.userData.grow=1;m.userData.growBase=y0;m.userData.growH=hh;m.scale.y=.001;m.position.y=y0;m.visible=false;}return m;};
+ const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;const m=add(new THREE.BoxGeometry(s1-s0,y1-y0,t),mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);const hh=y1-y0;
+  // Only structural wall slabs get wallCut (dollhouse). Frames/doors/glass must never — they caused ghost windows in GLB/Blender.
+  const isWallMat=mat===M.wall||mat===M.fac||mat===M.plinth||mat===WP||mat===WN||(Array.isArray(mat)&&(mat.includes(M.wall)||mat.includes(M.fac)));
+  if(hh>0.4&&isWallMat){m.userData.wallCut={base:y0,h:hh};}
+  if(doGrow&&isWallMat){m.userData.grow=1;m.userData.growBase=y0;m.userData.growH=hh;m.scale.y=.001;m.position.y=y0;m.visible=false;}return m;};
  H.walls.forEach(w=>{const L=geo(w).L,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0),h=w.height||2.8;xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);
   const ops=[...(w.openings||[])].sort((a,b)=>a.offset-b.offset);let s=0;
   ops.forEach(o=>{const sl=o.sill||0,a=o.offset,b=a+o.width,f=.06;box(w,s,a,e,e+h,M.wall);box(w,a,b,e,e+sl,M.wall);box(w,a,b,e+sl+o.height,e+h,M.wall);
@@ -404,72 +409,43 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
  if(xs.length&&zs.length){H.walls.forEach(w=>{const g=geo(w),h=w.height||2.8,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0);if(e>0.2)return;
   const cap=add(new THREE.BoxGeometry(g.L,.04,w.thickness+.04),std({color:0xe8e4dc,roughness:.9}),g.x0+g.u[0]*g.L/2,e+h+.02,g.z0+g.u[1]*g.L/2,-Math.atan2(g.u[1],g.u[0]),1);
   cap.userData.cap=1;cap.userData.capY=cap.position.y;cap.userData.noCol=true;cap.visible=false;cap.castShadow=false;});}
- if(roof!=='none'){const o=.95,W=fp[2]-fp[0]+2*o,D=fp[3]-fp[1]+2*o,cx=(fp[0]+fp[2])/2,cz=(fp[1]+fp[3])/2;
+ if(roof!=='none'){const eave=.40; // ~0.4 m overhang past wall outer face
+  const houseW=fp[2]-fp[0], houseD=fp[3]-fp[1];
+  const W=houseW+2*eave, D=houseD+2*eave, cx=(fp[0]+fp[2])/2, cz=(fp[1]+fp[3])/2;
   if(roof==='flat'){add(new THREE.BoxGeometry(W,.22,D),M.roof,cx,th+.16,cz,0,1).userData.roof=1;add(new THREE.BoxGeometry(W+.08,.06,D+.08),M.roof,cx,th+.3,cz,0,1).userData.roof=1;
-   // gutter ring
-   add(new THREE.BoxGeometry(W+.1,.06,.08),M.frame,cx,th+.02,fp[1]-o,0,1).userData.roof=1;add(new THREE.BoxGeometry(W+.1,.06,.08),M.frame,cx,th+.02,fp[3]+o,0,1).userData.roof=1;}
-  else{const rh=Math.min(W,D)*.32,lng=W>=D,a=lng?W:D,b=lng?D:W;
-   // Slope panels only (no dark extruded gable caps) + white facade gables
-   const slopeMat=M.roof, gableMat=M.fac||M.wall;
-   const mkSlope=(sign)=>{
-     const len=a, rise=rh, run=b/2, hyp=Math.hypot(run,rise);
-     const m=add(new THREE.BoxGeometry(len, .07, hyp), slopeMat, 0,0,0,0,1);
-     m.geometry.translate(0,0,hyp/2);
-     const grp=new THREE.Group(); grp.add(m);
-     const pitch=Math.atan2(rise,run);
-     if(lng){grp.rotation.x=sign>0?-pitch:pitch; grp.position.set(cx,th+.05,cz+sign*(0)); 
-       // place pivot at eaves: move along ±Z
-       m.position.set(0,0,0); grp.position.set(cx, th+.05, cz); 
-       grp.rotation.set(sign>0?-pitch:pitch, 0, 0);
-       // shift so eave sits at ±b/2
-       const off=sign*(b/2); grp.position.z=cz+off; 
-       // after rot.x, local +Z goes up the slope toward ridge from eave at z=cz+sign*b/2
-     }else{
-       grp.rotation.set(0,0,sign>0?pitch:-pitch);
-       grp.position.set(cx+sign*(b/2), th+.05, cz);
-     }
-     root.add(grp); grp.traverse(o=>{if(o.isMesh){o.userData.roof=1;o.castShadow=true;o.receiveShadow=true;}});
-     return grp;
-   };
-   // Simpler reliable slopes: two thin boxes rotated to pitch
-   {const hyp=Math.hypot(b/2,rh), pitch=Math.atan2(rh,b/2);
-    const place=(sign)=>{
-      const mesh=add(new THREE.BoxGeometry(lng?a+.05:hyp, .08, lng?hyp:a+.05), slopeMat, 0,0,0,0,1);
-      mesh.userData.roof=1;
-      if(lng){mesh.rotation.x=sign*-pitch; mesh.position.set(cx, th+.05+Math.sin(Math.abs(pitch))*hyp/2, cz+sign*(b/4));}
-      else{mesh.rotation.z=sign*pitch; mesh.position.set(cx+sign*(b/4), th+.05+Math.sin(Math.abs(pitch))*hyp/2, cz);}
-      return mesh;
-    };
-    place(1); place(-1);
-   }
-   // White gable end triangles (facade) — never black
-   {const gable=(atNeg)=>{
-      const shape=new THREE.Shape([new THREE.Vector2(-b/2,0),new THREE.Vector2(b/2,0),new THREE.Vector2(0,rh)]);
-      const geo=new THREE.ShapeGeometry(shape); geo.computeVertexNormals();
-      const mesh=new THREE.Mesh(geo, gableMat); mesh.userData.roof=1; mesh.userData.noCol=true; mesh.castShadow=true;
-      if(lng){mesh.rotation.y=atNeg?Math.PI:0; mesh.position.set(cx+(atNeg?-a/2:a/2), th+.05, cz);}
-      else{mesh.rotation.y=atNeg?Math.PI/2:-Math.PI/2; mesh.position.set(cx, th+.05, cz+(atNeg?-a/2:a/2));}
+   add(new THREE.BoxGeometry(W+.1,.06,.08),M.frame,cx,th+.02,fp[1]-eave,0,1).userData.roof=1;add(new THREE.BoxGeometry(W+.1,.06,.08),M.frame,cx,th+.02,fp[3]+eave,0,1).userData.roof=1;}
+  else{
+   // Solid extruded gable. Eaves 0.4 m on all sides; mid-grey tiles; white end caps OUTSIDE extrude.
+   const lng=W>=D;
+   const along=lng?W:D, span=lng?D:W;
+   const rh=Math.min(span,along)*.26;
+   const hd=span/2;
+   const shape=new THREE.Shape([new THREE.Vector2(-hd,0), new THREE.Vector2(hd,0), new THREE.Vector2(0,rh)]);
+   const geo=new THREE.ExtrudeGeometry(shape,{depth:along,bevelEnabled:false,steps:1});
+   geo.translate(0,0,-along/2);
+   const rMat=M.roof.clone(); rMat.color.setHex(0x9aa3ab); rMat.side=THREE.DoubleSide;
+   rMat.roughness=.72; rMat.metalness=.05; rMat.needsUpdate=true;
+   const roofMesh=new THREE.Mesh(geo,rMat);
+   roofMesh.castShadow=roofMesh.receiveShadow=true; roofMesh.userData.roof=1;
+   // nest 2 cm onto wall tops so no float gap from elevated angles
+   const ry=th-0.02;
+   if(lng){ roofMesh.rotation.y=-Math.PI/2; roofMesh.position.set(cx, ry, cz); }
+   else { roofMesh.position.set(cx, ry, cz); }
+   root.add(roofMesh);
+   // White gables OUTSIDE extruded ends (cover grey caps); full eave span
+   {const gW=span;
+    const gMat=(M.fac||M.wall).clone(); gMat.color.setHex(0xf7f5f0); gMat.side=THREE.DoubleSide; gMat.needsUpdate=true;
+    const gable=(atNeg)=>{
+      const g=new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-gW/2,0),new THREE.Vector2(gW/2,0),new THREE.Vector2(0,rh)]));
+      const mesh=new THREE.Mesh(g, gMat);
+      mesh.userData.roof=1; mesh.userData.noCol=true; mesh.castShadow=true;
+      const out=along/2+0.015; // just outside Extrude end face
+      if(lng){ mesh.rotation.y=atNeg?Math.PI/2:-Math.PI/2; mesh.position.set(cx+(atNeg?-out:out), ry, cz); }
+      else { mesh.rotation.y=atNeg?Math.PI:0; mesh.position.set(cx, ry, cz+(atNeg?-out:out)); }
       root.add(mesh);
-    }; gable(false); gable(true);}
-   const ridge=add(new THREE.BoxGeometry(lng?a+.2:.18,.14,lng?.18:a+.2), slopeMat,cx,th+rh+.12,cz,0,1);ridge.userData.roof=1;
-   // Pronounced tile courses (geometry) on both slopes
-   {const n=9, pitch=Math.atan2(rh,b/2), hyp=Math.hypot(b/2,rh);
-    for(let i=0;i<n;i++){const u=(i+.5)/n; const along=u*hyp; const yy=th+.06+Math.sin(pitch)*along; const horiz=Math.cos(pitch)*along;
-      const deep=.16, thick=.055;
-      const bar=(sign)=>{
-        const m=add(new THREE.BoxGeometry(lng?a*.94:deep, thick, lng?deep:a*.94), slopeMat,
-          lng?cx:cx+sign*(b/2-horiz), yy, lng?cz+sign*(b/2-horiz):cz, 0,1);
-        m.userData.roof=1; m.castShadow=true;
-        if(lng)m.rotation.x=sign*-pitch; else m.rotation.z=sign*pitch;
-      };
-      bar(1); bar(-1);
-    }}
-   // Dark eaves / fascia only (no bright stray soffit lines)
-   const eaveY=th+.06; const darkE=std({color:0x3a3e44,roughness:.9});
-   add(new THREE.BoxGeometry(lng?a+.15:b+.1,.07,.1),darkE,cx,eaveY,fp[1]-o*.55,0,1).userData.roof=1;
-   add(new THREE.BoxGeometry(lng?a+.15:b+.1,.07,.1),darkE,cx,eaveY,fp[3]+o*.55,0,1).userData.roof=1;
-   add(new THREE.BoxGeometry(.1,.07,lng?b+.1:a+.15),darkE,fp[0]-o*.55,eaveY,cz,0,1).userData.roof=1;
-   add(new THREE.BoxGeometry(.1,.07,lng?b+.1:a+.15),darkE,fp[2]+o*.55,eaveY,cz,0,1).userData.roof=1;}}
+    };
+    gable(true); gable(false);}
+  }}
  // plot: muted lawn (plot only), soft ground, drive, terrace accents, trees, slim fence
  const P=H.plot;const xMinP=xs.length?Math.min(...xs)-6: -4,xMaxP=xs.length?Math.max(...xs)+6:20,zMinP=zs.length?Math.min(...zs)-6:-5,zMaxP=zs.length?Math.max(...zs)+6:15;
  // soft neighbouring ground (large disc under everything)
@@ -547,7 +523,16 @@ export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  walk=walk&&!anim;setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;return true;}
-export async function glb(){if(!world)return null;const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');return new Promise((res,rej)=>new GLTFExporter().parse(world,b=>res(new Blob([b],{type:'model/gltf-binary'})),rej,{binary:true}));}
+export async function glb(){if(!world)return null;
+  // Normalize dollhouse/grow state so Blender does not get ghost window/door meshes below the real ones
+  world.traverse(o=>{
+    if(o.userData&&o.userData.wallCut){const{base,h}=o.userData.wallCut;o.scale.y=1;o.position.y=base+h/2;o.visible=true;}
+    if(o.userData&&o.userData.doorLeaf){o.scale.y=1;o.visible=true;}
+    if(o.userData&&o.userData.grow){o.scale.y=1;if(o.userData.growBase!=null&&o.userData.growH!=null)o.position.y=o.userData.growBase+o.userData.growH/2;o.visible=true;}
+  });
+  world.updateMatrixWorld(true);
+  const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');
+  return new Promise((res,rej)=>new GLTFExporter().parse(world,b=>res(new Blob([b],{type:'model/gltf-binary'})),rej,{binary:true,onlyVisible:true}));}
 
 export function snap(){if(!R)return null;R.render(scene,cam);return R.domElement.toDataURL('image/png');}
 
@@ -556,7 +541,7 @@ export function pano(x,z,e,W=4096,keep){if(!R)return null;if(!keep)jump(x,z,e);c
  const qs=new THREE.Scene(),oc=new THREE.OrthographicCamera(-1,1,1,-1,0,1),mt=new THREE.ShaderMaterial({uniforms:{t:{value:rt.texture},yaw:{value:-yaw}},vertexShader:'varying vec2 v;void main(){v=uv;gl_Position=vec4(position.xy,0.,1.);}',fragmentShader:'uniform samplerCube t;uniform float yaw;varying vec2 v;void main(){float lo=(v.x-.5)*6.2831853+yaw,la=(v.y-.5)*3.14159265;vec3 d=vec3(cos(la)*sin(lo),sin(la),-cos(la)*cos(lo));gl_FragColor=textureCube(t,d);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}',toneMapped:true});
  qs.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),mt));const pr=R.getPixelRatio(),sz=R.getSize(new THREE.Vector2()),xr=R.xr.enabled;R.xr.enabled=false;R.setPixelRatio(1);R.setSize(W,W/2,false);R.render(qs,oc);const u=R.domElement.toDataURL('image/jpeg',.9);R.setPixelRatio(pr);R.setSize(sz.x,sz.y,false);R.xr.enabled=xr;rt.dispose();mt.dispose();DIRTY=Math.max(DIRTY,30);return u;}
 export const STY={moderny:{sofa:'#5d6470',armch:'#2f3237',table:'#2b2b2b',ctable:'#2b2b2b',desk:'#3a3a3a',ward:'#ececea',kitch:'#2f3237',shelf:'#3a3a3a',bed:'#d6d6d2',chair:'#2f3237',wood:'#3b3b3b',art:'#6a7a88',curtain:'#d0d4d8',rug:'#4a5560',lounge:'#4a5560'},skandi:{sofa:'#6a5644',armch:'#7a6550',table:'#c4a07a',ctable:'#c4a07a',desk:'#c9a882',ward:'#e8e0d4',kitch:'#ebe6de',shelf:'#c4a07a',chair:'#d8cfc0',wood:'#c4a07a',art:'#c4b8a4',curtain:'#b8a890',shoe:'#c4a07a',rug:'#7a4028',bed:'#5a3e2c',lounge:'#5a6a4a',stool:'#6a5644',runner:'#6a4a3a',pendant:'#e8dcc8'},klasik:{sofa:'#6b3f35',armch:'#8a5a3c',table:'#5a3a26',ctable:'#5a3a26',desk:'#6b4a30',ward:'#7a5a40',kitch:'#efe6d6',shelf:'#5a3a26',chair:'#7a5a40',wood:'#5a3a26',rug:'#5a3020'}};
-export const FUR={bed:{w:1.6,d:2.05,h:.5,c:'#e9e4da'},bed1:{w:.9,d:2,h:.5,c:'#e9e4da'},sofa:{w:2.4,d:1.0,h:.8,c:'#6a5644'},armch:{w:.85,d:.85,h:.8,c:'#7a6550'},table:{w:1.8,d:1.0,h:.75,c:'#d4b48a'},ctable:{w:1.1,d:.7,h:.42,c:'#d4b48a'},desk:{w:1.2,d:.6,h:.75,c:'#e0c9a6'},tv:{w:1.8,d:.42,h:.5,c:'#3b3d40'},ward:{w:1.8,d:.62,h:2.2,c:'#f4f1ea'},kitch:{w:2.8,d:.62,h:.9,c:'#f7f5f0'},fridge:{w:.65,d:.7,h:1.85,c:'#dcdcdc'},bath:{w:1.7,d:.75,h:.55,c:'#ffffff'},shower:{w:.9,d:.9,h:.1,c:'#ffffff'},sink:{w:.6,d:.45,h:.85,c:'#ffffff'},wc:{w:.4,d:.65,h:.42,c:'#ffffff'},shelf:{w:.9,d:.35,h:1.8,c:'#d4b48a'},plant:{w:.45,d:.45,h:1.1,c:'#5b7d4a'},rug:{w:2.6,d:2.0,h:.02,c:'#7a4530'},runner:{w:2.4,d:.7,h:.02,c:'#6a4a3a'},lamp:{w:.35,d:.35,h:1.3,c:'#2f3235'},chair:{w:.45,d:.5,h:.9,c:'#f1ece2'},art:{w:.9,d:.04,h:.7,c:'#c4b8a4'},curtain:{w:1.4,d:.08,h:2.0,c:'#e8e2d6'},shoe:{w:1.0,d:.4,h:.7,c:'#d4b48a'},bench:{w:1.2,d:.4,h:.45,c:'#c4a07a'},nstand:{w:.45,d:.4,h:.55,c:'#c4a07a'},dresser:{w:1.2,d:.5,h:.9,c:'#e8e0d4'},sideb:{w:1.6,d:.45,h:.85,c:'#c4a07a'},side:{w:.45,d:.45,h:.5,c:'#c4a07a'},stool:{w:.38,d:.38,h:.75,c:'#6a5644'},island:{w:1.6,d:.8,h:.9,c:'#efe8de'},pendant:{w:.4,d:.4,h:.3,c:'#e8dcc8'},mirror:{w:.7,d:.04,h:.9,c:'#c5d4e0'},towel:{w:.55,d:.12,h:.7,c:'#d8c8b0'},coat:{w:.5,d:.5,h:1.8,c:'#3a4a5a'},toy:{w:.55,d:.4,h:.5,c:'#c4783a'},otable:{w:1.4,d:.8,h:.75,c:'#a08060'},lounge:{w:1.6,d:.85,h:.55,c:'#5a6a4a'}};
+export const FUR={bed:{w:1.6,d:2.05,h:.5,c:'#e9e4da'},bed1:{w:.9,d:2,h:.5,c:'#e9e4da'},sofa:{w:2.4,d:1.0,h:.8,c:'#6a5644'},armch:{w:.85,d:.85,h:.8,c:'#7a6550'},table:{w:1.8,d:1.0,h:.75,c:'#d4b48a'},ctable:{w:1.1,d:.7,h:.42,c:'#d4b48a'},desk:{w:1.2,d:.6,h:.75,c:'#e0c9a6'},tv:{w:1.8,d:.42,h:.5,c:'#3b3d40'},ward:{w:1.8,d:.62,h:2.2,c:'#f4f1ea'},kitch:{w:2.8,d:.62,h:.9,c:'#f7f5f0'},fridge:{w:.65,d:.7,h:1.85,c:'#dcdcdc'},bath:{w:1.7,d:.75,h:.55,c:'#ffffff'},shower:{w:.9,d:.9,h:.1,c:'#ffffff'},sink:{w:.6,d:.45,h:.85,c:'#ffffff'},wc:{w:.4,d:.65,h:.42,c:'#ffffff'},shelf:{w:.9,d:.35,h:1.8,c:'#d4b48a'},plant:{w:.45,d:.45,h:1.1,c:'#5b7d4a'},rug:{w:3.2,d:3.4,h:.02,c:'#7a4530'},runner:{w:2.4,d:.7,h:.02,c:'#6a4a3a'},lamp:{w:.35,d:.35,h:1.3,c:'#2f3235'},chair:{w:.45,d:.5,h:.9,c:'#f1ece2'},art:{w:.9,d:.04,h:.7,c:'#c4b8a4'},curtain:{w:1.4,d:.08,h:2.0,c:'#e8e2d6'},shoe:{w:1.0,d:.4,h:.7,c:'#d4b48a'},bench:{w:1.2,d:.4,h:.45,c:'#c4a07a'},nstand:{w:.45,d:.4,h:.55,c:'#c4a07a'},dresser:{w:1.2,d:.5,h:.9,c:'#e8e0d4'},sideb:{w:1.6,d:.45,h:.85,c:'#c4a07a'},side:{w:.45,d:.45,h:.5,c:'#c4a07a'},stool:{w:.38,d:.38,h:.75,c:'#6a5644'},island:{w:1.6,d:.8,h:.9,c:'#efe8de'},pendant:{w:.4,d:.4,h:.3,c:'#e8dcc8'},mirror:{w:.7,d:.04,h:.9,c:'#c5d4e0'},towel:{w:.55,d:.12,h:.7,c:'#d8c8b0'},coat:{w:.5,d:.5,h:1.8,c:'#3a4a5a'},toy:{w:.55,d:.4,h:.5,c:'#c4783a'},otable:{w:1.4,d:.8,h:.75,c:'#a08060'},lounge:{w:1.6,d:.85,h:.55,c:'#5a6a4a'}};
 const FM={};function fm(c,soft){const k=c+(soft?'~f':'');return FM[k]||(FM[k]=new THREE.MeshStandardMaterial({color:c,roughness:soft?.85:.72,map:soft?fabric:null}));}
 const FLO={dub:[0xbea07d,'wood',.55],orech:[0x8a6448,'wood',.55],dlazba:[0xe6e2da,'tile',.35],beton:[0xb0aea8,'beton',.85],tmave:[0x5a4636,'wood',.6]};
 export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;}}

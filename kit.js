@@ -220,19 +220,19 @@ function proc(type, F, cols) {
       g.add(s);
     }
   } else if (type === 'rug' || type === 'runner') {
-    const base = cols.fab || cols.rug || (type === 'runner' ? '#5a3a2a' : '#8a3020');
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), std(base, 1));
-    m.position.set(0, 0.025, 0); m.receiveShadow = true; g.add(m);
+    const base = cols.fab || cols.rug || (type === 'runner' ? '#6a3a28' : '#a03828');
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), std(base, 1));
+    m.position.set(0, 0.045, 0); m.receiveShadow = true; m.renderOrder=2; g.add(m);
     // patterned border + centre medallion readable from dollhouse
     const border = std(cols.border || '#d8c4a8', 1);
-    box(g, border, 0, 0.024, 0, w * 0.92, 0.008, d * 0.92, 0);
-    box(g, std(base, 1), 0, 0.028, 0, w * 0.78, 0.006, d * 0.78, 0);
+    box(g, border, 0, 0.052, 0, w * 0.92, 0.008, d * 0.92, 0);
+    box(g, std(base, 1), 0, 0.056, 0, w * 0.78, 0.006, d * 0.78, 0);
     const accent = std(cols.accent || '#c4a070', 1);
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
       if (!i && !j) continue;
-      box(g, accent, i * w * 0.22, 0.032, j * d * 0.22, w * 0.12, 0.005, d * 0.12, 0);
+      box(g, accent, i * w * 0.22, 0.06, j * d * 0.22, w * 0.12, 0.005, d * 0.12, 0);
     }
-    box(g, std('#e8dcc8', 1), 0, 0.034, 0, w * 0.16, 0.005, d * 0.16, 0);
+    box(g, std('#e8dcc8', 1), 0, 0.062, 0, w * 0.16, 0.005, d * 0.16, 0);
   } else if (type === 'chair') {
     ao(g, w * 0.9, d * 0.9);
     box(g, wood, 0, 0.42, 0, w, 0.04, d, 0.015);

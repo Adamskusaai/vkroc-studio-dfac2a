@@ -1,4 +1,4 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261109bs';
+import {detectWalls,gapMerge} from './cv.js?v=20261109ca';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -32,7 +32,7 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
  // Kitchen peninsula hint wall short
  W([0,7.2],[3.8,7.2],[],.12);
  // Furniture — Scandi, door-swing clear (leaf+10cm), no wall/window solids overlap
- const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.4,1.0],armch:[.85,.85],table:[1.8,1.0],ctable:[1.1,.7],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.8,.62],fridge:[.65,.7],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.6,2.0],runner:[2.4,.7],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4],bench:[1.2,.4],nstand:[.45,.4],dresser:[1.2,.5],sideb:[1.6,.45],side:[.45,.45],stool:[.38,.38],island:[1.6,.8],pendant:[.4,.4],mirror:[.7,.04],towel:[.55,.12],coat:[.5,.5],toy:[.55,.4],otable:[1.4,.8],lounge:[1.6,.85]};
+ const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.4,1.0],armch:[.85,.85],table:[1.8,1.0],ctable:[1.1,.7],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.8,.62],fridge:[.65,.7],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[3.2,3.4],runner:[2.4,.7],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4],bench:[1.2,.4],nstand:[.45,.4],dresser:[1.2,.5],sideb:[1.6,.45],side:[.45,.45],stool:[.38,.38],island:[1.6,.8],pendant:[.4,.4],mirror:[.7,.04],towel:[.55,.12],coat:[.5,.5],toy:[.55,.4],otable:[1.4,.8],lounge:[1.6,.85]};
  const soft=new Set(['rug','runner','curtain','lamp','art','pendant','mirror','towel','plant']); // soft vs soft OK; plant/chair still clear of doors
  const mount=new Set(['art','curtain','mirror','towel','pendant']);
  const placed=[];
@@ -71,11 +71,17 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
  // ===== BATH (5.2–7.4, 1.9–3.6) =====
  F('bath',6.55,2.3,0,1); F('shower',5.7,3.2,0,1); F('sink',7.0,2.5,1,1);
  F('mirror',7.15,2.5,1); F('towel',5.55,2.3,1); F('runner',6.35,3.05);
- // ===== LIVING =====
- F('sofa',5.55,4.75); F('ctable',5.55,5.9); F('armch',7.2,6.35,3); F('side',4.15,4.7,0,1);
- F('tv',5.55,9.9,2); F('shelf',7.35,8.5,1); F('lamp',4.2,5.2); F('lamp',7.2,7.4);
- F('plant',4.25,6.9); F('plant',7.3,9.35); F('art',4.3,3.85); F('art',6.95,3.85);
- F('curtain',5.4,10.3,2); F('rug',5.55,6.4,0,1);
+ // ===== LIVING (fill open plan — sofa south, TV north, big rug, reading corner) =====
+ F('sofa',5.55,4.85); F('ctable',5.55,5.95); F('side',4.15,4.8,0,1);
+ F('rug',5.55,6.5,0,1); // large rug under sofa→TV
+ F('tv',5.55,8.35,2,1); // closer so lower half isn't empty
+ F('shelf',4.3,8.3,1,1);
+ F('armch',7.15,6.5,3); F('lamp',4.2,5.25); F('lamp',7.15,8.0);
+ // reading corner / overflow in north-east of living
+ F('armch',7.0,9.35,2,1); F('side',6.2,9.4,0,1); F('lamp',7.35,9.55);
+ F('plant',4.25,6.9); F('plant',4.4,8.1); F('plant',7.3,8.9);
+ F('art',4.3,3.85); F('art',6.95,3.85); F('art',7.55,6.2,1);
+ F('curtain',5.4,10.3,2);
  // ===== DINING =====
  F('table',2.5,5.85);
  F('chair',1.55,5.85,1); F('chair',3.45,5.85,3);
@@ -347,7 +353,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109bs');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261109ca');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h)};}return V;};
 function wUI(v){jumpsUI(v);$('walk').innerHTML=v?I.out+'<span>Pohľad zvonka</span>':I.walk+'<span>Prechádzka</span>';$('walk').classList.toggle('on',v);$('st').textContent=v?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie, Shift = rýchlejšie.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
