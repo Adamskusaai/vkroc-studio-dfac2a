@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110j';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110k';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -431,10 +431,10 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
  // plinth: dark grey band on exterior face only (never solid fill over floors)
  if(xs.length&&zs.length){const px0=Math.min(...xs),px1=Math.max(...xs),pz0=Math.min(...zs),pz1=Math.max(...zs);
   const t=.28,h=.38,y=h/2-.02,cx=(px0+px1)/2,cz=(pz0+pz1)/2,pw=px1-px0+.2,pd=pz1-pz0+.2;
-  add(new THREE.BoxGeometry(pw+.4,h,t),M.plinth,cx,y,pz0-t/2,0,1).userData.noCol=true;
-  add(new THREE.BoxGeometry(pw+.4,h,t),M.plinth,cx,y,pz1+t/2,0,1).userData.noCol=true;
-  add(new THREE.BoxGeometry(t,h,pd),M.plinth,px0-t/2,y,cz,0,1).userData.noCol=true;
-  add(new THREE.BoxGeometry(t,h,pd),M.plinth,px1+t/2,y,cz,0,1).userData.noCol=true;}
+  // prem8: the band stops at exterior door openings (no 38 cm step in the doorway, leaves swing clear)
+  const gaps=(hz,c)=>{const G=[];H.walls.forEach(w=>{const g=geo(w);const on=hz?Math.abs(g.u[1])<.01&&Math.abs(w.start[1]-c)<.05:Math.abs(g.u[0])<.01&&Math.abs(w.start[0]-c)<.05;if(!on)return;(w.openings||[]).forEach(o=>{if(o.type!=='door')return;const p0=hz?g.x0+g.u[0]*o.offset:g.z0+g.u[1]*o.offset,p1=hz?g.x0+g.u[0]*(o.offset+o.width):g.z0+g.u[1]*(o.offset+o.width);G.push([Math.min(p0,p1)-.02,Math.max(p0,p1)+.02]);});});return G.sort((a,b)=>a[0]-b[0]);};
+  const band=(hz,c,a0,a1,off)=>{let s0=a0;for(const[g0,g1]of[...gaps(hz,c),[a1,a1]]){const e0=Math.min(g0,a1);if(e0-s0>.02){const m=(s0+e0)/2,L=e0-s0;hz?add(new THREE.BoxGeometry(L,h,t),M.plinth,m,y,c+off,0,1).userData.noCol=true:add(new THREE.BoxGeometry(t,h,L),M.plinth,c+off,y,m,0,1).userData.noCol=true;}s0=Math.max(s0,g1);}};
+  band(1,pz0,cx-(pw+.4)/2,cx+(pw+.4)/2,-t/2);band(1,pz1,cx-(pw+.4)/2,cx+(pw+.4)/2,t/2);band(0,px0,cz-pd/2,cz+pd/2,-t/2);band(0,px1,cz-pd/2,cz+pd/2,t/2);}
  // soft wall caps for dollhouse (hidden until doll mode)
  if(xs.length&&zs.length){H.walls.forEach(w=>{const g=geo(w),h=w.height||2.8,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0);if(e>0.2)return;
   const cap=add(new THREE.BoxGeometry(g.L,.04,w.thickness+.04),CAPM,g.x0+g.u[0]*g.L/2,e+h+.02,g.z0+g.u[1]*g.L/2,-Math.atan2(g.u[1],g.u[0]),1);
