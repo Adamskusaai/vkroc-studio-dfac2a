@@ -1,5 +1,5 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261110d';
-import {readPlan} from './plan.js?v=20261110d';
+import {detectWalls,gapMerge} from './cv.js?v=20261110e';
+import {readPlan} from './plan.js?v=20261110e';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -113,7 +113,7 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
  F('chair',5.6,11.45); F('chair',5.6,12.85,2); F('lounge',9.1,12.2);
  F('plant',4.1,13.05); F('plant',10.7,13.05); F('lamp',7.6,12.95);
 })();
-let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;
+let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;window.__rooms=()=>rooms().map(r=>({n:r.n,a:+r.a.toFixed(1),p:r.p}));
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
 function thumb(h){const ws=h.walls.filter(w=>w.level===h.levels[0].name),pp=h.plot?h.plot.pts:[];const P=[...ws.flatMap(w=>[w.start,w.end]),...pp];if(!P.length)return'';const xs=P.map(p=>p[0]),zs=P.map(p=>p[1]),x0=Math.min(...xs),z0=Math.min(...zs),S=Math.max(Math.max(...xs)-x0,Math.max(...zs)-z0,1),k=100/S,f=v=>(v*k).toFixed(1);
  return '<svg viewBox="-6 -6 112 112" preserveAspectRatio="xMidYMid meet">'+(pp.length?'<path d="M'+pp.map(p=>f(p[0]-x0)+' '+f(p[1]-z0)).join('L')+'Z" fill="#E4EED9" stroke="#7a9a5a" stroke-dasharray="3 2"/>':'')+'<path d="'+ws.map(w=>'M'+f(w.start[0]-x0)+' '+f(w.start[1]-z0)+'L'+f(w.end[0]-x0)+' '+f(w.end[1]-z0)).join('')+'" stroke="#0B0B0B" stroke-width="'+Math.max(1.5,.3*k).toFixed(1)+'" stroke-linecap="square" fill="none"/></svg>';}
@@ -122,7 +122,7 @@ function syncUl(){const cur=H.ulv||H.levels[0].name;if(cur===lvl)return;const a=
 function goLvl(n){if(n===lvl)return;lvl=n;syncUl();setBg();banner();lvUI();fit();}
 function setBg(){bg=null;bgW=H.underlay?H.underlay.w:12;$('imw').value=bgW;if(H.underlay){bg=new Image();bg.onload=draw;bg.src=H.underlay.src;}}
 function openP(id,data){PID=id;H=data||JSON.parse(localStorage.getItem('vks_p_'+id));if(!H.levels)H.levels=JSON.parse(JSON.stringify(DEMO.levels));lvl=H.levels[0].name;syncUl();lvUI();undo=[];setBg();save();show('ed');banner();if(H.underlay&&!H.walls.length)afterImg(1);}
-const newP=(name,walls=[],ul=null,plot)=>openP('p'+Date.now(),{...JSON.parse(JSON.stringify(DEMO)),name,walls,underlay:ul,plot:plot===undefined?null:plot});
+const newP=(name,walls=[],ul=null,plot)=>openP('p'+Date.now(),{...JSON.parse(JSON.stringify(DEMO)),name,walls,furn:[],rn:[],underlay:ul,plot:plot===undefined?null:plot});
 function load(){route(true);}
 const snap=()=>{undo.push(JSON.stringify(H));if(undo.length>80)undo.shift();};
 // ---------- editor ----------
@@ -155,8 +155,11 @@ function rooms(L=lvl){const ws=H.walls.filter(w=>w.level===L),k=JSON.stringify(w
 function cellIn(R,id){let best=null,bd=-1;const{g,W,Hh,x0,z0,c}=R;for(let z=1;z<Hh-1;z+=2)for(let x=1;x<W-1;x+=2){const i=z*W+x;if(g[i]!==id)continue;let d=0;while(d<40&&g[i-d]===id&&g[i+d]===id&&g[i-d*W]===id&&g[i+d*W]===id)d++;if(d>bd){bd=d;best=[x0+x*c,z0+z*c];}}return best||[x0,z0];}
 function roomAt(R,p){if(!R||!R.g)return 0;const ix=Math.round((p[0]-R.x0)/R.c),iz=Math.round((p[1]-R.z0)/R.c);if(ix<0||iz<0||ix>=R.W||iz>=R.Hh)return 0;return R.g[iz*R.W+ix];}
 const RN=['Obývačka','Obývačka s kuchyňou','Kuchyňa','Jedáleň','Spálňa','Detská izba','Izba','Pracovňa','Kúpeľňa','WC','Chodba','Predsieň','Šatník','Komora','Technická miestnosť','Garáž','Terasa'];
-function sugName(r,big){const w=r.bb[2]-r.bb[0],d=r.bb[3]-r.bb[1],asp=Math.max(w,d)/Math.max(.1,Math.min(w,d));if(r.a<2.6)return 'WC';if(asp>2.6&&Math.min(w,d)<1.8)return 'Chodba';if(r.a<5.5)return 'Kúpeľňa';if(big&&r.a>=14)return r.a>=30?'Obývačka s kuchyňou':'Obývačka';if(r.a<9)return 'Kuchyňa';if(r.a<12)return 'Izba';return 'Spálňa';}
-function furnName(R,r,L){const T=new Set();(H.furn||[]).forEach(f=>{if(f.level===L&&roomAt(R,f.p)===r.id)T.add(f.t);});if(!T.size)return null;const h=t=>T.has(t),kit=h('kitch')||h('fridge')||h('island');
+function sugName(r,big){const w=r.bb[2]-r.bb[0],d=r.bb[3]-r.bb[1],asp=Math.max(w,d)/Math.max(.1,Math.min(w,d));if(asp>2.6&&Math.min(w,d)<1.8&&r.a<25)return 'Chodba';return 'Miestnosť';}
+// guess used only to pick furniture (never shown as a fact)
+function guessKind(r,big){const w=r.bb[2]-r.bb[0],d=r.bb[3]-r.bb[1],asp=Math.max(w,d)/Math.max(.1,Math.min(w,d));if(r.a<2.6)return 'WC';if(asp>2.6&&Math.min(w,d)<1.8)return 'Chodba';if(r.a<5.5)return 'Kúpeľňa';if(big&&r.a>=14)return r.a>=30?'Obývačka s kuchyňou':'Obývačka';if(r.a<9)return 'Kuchyňa';if(r.a<12)return 'Izba';return 'Spálňa';}
+function furnName(R,r,L){const n=furnName0(R,r,L);if(!n)return null;const A=r.a,ok={'Kúpeľňa':[2,16],'WC':[.8,5],'Spálňa':[6,40],'Detská izba':[5,30],'Obývačka s kuchyňou':[14,120],'Obývačka':[10,90],'Kuchyňa':[3,30],'Pracovňa':[4,30],'Predsieň':[1.5,25]}[n];return ok&&(A<ok[0]||A>ok[1])?null:n;}
+function furnName0(R,r,L){const T=new Set();(H.furn||[]).forEach(f=>{if(f.level===L&&roomAt(R,f.p)===r.id)T.add(f.t);});if(!T.size)return null;const h=t=>T.has(t),kit=h('kitch')||h('fridge')||h('island');
  if(h('bath')||h('shower'))return 'Kúpeľňa';if(h('wc'))return 'WC';if(h('bed'))return 'Spálňa';if(h('bed1')||h('toy'))return 'Detská izba';
  if((h('sofa')||h('tv'))&&kit)return 'Obývačka s kuchyňou';if(h('sofa')||h('tv'))return 'Obývačka';if(kit)return 'Kuchyňa';if(h('desk'))return 'Pracovňa';if(h('shoe')||h('coat')||h('bench'))return 'Predsieň';return null;}
 function nameR(R,L){const mx=Math.max(0,...R.r.map(r=>r.a));R.r.forEach(r=>{const e=(H.rn||[]).find(e=>e.level===L&&roomAt(R,e.p)===r.id);r.n=e?e.n:(furnName(R,r,L)||sugName(r,r.a===mx));r.auto=!e;});return R.r;}
@@ -286,7 +289,7 @@ async function calDone(){const d=Math.hypot(calPts[1][0]-calPts[0][0],calPts[1][
  bgW=Math.round(bgW*f*100)/100;H.underlay.w=bgW;H.underlay.cal=1;banner();$('imw').value=bgW;H.walls.forEach(w=>{w.start=w.start.map(c=>Math.round(c*f*100)/100);w.end=w.end.map(c=>Math.round(c*f*100)/100);w.thickness=Math.max(.1,Math.round(w.thickness*f*20)/20);(w.openings||[]).forEach(o=>{o.offset*=f;o.width=Math.min(o.width,o.width*f>.5?o.width:o.width);});});save();fit();
  if(!H.walls.length)recog(1);}
 function busy(t){let b=$('busy');if(!t){if(b)b.remove();return;}if(!b){b=document.createElement('div');b.id='busy';b.className='busy';document.body.appendChild(b);}b.innerHTML='<div><span class="spin"></span><b>'+t+'</b></div>';}
-function banner(){$('ban').hidden=!(H.underlay&&H.underlay.guess&&!H.underlay.cal&&H.walls.length);}
+function banner(){$('ban').hidden=!(H.underlay&&H.underlay.guess&&!H.underlay.cal&&!H.underlay.asked&&H.walls.length);}
 let recBusy=0;
 
 function offerTrace(hasGuess){dlg(hasGuess?'Skontrolujte obrys domu':'Rozpoznanie sa nepodarilo',hasGuess?'<p>Obvod domu som odhadol, ale nie som si istý (situácia / farebný výrez / značenie).</p><p>Ak sedí, pokračujte. Ak nie, <b>označte 4 rohy</b> správne, alebo dokreslite ručne.</p>':'<p>Na výkrese neviem spoľahlivo nájsť steny (fotka, tiene, situácia alebo neštandardný formát).</p><p><b>Označte 4 rohy domu</b> na podklade – vytvorím obvod. Vnútro potom dokreslíte, alebo skúste inú citlivosť.</p>',[['Zrušiť',null],['Kresliť ručne','draw'],['Označiť 4 rohy','corners','go']]).then(r=>{if(!r)return;if(r.v==='draw'){tool('wall');toast('Kreslite steny prstom / myšou.','ok');}else if(r.v==='corners')startCorners();});}
@@ -365,7 +368,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110d');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110e');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -421,10 +424,12 @@ async function opDlg(op){const o=op.o,T=OPK[o.type],kd=o.kind||(o.type==='door'?
  const f=r.f,nk=f.k||kd;let w=+f.w/100,h=+f.h/100,s=f.s!=null?+f.s/100:o.sill;if(nk!==kd&&Math.abs(w-o.width)<.005&&Math.abs(h-o.height)<.005){w=T[nk][1];h=T[nk][2];s=T[nk][3];}
  const L=geo(op.w).L;w=Math.max(.3,Math.min(L-.1,w||o.width));Object.assign(o,{kind:nk,width:w,height:Math.max(.3,h||o.height),sill:o.type==='window'?Math.max(0,s||0):0});if(o.type==='door'){o.hinge=f.g||'L';o.out=f.o==='1';}o.offset=Math.max(.05,Math.min(L-w-.05,o.offset));save();draw();toast((o.type==='door'?'Dvere':'Okno')+': '+T[nk][0]+', '+c(w)+' × '+c(o.height)+' cm','ok');}
 cv.addEventListener('click',e=>{if(tool!=='move')return;const d=devicePixelRatio,r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*d,y=(e.clientY-r.top)*d;const rm=rooms().find(q=>q.sp&&Math.abs(q.sp[0]-x)<60*d&&Math.abs(q.sp[1]-y)<20*d);if(rm)nameDlg(rm);});
+// every sample of the footprint must lie in this room's cells (not in a wall, not in another room, not outside)
+function fitsRoom(id,x,z,w,d){const R=RC[lvl];if(!R||!R.g)return false;const nx=Math.max(2,Math.ceil(w/.15)),nz=Math.max(2,Math.ceil(d/.15));for(let i=0;i<=nx;i++)for(let k=0;k<=nz;k++){const px=x-w/2+.03+(w-.06)*i/nx,pz=z-d/2+.03+(d-.06)*k/nz;if(roomAt(R,[px,pz])!==id)return false;}return true;}
 function furnish(){const RS=rooms();if(!RS.length){toast('Najprv uzavrite steny miestností.','warn');return;}snap();const had=(H.furn||[]).some(f=>f.level===lvl);H.fv=had?((H.fv||0)+1)%4:0;const MX=H.fv&1,MZ=H.fv&2;H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!RS.some(r=>f.p[0]>r.bb[0]&&f.p[0]<r.bb[2]&&f.p[1]>r.bb[1]&&f.p[1]<r.bb[3]));let n=0;
  RS.forEach(r=>{const[x0,z0,x1,z1]=[r.bb[0]+.05,r.bb[1]+.05,r.bb[2]-.05,r.bb[3]-.05],cx_=(x0+x1)/2,cz=(z0+z1)/2,W=x1-x0,D=z1-z0;
-  const put=(t,x,z,rr=0)=>{if(MX){x=x0+x1-x;rr=rr===1?3:rr===3?1:rr;}if(MZ){z=z0+z1-z;rr=rr===0?2:rr===2?0:rr;}const F=FUR[t],[w,d]=rr%2?[F[2],F[1]]:[F[1],F[2]];x=Math.max(x0+w/2,Math.min(x1-w/2,x));z=Math.max(z0+d/2,Math.min(z1-d/2,z));if(w>W||d>D)return;if(roomAt(RC[lvl],[x,z])!==r.id)return;H.furn.push({t,p:[r2(x),r2(z)],r:rr,level:lvl});n++;};
-  const nm=r.n.toLowerCase();
+  const put=(t,x,z,rr=0)=>{if(MX){x=x0+x1-x;rr=rr===1?3:rr===3?1:rr;}if(MZ){z=z0+z1-z;rr=rr===0?2:rr===2?0:rr;}const F=FUR[t],[w,d]=rr%2?[F[2],F[1]]:[F[1],F[2]];x=Math.max(x0+w/2,Math.min(x1-w/2,x));z=Math.max(z0+d/2,Math.min(z1-d/2,z));if(w>W||d>D)return;if(!fitsRoom(r.id,x,z,w,d))return;H.furn.push({t,p:[r2(x),r2(z)],r:rr,level:lvl});n++;};
+  const nm=(r.n==='Miestnosť'?guessKind(r,r.a===Math.max(...RS.map(q=>q.a))):r.n).toLowerCase();
   if(nm.startsWith('obýva')){put('sofa',cx_,z1,2);put('ctable',cx_,z1-1.6);put('tv',cx_,z0);put('plant',x0,z0);if(nm.includes('kuch')){put('kitch',x0+1.3,z0);put('table',x0+1.3,cz);}else put('armch',x0+.5,z1-1.6,1);}
   else if(nm.startsWith('spál')){put('bed',cx_,z0+1.05);put('ward',cx_,z1,2);}
   else if(nm.includes('izba')){put('bed1',x0+.45,z0+1);put('desk',x1-.6,z0);put('ward',x1,z1-.9,3);}
@@ -508,7 +513,7 @@ function tut(T=TUT,key='vkTut'){document.getElementById('tutx')?.remove();const 
   const bw=Math.min(300,innerWidth-24),below=r.bottom+170<innerHeight;bx.style.width=bw+'px';bx.style.left=Math.max(12,Math.min(innerWidth-bw-12,r.left+r.width/2-bw/2))+'px';bx.style.top=(below?r.bottom+16:Math.max(12,r.top-16-bx.offsetHeight))+'px';}
  w.querySelector('.tn').onclick=()=>{if(++i>=st.length)end();else show();};w.querySelector('.ts').onclick=end;addEventListener('resize',show);show();}
 window.tut=tut;
-function tutWait(n=0,T=TUT,key='vkTut'){if(localStorage[key]||document.getElementById('tutx')||n>60)return;const ok=document.getElementById(T===TUT?'ed':'vw').classList.contains('on')&&!document.getElementById('sk3').offsetParent&&!document.getElementById('ov').classList.contains('on')&&!document.body.classList.contains('pres');if(ok&&n>2)tut(T,key);else setTimeout(()=>tutWait(n+1,T,key),400);}
+function tutWait(n=0,T=TUT,key='vkTut'){if(localStorage[key]||document.getElementById('tutx')||n>60)return;if(T===TUT&&H&&(H.underlay||H.walls.some(w=>w.auto)))return;const ok=document.getElementById(T===TUT?'ed':'vw').classList.contains('on')&&!document.getElementById('sk3').offsetParent&&!document.getElementById('ov').classList.contains('on')&&!document.body.classList.contains('pres');if(ok&&n>2)tut(T,key);else setTimeout(()=>tutWait(n+1,T,key),400);}
 
 /* Marketing / Social capture — URL params only (hidden from normal UI)
    ?clean=1          hide all UI, cursor, toasts
