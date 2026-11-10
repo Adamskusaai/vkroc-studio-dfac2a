@@ -332,7 +332,12 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
    for(const fl of[0,1]){if(D&&D.n>=2)break;const D3=tryD(u,W2,H2,2,fl);if(D3&&(!D||D3.n>D.n))D=D3;}}
   if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};
    // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
-   if(D.lines&&D.lines.length){const n0=S.length;S=S.filter(q=>!D.lines.some(L=>{const hz=!L.rot;if(!!q.hz!==hz)return false;if(Math.abs(q.c-L.v)>Math.max(4,q.t))return false;const ov=Math.min(q.b,L.b)-Math.max(q.a,L.a);return ov>.6*(q.b-q.a);}));dbg.dimLines=n0-S.length;}}}catch(e){dbg.dimErr=String(e);}
+   if(D.lines&&D.lines.length){const n0=S.length,cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2;
+    const outer=q=>{const ctr=q.hz?cy:cx,out=Math.sign(q.c-ctr);return !S.some(o=>o!==q&&!!o.hz===!!q.hz&&Math.sign(o.c-q.c)===out&&Math.abs(o.c-q.c)>q.t&&Math.min(o.b,q.b)-Math.max(o.a,q.a)>.3*(q.b-q.a));};
+    S=S.filter(q=>!D.lines.some(L=>{const hz=!L.rot;if(!!q.hz!==hz)return false;if(Math.abs(q.c-L.v)>Math.max(4,q.t))return false;const ov=Math.min(q.b,L.b)-Math.max(q.a,L.a);return ov>.6*(q.b-q.a)&&outer(q);}));dbg.dimLines=n0-S.length;if(n0>S.length){const n1=S.length;S=pruneLoose(S);dbg.dimPrune=n1-S.length;
+     // walls that ran on to the removed dimension line overshoot the house: clip them to the span of the perpendicular walls
+     const V=S.filter(q=>!q.hz),Hz=S.filter(q=>q.hz);if(V.length>=2&&Hz.length>=2){const xr=[Math.min(...V.map(q=>q.c-q.t/2)),Math.max(...V.map(q=>q.c+q.t/2))],yr=[Math.min(...Hz.map(q=>q.c-q.t/2)),Math.max(...Hz.map(q=>q.c+q.t/2))];
+      S=S.map(q=>{const r=q.hz?xr:yr;return(q.a<r[0]-2||q.b>r[1]+2)?{...q,a:Math.max(q.a,r[0]),b:Math.min(q.b,r[1])}:q;}).filter(q=>q.b-q.a>q.t*2);}}}}}catch(e){dbg.dimErr=String(e);}
  tm('dims');if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
  ops=findOpenings(S,ink,W,H,sc.ppm,bb);
  {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
@@ -435,7 +440,7 @@ function readString(chars,m,W,rot){// chars: comps (in page coords) ordered alon
   let r;if(rot){const R=rotGrid(m,W,c,rot);r=ocrChar(R.m,R.W,0,0,R.W,R.H);}else r=ocrChar(m,W,c.x0,c.y0,c.x1,c.y1);txt+=r.ch;sc+=r.s;n++;}
  return{txt,s:n?sc/n:0};}
 function parseDim(txt){// imperial: OCR reads ' and " as commas -> 32'6" = "32,6,," and 16' = "16,"
- {const m=/^(\d{1,2}),(\d{1,2}),{1,2}$/.exec(txt);if(m&&+m[2]<12)return[+m[1]*.3048+ +m[2]*.0254];}
+ {const m=/^(\d{1,2}),(\d{1,2}),{1,2}$/.exec(txt);if(m&&+m[2]<12)return[+m[1]*.3048+ +m[2]*.0254];const f=/^(\d{1,2}),$/.exec(txt);if(f&&+f[1]>=6)return[+f[1]*.3048,+f[1]/100,+f[1]/1000,+f[1]];}
  const t=txt.replace(/^,+|,+$/g,'');if(!/^\d+(,\d+)?$/.test(t))return[];const v=parseFloat(t.replace(',','.'));if(!isFinite(v)||v<=0)return[];
  if(t.includes(','))return[v];// metres "15,00"
  return[v/100,v/1000,v];}// "1500" cm, "15000" mm, "15" m
@@ -467,12 +472,16 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
   if((best.txt.match(/\d/g)||[]).length>=2){const vc=Math.round((tv0+tv1)/2),dv=Math.max(2,Math.round(th*.3)),onL=u=>{for(let q=-dv;q<=dv;q++)if(I(u,vc+q))return 1;return 0;};
    const side=dir=>{let u=dir<0?tu0-1:tu1+1,k=0;while(k<th*1.5&&!onL(u)){u+=dir;k++;}if(!onL(u))return null;const u0=u;let g=0;while(Math.abs(u-u0)<4000){u+=dir;if(onL(u))g=0;else if(++g>2)break;}const e=u-dir*g;return Math.abs(e-u0)>th*1.5?e:null;};
    const a=side(-1),b=side(1);if(a!=null&&b!=null&&b-a>(tu1-tu0)*3){seg=b-a;lineV={rot:S.rot,v:vc,a,b};}}
+  // perpendicular: text sits in a gap of a line running across it ("16'" breaking a vertical arrow line)
+  if(!seg&&(best.txt.match(/\d/g)||[]).length>=2){const uc2=Math.round((tu0+tu1)/2),du=Math.max(2,Math.round(th*.3)),onP=v=>{for(let q=-du;q<=du;q++)if(I(uc2+q,v))return 1;return 0;};
+   const side2=dir=>{let v=dir<0?tv0-1:tv1+1,k=0;while(k<th*1.2&&!onP(v)){v+=dir;k++;}if(!onP(v))return null;const v0=v;let g=0;while(Math.abs(v-v0)<4000){v+=dir;if(onP(v))g=0;else if(++g>2)break;}const e=v-dir*g;return Math.abs(e-v0)>th*2?e:null;};
+   const a=side2(-1),b=side2(1);if(a!=null&&b!=null&&b-a>(tv1-tv0)*4){seg=b-a;lineV={rot:S.rot?0:1,v:uc2,a,b};}}
   for(let k=1;k<=Math.round(th*1.3)&&!seg;k++)for(const v of[tv1+k,tv0-k]){if(seg)break;
    if(!(I(uc,v)||I(uc-2,v)||I(uc+2,v)))continue;// line must pass under/over the text
    const on=u=>I(u,v)||I(u,v-1)||I(u,v+1);const side=v>tv1?1:-1;// text side
    const mark=u=>{let a=0,b=0;for(let d=3;d<=6;d++){a+=I(u,v+d*side*-1)?1:0;if(u<tu0-1||u>tu1+1)b+=I(u,v+d*side)?1:0;}return a>=2||b>=2;};
    const G=Math.max(3,Math.round(th*1.5));const walk=dir=>{let u=uc,g=0;for(let n=0;n<4000;n++){u+=dir;if(on(u)){g=0;if((dir<0?u<tu0-1:u>tu1+1)&&mark(u)){let e=u;for(let q=u+dir,gq=0;Math.abs(q-u)<16&&gq<=3;q+=dir){if(mark(q)){e=q;gq=0;}else gq++;}return (u+e)/2;}}else if(++g>G)return u-dir*g;}return null;};
-   const a=walk(-1),b=walk(1);if(a!=null&&b!=null&&b-a>(tu1-tu0)*1.1){seg=b-a;lineV=v;}}
+   const a=walk(-1),b=walk(1);if(a!=null&&b!=null&&b-a>(tu1-tu0)*1.1){seg=b-a;lineV={rot:S.rot,v,a,b};}}
   dimScale.log&&dimScale.log.push('@'+best.txt+'>'+seg+':1');if(!seg)continue;
   out.push({txt:best.txt,s:+best.s.toFixed(2),ext:seg,vals,rot:S.rot,line:typeof lineV==='object'?lineV:null});}
  if(!out.length)return null;
