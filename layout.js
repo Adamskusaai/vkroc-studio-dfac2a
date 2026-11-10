@@ -132,7 +132,7 @@ export const REQ={'Obývačka':[['sofa'],['tv'],['ctable','armch']],'Obývačka 
  'Pracovňa':[['desk'],['shelf','sideb']],'Kúpeľňa':[['bath','shower'],['sink']],'WC':[['wc']],'Chodba':[['shoe','coat','mirror','bench','runner','plant']],'Predsieň':[['shoe','coat','bench'],['mirror','runner','plant']],
  'Šatník':[['ward','shelf']],'Špajza':[['shelf']],'Komora':[['shelf','washer']],'Technická miestnosť':[['shelf','washer']],'Garáž':[['shelf']]};
 // small rooms: a living room under 12 m2 needs a sofa, not the full TV group
-export const reqFor=(key,a)=>(REQ[key]||[]).filter(g=>!(a<12&&/^Obývačka/.test(key)&&(g.includes('tv')||g.includes('ctable')))).map(g=>a<18&&key==='Obývačka s kuchyňou'&&g.includes('ctable')?g.concat(['side']):g).map(g=>g.includes('tv')?g.concat(['tvw']):g.includes('coat')?g.concat(['hooks']):g);
+export const reqFor=(key,a)=>(REQ[key]||[]).filter(g=>!(a<12&&/^Obývačka/.test(key)&&(g.includes('tv')||g.includes('ctable')))).map(g=>a<18&&key==='Obývačka s kuchyňou'&&g.includes('ctable')?g.concat(['side']):g).map(g=>g.includes('tv')?g.concat(['tvw']):g.includes('coat')?g.concat(['hooks']):g.includes('shelf')?g.concat(['wshelf']):g);
 const AREA_SKIP=new Set(['wshelf','tvw','hooks','rug','runner','art','curtain','pendant','mirror','towel']);
 export const fillRatio=(G,items)=>items.filter(i=>!AREA_SKIP.has(i.t)).reduce((a,i)=>a+(i.q[2]-i.q[0])*(i.q[3]-i.q[1]),0)/Math.max(.5,G.room.a);
 // living: TV on a wall, sofa facing it at 2.2-3.5 m (flush to the opposite wall in small rooms, free-standing in big ones),
@@ -198,7 +198,7 @@ function entry0(G,S,e,opt){const req=e.endsWith('!');e=e.replace('!','');const c
  ok(place(G,S,e,wallCands(G,e)));}
 // ---------- repair: a required item is missing -> drop optional items (least important first) until it fits; then top the room up again ----------
 const DROP=['art','plant','lamp','side','toy','runner','rug','armch','chair','shelf','sideb','dresser','desk','bench','coat','mirror','towel','washer','ward','table','ctable'];
-const REPAIR={side:['side'],tv:['tv','seating'],tvw:['tvw'],hooks:['hooks'],sofa:['seating','sofa'],ctable:['ctable'],table:['table','chair4'],fridge:['fridge'],bed:['bed','nstand2'],bed1:['bed1'],bunk:['bunk'],desk:['desk','chair1'],sink:['sink'],bath:['bath'],shower:['shower','shower~'],wc:['wc']};
+const REPAIR={side:['side'],tv:['tv','seating'],tvw:['tvw'],wshelf:['wshelf'],hooks:['hooks'],sofa:['seating','sofa'],ctable:['ctable'],table:['table','chair4'],fridge:['fridge'],bed:['bed','nstand2'],bed1:['bed1'],bunk:['bunk'],desk:['desk','chair1'],sink:['sink'],bath:['bath'],shower:['shower','shower~'],wc:['wc']};
 function relast(S){S.last={};for(const it of S.items)S.last[it.t]=it;}
 function tryReq(G,S,g,opt){for(const t of g){const n0=S.items.length;for(const e of REPAIR[t]||[t]){if(e==='tv'&&!S.last.sofa)continue;entry(G,S,e,opt);relast(S);}if(S.items.some(i=>g.includes(i.t)))return true;S.items.length=Math.max(S.items.length,0);void n0;}return false;}
 function repair(G,S,key,opt){const R=reqFor(key,G.room.a);const reqT=new Set(R.flat());

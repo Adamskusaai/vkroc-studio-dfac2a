@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261110t';
-import {readPlan} from './plan.js?v=20261110t';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261110t';
+import {detectWalls,gapMerge} from './cv.js?v=20261110u';
+import {readPlan} from './plan.js?v=20261110u';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261110u';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -352,6 +352,7 @@ async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)to
  if(R&&!H.underlay.rect&&!man){H.underlay={src:R.mode==='plan'?R.canvas.toDataURL('image/jpeg',.85):H.underlay.src,w:R.w,rect:1,guess:R.guess,site:R.mode==='site'?1:0};}else if(R&&R.guess&&!H.underlay.cal){H.underlay.w=R.w;H.underlay.guess=true;}
  H.walls=H.walls.concat(gapMerge(ws,R&&R.mode==='plan').map((w,i)=>({id:'a'+Date.now()+i,auto:1,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:w.op||[]})));
  if(R&&R.mode==='plan'&&R.dbg&&R.dbg.wordsP&&R.dbg.wordsP.length)dropFurnBoxes(R.dbg.wordsP,lv.name);
+ if(R&&R.mode==='plan')closeGaps(lv.name);
  save();const u=H.underlay;bgW=u.w;$('imw').value=bgW;if(!bg.src.endsWith(u.src.slice(-40))){bg=new Image();bg.onload=()=>{fit();};bg.src=u.src;}else fit();banner();
  const md=R?R.mode:'none';window.__mode=md;
  const nAuto=H.walls.filter(w=>w.auto&&w.level===lv.name).length,nOp=H.walls.filter(w=>w.auto&&w.level===lv.name).reduce((s,w)=>s+(w.openings||[]).length,0);
@@ -380,7 +381,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261110t';
+const DEMO_V='20261110u';
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
  const keep=(D.furn||[]).filter(f=>f.p[0]>15.3||f.p[0]<-.3||f.p[1]<-.3||f.p[1]>10.8);H.furn=[];furnish({demo:1});const R=RC[lvl];const nm=id=>{const e=H.rn.find(e=>roomAt(R,e.p)===id);return e?e.n:'';};
@@ -423,7 +424,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110t');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110u');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -563,6 +564,19 @@ function dropFurnBoxes(words,L){let n=0,cut=0;dropFurnBoxes.ws=[];const seen=new
    if(hit){H.walls=nw;n++;cut+=hit;did=1;(dropFurnBoxes.ws=dropFurnBoxes.ws||[]).push(w.t+'@'+bw.toFixed(1)+'x'+bh.toFixed(1));break;}}
   if(!did)break;}
  if(n)H.boxFix={boxes:n,walls:cut,ws:dropFurnBoxes.ws};}
+// prem8 u: after recognition (and furniture-box cuts) tidy the wall graph: drop dead-end stubs, then close a room where a wall
+// ends in front of another wall: gap ≤ 0.5 m -> extend the wall; 0.5–1.2 m -> a wall piece with a door. Logged in H.gapFix.
+function closeGaps(L){closeGaps.log=[];const ws=()=>H.walls.filter(q=>q.level===L&&q.auto);const G=q=>{const dx=q.end[0]-q.start[0],dz=q.end[1]-q.start[1],l=Math.hypot(dx,dz)||1e-9;return{l,u:[dx/l,dz/l]};};
+ const dist=(p,q)=>{const{l,u}=G(q),t=Math.max(0,Math.min(l,(p[0]-q.start[0])*u[0]+(p[1]-q.start[1])*u[1]));return Math.hypot(p[0]-q.start[0]-u[0]*t,p[1]-q.start[1]-u[1]*t)-q.thickness/2;};
+ const free=(q,e)=>!H.walls.some(o=>o!==q&&o.level===L&&dist(e,o)<=.12);let st=0,ex=0,dr=0;
+ for(const q of ws()){const fs=[q.start,q.end].filter(e=>free(q,e)).length,l=G(q).l;if(!fs||(q.openings||[]).length)continue;if((fs===2&&l<2)||(fs===1&&l<.8)){H.walls=H.walls.filter(o=>o!==q);st++;}}
+ const add=[];
+ for(const q of ws()){const{l,u}=G(q);for(const[e,sg]of[[q.end,1],[q.start,-1]]){if(!free(q,e))continue;const d0=[u[0]*sg,u[1]*sg];let hit=null;
+   for(let s=.05;s<=1.25;s+=.05){const p=[e[0]+d0[0]*s,e[1]+d0[1]*s];const o=H.walls.find(o=>o!==q&&o.level===L&&dist(p,o)<=.02);if(o){hit={s,o};break;}}
+   if(!hit)continue;(closeGaps.log=closeGaps.log||[]).push([+hit.s.toFixed(2),Math.abs(G(hit.o).u[0]*d0[0]+G(hit.o).u[1]*d0[1])>.9?'col':'perp',e.map(v=>+v.toFixed(2))]);/* only gaps in a straight wall line are closed: a wall stopping short of a perpendicular wall is usually a real opening (demo photo) */if(Math.abs(G(hit.o).u[0]*d0[0]+G(hit.o).u[1]*d0[1])<.9)continue;if(hit.s<=.5){e[0]=+(e[0]+d0[0]*(hit.s+hit.o.thickness/2)).toFixed(3);e[1]=+(e[1]+d0[1]*(hit.s+hit.o.thickness/2)).toFixed(3);ex++;continue;}
+   const p1=[+(e[0]+d0[0]*(hit.s+hit.o.thickness/2)).toFixed(3),+(e[1]+d0[1]*(hit.s+hit.o.thickness/2)).toFixed(3)],len=hit.s+hit.o.thickness/2,w=Math.min(.9,len-.1);
+   add.push({id:q.id+'g'+add.length,auto:1,level:L,start:[e[0],e[1]],end:p1,thickness:q.thickness,base:q.base||0,height:q.height,openings:[{type:'door',offset:+((len-w)/2).toFixed(3),width:+w.toFixed(2),height:2.05}]});dr++;}}
+ H.walls=H.walls.concat(add);if(st||ex||dr)H.gapFix={stubs:st,ext:ex,doors:dr,log:closeGaps.log};}
 function furnish(op){const dm=!!(op&&op.demo===1);const RS=rooms();if(!RS.length){if(!dm)toast('Najprv uzavrite steny miestností.','warn');return;}if(!dm)snap();const had=(H.furn||[]).some(f=>f.level===lvl);H.fv=dm?0:had?((H.fv||0)+1)%4:0;
  const R=RC[lvl],ids=new Set(RS.map(r=>r.id));const fixes=sanitizeOpenings(H.walls.filter(w=>w.level===lvl),p=>{const v=roomAt(R,p);return v===-1?-1:ids.has(v)?v:0;});H.fixLog=fixes;
  const T=assignTypes(R,lvl);addMissingDoors(R,lvl,RS,T,fixes);wetDoors(R,lvl,RS,T,fixes);H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
