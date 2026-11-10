@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110a';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110b';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -84,20 +84,11 @@ function introTick(dt){intro.t=Math.min(1,intro.t+dt/2.2);const k=ease(intro.t);
 let roofVis=1,roofTgt=1,sunTween=null,camPath=null,wallGrow=null,DOLL=false,doGrow=false,fixedSize=null;
 function camPathTick(dt){if(!camPath)return;const P=camPath;if(!P.paused)P.t=Math.min(1,P.t+dt/(P.dur||8));const u=easeInOut(P.t);
  if(P.kind==='orbit'){const c=P.c,r=P.r,y=P.y,a0=P.a0,a1=P.a1,ang=a0+(a1-a0)*u;cam.position.set(c[0]+Math.cos(ang)*r,y,c[1]+Math.sin(ang)*r);orb.target.set(c[0],P.ty||1.2,c[1]);orb.update();}
- if(P.kind==='reveal'){const ee=t=>t*t*(3-2*t);const u2=ee(u);
-  // 0-0.35 exterior hold/rise, 0.35-0.7 roof lift while rising, 0.7-1 top-down settle
-  let p,tg;
-  if(u2<0.28){const k=ee(u2/0.28);p=P.pts[0].clone().lerp(P.pts[1],k);tg=P.looks[0].clone().lerp(P.looks[1],k);roofTgt=1;}
-  else if(u2<0.68){const k=ee((u2-0.28)/0.4);p=P.pts[1].clone().lerp(P.pts[2],k*0.55);tg=P.looks[1].clone().lerp(P.looks[2],k);roofTgt=0; // fade/lift roof
-   // physically lift roof meshes a bit while fading
-   if(world){const lift=k*2.8;world.traverse(o=>{if(o.userData.roof&&o.isMesh){if(o.userData.roofY0==null)o.userData.roofY0=o.position.y;o.position.y=o.userData.roofY0+lift;}});}
-  }
-  else{const k=ee((u2-0.68)/0.32);p=P.pts[1].clone().lerp(P.pts[2],0.55+0.45*k);tg=P.looks[2].clone();roofTgt=0;setDollViz(true);
-   if(world)world.traverse(o=>{if(o.userData.roof&&o.userData.roofY0!=null){o.position.y=o.userData.roofY0;}});}
-  cam.position.copy(p);orb.target.copy(tg);orb.update();}
+ if(P.kind==='reveal')revealAt(P);
  else if(P.kind==='lerp'){cam.position.lerpVectors(P.a,P.b,u);orb.target.lerpVectors(P.ta,P.tb,u);orb.update();}
  else if(P.kind==='walk'){const s=sampleWalkPath(P,u);aimWalkCam(s.p,s.look);syncEntranceDoor(s.p);
   if(P.doorZ!=null&&s.p.z>P.doorZ+0.25&&!P._int){setInteriorViz();P._int=1;}}
+ if(P.kind==='reveal'&&P.t>=1&&!P.hold){if(!P.paused)P.over=(P.over||0)+dt/(P.dur||12);return;}
  if(P.t>=1){if(P.loop&&P.kind==='orbit'){P.t=0;}else{const n=P.next;camPath=null;if(n)startCam(n);}}}
 
 /** Distance from house bbox + vertical FOV + aspect so whole house fits with ~15% side margins,
@@ -194,6 +185,20 @@ function sampleWalkPath(P,u){
   return{p,look};
 }
 
+const sstep=t=>{t=Math.min(1,Math.max(0,t));return t*t*(3-2*t);};
+function revealAt(P){if(!world||!cam)return;const t=P.t,ov=P.over||0;
+ // angle: eases in over first 30%, then constant angular speed (continues after t=1 so the orbit never stops abruptly)
+ const g=t<0.3?t*t/(2*0.3):t-0.15, W=P.rot/0.85, ang=P.a0+W*(g+ov);
+ const k=sstep(t/0.62), el=P.el0+(P.elE-P.el0)*k, d=P.d0+(P.dE-P.d0)*k, ty=P.ty0+(P.tyE-P.ty0)*k;
+ cam.position.set(P.c[0]+Math.cos(ang)*Math.cos(el)*d, ty+Math.sin(el)*d, P.c[1]+Math.sin(ang)*Math.cos(el)*d);
+ orb.target.set(P.c[0],ty,P.c[1]);cam.lookAt(orb.target);orb.update();
+ // roof: small lift, then slides sideways off the house, stays opaque until fully clear, then fades
+ const s=sstep((t-0.2)/0.4), lift=0.9*sstep(s*4), op=1-sstep((s-0.8)/0.2);
+ world.traverse(o=>{if(o.userData.roof){if(!o.userData.roofP0)o.userData.roofP0=o.position.clone();const p0=o.userData.roofP0;o.position.set(p0.x+P.slide.x*P.slide.d*s,p0.y+lift,p0.z+P.slide.z*P.slide.d*s);
+   if(o.material){if(!o.userData.roofMat){o.material=o.material.clone();o.userData.roofMat=1;}const tr=op<.999;o.material.transparent=tr;o.material.opacity=op;o.material.depthWrite=!tr;}o.visible=op>.01;}
+  if(o.userData.cap)o.visible=s>0.05;if(o.userData.ceil)o.visible=false;});
+ roofTgt=roofVis=op;DIRTY=Math.max(DIRTY,4);}
+export function pauseCam(on){if(camPath){camPath.paused=on==null?!camPath.paused:!!on;}return camPath?camPath.paused:null;}
 function startCam(o){DIRTY=Math.max(DIRTY,999);if(!world||!orb)return;orb.autoRotate=false;orb.enabled=!(o&&o.lock);
  const fp=world.userData.fp||[0,0,10,10],c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],S=Math.max(fp[2]-fp[0],fp[3]-fp[1],8);
  if(o.kind==='orbit'){setWalk(false);resetExterior();
@@ -265,19 +270,22 @@ function startCam(o){DIRTY=Math.max(DIRTY,999);if(!world||!orb)return;orb.autoRo
   const pts=[new THREE.Vector3(c[0],S*1.9,c[1]+S*.4),...rooms];
   camPath={kind:'walk',pts,t:0,dur:(o.dur||12)/(o.speed||1)};}
  else if(o.kind==='reveal'){setWalk(false);resetExterior();
-  // same exterior fit as orbit so reveal_0 exposure/framing match
+  // prem8: one deterministic path (scrub-safe): 3/4 exterior -> rise while the opaque roof slides off sideways -> slow orbit framing the whole furnished house
   const asp=cam?cam.aspect:(innerWidth/Math.max(1,innerHeight));
   const port=asp<0.85; const fov0=port?42:46;
   const a0=-0.55, fit=fitExteriorCam(fp, asp, fov0, a0);
   if(cam){cam.fov=fit.fov;cam.updateProjectionMatrix();}
-  const p0=new THREE.Vector3(c[0]+Math.cos(a0)*fit.r,fit.y,c[1]+Math.sin(a0)*fit.r), t0=new THREE.Vector3(c[0],fit.ty,c[1]);
-  const p1=new THREE.Vector3(c[0]-S*.05,Math.max(fit.y,S*1.25),c[1]+S*.65), t1=new THREE.Vector3(c[0],.5,c[1]);
-  const p2=new THREE.Vector3(c[0]-S*.12,S*1.05,c[1]+S*.5), t2=new THREE.Vector3(c[0],.35,c[1]);
-  cam.position.copy(p0);orb.target.copy(t0);orb.update();
+  const vf=fit.fov*Math.PI/180,hf=2*Math.atan(Math.tan(vf/2)*asp),W=fp[2]-fp[0],D=fp[3]-fp[1];
+  const Rr=Math.hypot(W,D)/2+0.7, dE=Rr/Math.sin(Math.min(vf,hf)/2)*(port?0.9:0.95);
+  const el0=port?Math.max(0.36,Math.atan2(fit.y-fit.ty,fit.r)):Math.atan2(fit.y-fit.ty,fit.r), dW=(Math.hypot(W,D)*0.92/2)/Math.tan(hf*0.9/2), d0=Math.max(Math.hypot(fit.y-fit.ty,fit.r), port?dW*0.97:0);
+  // roof slides along the camera's right-hand side so the viewer sees it move off the house
+  const rx=-Math.sin(a0),rz=Math.cos(a0);
+  if(world)world.traverse(m=>{if(m.userData.roof){if(!m.userData.roofP0)m.userData.roofP0=m.position.clone();m.position.copy(m.userData.roofP0);}});
   roofTgt=1;roofVis=1;
   if(typeof fitSun==='function'&&lastFp)fitSun(lastFp);
   DIRTY=Math.max(DIRTY,120);
-  camPath={kind:'reveal',pts:[p0,p1,p2],looks:[t0,t1,t2],t:0,dur:(o.dur||8)/(o.speed||1),roofLift:0};}
+  camPath={kind:'reveal',c,a0,el0,d0,ty0:fit.ty,elE:port?1.08:0.95,dE,tyE:0.3,rot:1.25,slide:{x:rx,z:rz,d:Math.max(W,D)+8},t:0,over:0,hold:!!o.hold,dur:(o.dur||12)/(o.speed||1),paused:!!o.pause};
+  revealAt(camPath);}
  DIRTY=Math.max(DIRTY,999);}
 function roofTweenTick(dt){if(Math.abs(roofVis-roofTgt)<.01){if(roofVis!==roofTgt){roofVis=roofTgt;DIRTY=Math.max(DIRTY,8);}return;}roofVis+=(roofTgt-roofVis)*Math.min(1,dt*2.2);DIRTY=Math.max(DIRTY,8);
  if(!world)return;world.traverse(o=>{if(o.userData.roof&&o.material){if(!o.userData.roofMat){o.material=o.material.clone();o.userData.roofMat=1;}o.material.transparent=true;o.material.depthWrite=roofVis>.9;o.material.opacity=roofVis;o.visible=roofVis>.02;}});}
@@ -290,13 +298,13 @@ function finishGrow(){wallGrow=null;if(!world)return;world.traverse(o=>{if(!o.is
   else if(o.scale&&o.scale.y<0.999&&o.userData.growH!=null){o.scale.y=1;o.position.y=o.userData.growBase+o.userData.growH*.5;o.visible=true;}
  });}
 function resetExterior(){finishGrow();DOLL=false;roofTgt=(roof==='none')?0:1;roofVis=roofTgt;if(!world)return;
- world.traverse(o=>{if(o.userData.roof){o.visible=roof!=='none';if(o.material&&o.userData.roofMat){o.material.opacity=1;o.material.transparent=false;o.material.depthWrite=true;}}
+ world.traverse(o=>{if(o.userData.roofP0)o.position.copy(o.userData.roofP0);if(o.userData.roof){o.visible=roof!=='none';if(o.material&&o.userData.roofMat){o.material.opacity=1;o.material.transparent=false;o.material.depthWrite=true;}}
   if(o.userData.ceil)o.visible=false;if(o.userData.cap)o.visible=false;if(o.isLight&&o.userData.ceil)o.visible=false;
   if(o.userData.wallCut){const{base,h}=o.userData.wallCut;o.scale.y=1;o.position.y=base+h/2;}if(o.userData.doorLeaf)o.scale.y=1;
  });DIRTY=Math.max(DIRTY,90);}
 function setDollViz(on){finishGrow();DOLL=!!on;roofTgt=on?0:1;roofVis=on?0:1;if(!world)return;
  // Adam: dollhouse keeps FULL-HEIGHT walls; only roof + ceilings removed
- world.traverse(o=>{if(o.userData.roof){if(o.material&&!o.userData.roofMat){o.material=o.material.clone();o.userData.roofMat=1;}if(o.material){o.material.transparent=true;o.material.opacity=on?0:1;o.material.depthWrite=!on;}o.visible=!on;}
+ world.traverse(o=>{if(o.userData.roofP0)o.position.copy(o.userData.roofP0);if(o.userData.roof){if(o.material&&!o.userData.roofMat){o.material=o.material.clone();o.userData.roofMat=1;}if(o.material){o.material.transparent=true;o.material.opacity=on?0:1;o.material.depthWrite=!on;}o.visible=!on;}
   if(o.userData.ceil)o.visible=false;if(o.isLight&&o.userData.ceil)o.visible=false;
   if(o.userData.wallCut){const{base,h}=o.userData.wallCut;o.scale.y=1;o.position.y=base+h/2;}
   if(o.userData.doorLeaf)o.scale.y=1;
@@ -304,7 +312,7 @@ function setDollViz(on){finishGrow();DOLL=!!on;roofTgt=on?0:1;roofVis=on?0:1;if(
  });DIRTY=Math.max(DIRTY,90);}
 /** Full-height walls + ceilings for interior/walk (never keep dollhouse cut). */
 function setInteriorViz(){finishGrow();DOLL=false;roofTgt=0;roofVis=0;if(!world)return;
- world.traverse(o=>{
+ world.traverse(o=>{if(o.userData.roofP0)o.position.copy(o.userData.roofP0);
   if(o.userData.wallCut){const{base,h}=o.userData.wallCut;o.scale.y=1;o.position.y=base+h/2;}
   if(o.userData.doorLeaf)o.scale.y=1;
   if(o.userData.roof){o.visible=false;if(o.material&&o.userData.roofMat){o.material.opacity=0;o.material.transparent=true;o.material.depthWrite=false;}}
@@ -322,7 +330,7 @@ export function birdCam(x,z,h=9.5){
   camPath=null; DIRTY=Math.max(DIRTY,120);
 }
 
-export function scrubCam(u){if(!camPath)return;camPath.t=Math.min(1,Math.max(0,+u));
+export function scrubCam(u){if(!camPath)return;camPath.t=Math.min(1,Math.max(0,+u));camPath.over=0;
   if(camPath.kind==='walk'){const s=sampleWalkPath(camPath,camPath.t);aimWalkCam(s.p,s.look);syncEntranceDoor(s.p);
     if(camPath.doorZ!=null&&s.p.z>camPath.doorZ+0.25){if(!camPath._int){setInteriorViz();camPath._int=1;}}
     else if(camPath._int&&camPath.doorZ!=null&&s.p.z<=camPath.doorZ+0.15){resetExterior();camPath._int=0;}}
@@ -516,7 +524,7 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
   {const sil=std({color:0x8a9488,roughness:1});
    [[-18,8,1.2],[-16,-6,1.0],[28,4,1.3],[26,-8,0.9],[8,-22,1.1],[-6,24,1.0],[22,22,1.2]].forEach(([x,z,s])=>tree(x,z,s));
    // low neighbour massing (simple boxes)
-   [[-14,6,8,3.5,7],[-12,-10,6,3.2,9],[30,2,9,3.8,8],[24,-14,7,3.0,10]].forEach(([x,z,ww,hh,dd])=>{
+   [[-14,6,8,3.5,7],[-12,-10,6,3.2,9],[-26,18,9,3.8,8],[34,20,7,3.0,10]].forEach(([x,z,ww,hh,dd])=>{
     const m=add(new THREE.BoxGeometry(ww,hh,dd),sil,x,hh/2,z,0,1);m.castShadow=false;m.receiveShadow=false;
     add(new THREE.BoxGeometry(ww+.4,.15,dd+.4),std({color:0x3a3e44,roughness:.85}),x,hh+.05,z,0,1).castShadow=false;
    });
@@ -641,3 +649,4 @@ export function jump(x,z,e){DIRTY=Math.max(DIRTY,90);if(!walk)setWalk(true);rig.
 const WP=[M.wall,M.wall,M.wall,M.wall,M.fac,M.wall],WN=[M.wall,M.wall,M.wall,M.wall,M.wall,M.fac];
 export function setAuto(v,spd){DIRTY=Math.max(DIRTY,90);if(!orb)return;orb.autoRotate=!!v;orb.autoRotateSpeed=spd!=null?spd:0.55;}
 export function spin(d){DIRTY=Math.max(DIRTY,90);yaw+=d;}
+export function camInfo(){return{path:camPath?{kind:camPath.kind,t:camPath.t,over:camPath.over,dE:camPath.dE,d0:camPath.d0,el0:camPath.el0,elE:camPath.elE}:null,asp:cam&&cam.aspect,fov:cam&&cam.fov,pos:cam&&cam.position.toArray().map(v=>+v.toFixed(2))};}
