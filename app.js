@@ -1,5 +1,5 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261110i';
-import {readPlan} from './plan.js?v=20261110i';
+import {detectWalls,gapMerge} from './cv.js?v=20261110j';
+import {readPlan} from './plan.js?v=20261110j';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -19,7 +19,7 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
   {type:'window',offset:11.4,width:1.5,sill:.9,height:1.4}]);
  W([15,0],[15,10.5],[{type:'window',offset:2.2,width:1.4,sill:.9,height:1.4},{type:'window',offset:5.2,width:1.4,sill:.9,height:1.4},{type:'window',offset:8.2,width:1.2,sill:.9,height:1.4}]); // spálňa, detská 1, detská 2
  W([15,10.5],[0,10.5],[{type:'window',offset:2.3,width:1.5,sill:.9,height:1.4},{type:'window',offset:7.2,width:1.6,sill:.9,height:1.4},{type:'window',offset:9.2,width:1.6,sill:.6,height:1.7},{type:'window',offset:11,width:1.5,sill:.9,height:1.4}]); // detská 2, obývačka ×2, kuchyňa
- W([0,10.5],[0,0],[{type:'window',offset:3.5,width:1.2,sill:.9,height:1.4},{type:'door',offset:5.75,width:.9,sill:0,height:2.15,out:1,kind:'terrace'},{type:'door',offset:8.2,width:1.05,sill:0,height:2.15,out:1,kind:'entrance'}]); // jedáleň, terasové dvere, vchod (after the mirror below this is the x=15 front facade)
+ W([0,10.5],[0,0],[{type:'window',offset:3.5,width:1.2,sill:.9,height:1.4},{type:'door',offset:5.75,width:.9,sill:0,height:2.15,out:1,kind:'terrace',open:65},{type:'door',offset:8.2,width:1.05,sill:0,height:2.15,out:1,kind:'entrance',open:65}]); // jedáleň, terasové dvere, vchod (after the mirror below this is the x=15 front facade)
  // Internal: hallway / living split
  W([0,3.6],[5.2,3.6],[{type:'door',offset:2.8,width:.9,height:2.05}],.15);
  W([5.2,1.9],[5.2,0],[{type:'door',offset:.55,width:.8,height:2.0}],.15); // WC from the hall (opens into the WC)
@@ -373,7 +373,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110i');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110j');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}

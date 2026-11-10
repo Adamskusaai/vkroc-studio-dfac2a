@@ -14,6 +14,18 @@ function findPaper(c){const s=Math.min(1,360/Math.max(c.width,c.height)),w=Math.
  // close lines inside the paper: dilate bright by 2
  const m2=dilate(m,w,h,3);const lab=new Int32Array(w*h);let best=0,bestN=0,id=0;const st=[];
  for(let i=0;i<w*h;i++){if(!m2[i]||lab[i])continue;id++;let n=0;st.push(i);lab[i]=id;while(st.length){const j=st.pop();n++;const x=j%w,y=(j/w)|0;if(x>0&&m2[j-1]&&!lab[j-1]){lab[j-1]=id;st.push(j-1);}if(x<w-1&&m2[j+1]&&!lab[j+1]){lab[j+1]=id;st.push(j+1);}if(y>0&&m2[j-w]&&!lab[j-w]){lab[j-w]=id;st.push(j-w);}if(y<h-1&&m2[j+w]&&!lab[j+w]){lab[j+w]=id;st.push(j+w);}}if(n>bestN){bestN=n;best=id;}}
+ // prem8: illumination-safe paper region = flood fill from the bright centre across small relative steps (soft shadows and
+ // gradients pass, the paper edge does not), then holes filled. Falls back to the Otsu component above.
+ {const b=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let s2=0,n2=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<w&&Y<h){s2+=g[Y*w+X];n2++;}}b[y*w+x]=s2/n2;}
+  let seed=-1,sv=-1;for(let y=Math.round(h*.3);y<h*.7;y++)for(let x=Math.round(w*.3);x<w*.7;x++){const v=b[y*w+x];if(v>sv){sv=v;seed=y*w+x;}}
+  const F=new Uint8Array(w*h),q=[seed];F[seed]=1;
+  while(q.length){const j=q.pop(),x=j%w,y=(j/w)|0,v=b[j];for(const[k,ok]of[[j-1,x>0],[j+1,x<w-1],[j-w,y>0],[j+w,y<h-1]]){if(!ok||F[k])continue;const u=b[k];if(Math.abs(u-v)/Math.max(u,v,20)<.045&&u>.35*sv){F[k]=1;q.push(k);}}}
+  // fill holes (rooms enclosed by walls, text): everything not reachable from the border through non-paper
+  const O=new Uint8Array(w*h),q2=[];for(let x=0;x<w;x++){for(const j of[x,(h-1)*w+x])if(!F[j]&&!O[j]){O[j]=1;q2.push(j);}}for(let y=0;y<h;y++){for(const j of[y*w,y*w+w-1])if(!F[j]&&!O[j]){O[j]=1;q2.push(j);}}
+  while(q2.length){const j=q2.pop(),x=j%w,y=(j/w)|0;for(const[k,ok]of[[j-1,x>0],[j+1,x<w-1],[j-w,y>0],[j+w,y<h-1]]){if(ok&&!F[k]&&!O[k]){O[k]=1;q2.push(k);}}}
+  let n=0;for(let i=0;i<w*h;i++)if(!O[i])n++;
+  let tb2=0;for(let x=0;x<w;x++){if(!O[x])tb2++;if(!O[(h-1)*w+x])tb2++;}for(let y=0;y<h;y++){if(!O[y*w])tb2++;if(!O[y*w+w-1])tb2++;}
+  if(n>.2*w*h&&n<.93*w*h&&tb2<.12*(2*w+2*h)){for(let i=0;i<w*h;i++)lab[i]=O[i]?0:-7;best=-7;bestN=n;findPaper.src='fill';}else findPaper.src='otsu';}
  if(bestN<.2*w*h)return null;
  // touches all 4 borders broadly -> no separate paper
  let tb=0;for(let x=0;x<w;x++){if(lab[x]===best)tb++;if(lab[(h-1)*w+x]===best)tb++;}for(let y=0;y<h;y++){if(lab[y*w]===best)tb++;if(lab[y*w+w-1]===best)tb++;}
@@ -22,7 +34,19 @@ function findPaper(c){const s=Math.min(1,360/Math.max(c.width,c.height)),w=Math.
  let P=[[1e9,0,0],[-1e9,0,0],[1e9,0,0],[-1e9,0,0]];// min x+y (TL), max x-y (TR), max x+y (BR), min x-y... use 4 scores
  const sc4=[(x,y)=>-(x+y),(x,y)=>x-y,(x,y)=>x+y,(x,y)=>y-x];const B=sc4.map(()=>[-1e9,0,0]);
  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(lab[y*w+x]===best)for(let k=0;k<4;k++){const v=sc4[k](x,y);if(v>B[k][0])B[k]=[v,x,y];}
- const q=B.map(b=>[(b[1]+.5)/s,(b[2]+.5)/s]);
+ let q0=B.map(b=>[b[1]+.5,b[2]+.5]);
+ // prem8: refine corners — fit a line to each paper edge (boundary pixels between two corners, ends excluded), intersect neighbours
+ {const bd=[];for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;if(lab[i]===best&&(lab[i-1]!==best||lab[i+1]!==best||lab[i-w]!==best||lab[i+w]!==best))bd.push([x+.5,y+.5]);}
+  const L=[];let ok=true;
+  for(let k=0;k<4;k++){const A=q0[k],Bq=q0[(k+1)%4],dx=Bq[0]-A[0],dy=Bq[1]-A[1],len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;const P=[];
+   for(const p of bd){const t=(p[0]-A[0])*ux+(p[1]-A[1])*uy,d=Math.abs(-(p[0]-A[0])*uy+(p[1]-A[1])*ux);if(t>.12*len&&t<.88*len&&d<.04*len+2)P.push(p);}
+   if(P.length<10){ok=false;break;}
+   // PCA line, then one trim pass of outliers
+   let fit=pts=>{let mx=0,my=0;for(const p of pts){mx+=p[0];my+=p[1];}mx/=pts.length;my/=pts.length;let sxx=0,syy=0,sxy=0;for(const p of pts){const a=p[0]-mx,b=p[1]-my;sxx+=a*a;syy+=b*b;sxy+=a*b;}const th=.5*Math.atan2(2*sxy,sxx-syy);return{mx,my,c:Math.cos(th),s:Math.sin(th)};};
+   let f=fit(P);const res=P.map(p=>Math.abs(-(p[0]-f.mx)*f.s+(p[1]-f.my)*f.c));const srt=[...res].sort((a,b)=>a-b),thr=Math.max(1.5,srt[Math.floor(srt.length*.7)]*1.5);const P2=P.filter((p,i)=>res[i]<=thr);if(P2.length>=10)f=fit(P2);L.push(f);}
+  if(ok){const X=(a,b)=>{const det=a.c*b.s-a.s*b.c;if(Math.abs(det)<1e-3)return null;const t=((b.mx-a.mx)*b.s-(b.my-a.my)*b.c)/det;return[a.mx+a.c*t,a.my+a.s*t];};
+   const q1=[];for(let k=0;k<4;k++){const p=X(L[(k+3)%4],L[k]);if(!p||Math.hypot(p[0]-q0[k][0],p[1]-q0[k][1])>.08*Math.max(w,h)){ok=false;break;}q1.push(p);}findPaper.ref=ok;if(ok)q0=q1;}else findPaper.ref=0;}
+ const q=q0.map(p=>[p[0]/s,p[1]/s]);
  const area=Math.abs(polyArea(q)),full=c.width*c.height;if(area<.2*full||area>.93*full)return null;
  return q;}
 function polyArea(q){let a=0;for(let i=0;i<q.length;i++){const p=q[i],r=q[(i+1)%q.length];a+=p[0]*r[1]-r[0]*p[1];}return a/2;}
@@ -41,19 +65,31 @@ function warpPaper(c,q){const d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);let W=Mat
 // ---------- cleaning ----------
 // remove coloured pen / highlighter (chroma) and normalise illumination -> Float32 "whiteness" 0..1
 function cleanGray(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Float32Array(W*H);
- for(let i=0;i<W*H;i++){const r=d[i*4],gg=d[i*4+1],b=d[i*4+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),y=r*.3+gg*.59+b*.11;g[i]=(mx-mn>28&&(mx-mn)>.16*mx)?-1:y;}
- // background (paper) level: block max then smooth
- const B=Math.max(8,Math.round(Math.max(W,H)/40)),bw=Math.ceil(W/B),bh=Math.ceil(H/B),bm=new Float32Array(bw*bh);
- for(let by=0;by<bh;by++)for(let bx=0;bx<bw;bx++){const vals=[];for(let y=by*B;y<Math.min(H,by*B+B);y+=2)for(let x=bx*B;x<Math.min(W,bx*B+B);x+=2){const v=g[y*W+x];if(v>=0)vals.push(v);}vals.sort((a,b)=>a-b);bm[by*bw+bx]=vals.length?vals[Math.floor(vals.length*.9)]:255;}
- // max-filter 3x3 blocks (walls bigger than a block) then mean 3x3
- const bm2=new Float32Array(bw*bh),bm3=new Float32Array(bw*bh);
- for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let m=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<bw&&Y<bh)m=Math.max(m,bm[Y*bw+X]);}bm2[y*bw+x]=m;}
- for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let s=0,n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<bw&&Y<bh){s+=bm2[Y*bw+X];n++;}}bm3[y*bw+x]=s/n;}
+ const gm=new Float32Array(W*H);for(let i=0;i<W*H;i++){const r=d[i*4],gg=d[i*4+1],b=d[i*4+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),y=r*.3+gg*.59+b*.11;g[i]=(mx-mn>28&&(mx-mn)>.16*mx)?-1:y;gm[i]=mx;}
+ // prem8 photo stage: paper level = grey closing (removes dark strokes up to K px) on a 4x-reduced max image, so soft shadows,
+ // gradients and glare stay in the background while lines/walls do not; then divide (background normalisation)
+ const F=4,bw=Math.ceil(W/F),bh=Math.ceil(H/F),sm=new Float32Array(bw*bh);
+ {const vv=[];for(let by=0;by<bh;by++)for(let bx=0;bx<bw;bx++){vv.length=0;for(let y=by*F;y<Math.min(H,by*F+F);y++)for(let x=bx*F;x<Math.min(W,bx*F+F);x++)vv.push(gm[y*W+x]);vv.sort((a,b)=>a-b);sm[by*bw+bx]=vv[Math.floor((vv.length-1)*.8)];}}// 80th pct of the block (robust to sensor noise)
+ // colour-only blocks: take neighbour level later (fill with local max)
+ const mx1=(a,r,hz)=>{const o=new Float32Array(a.length),n=hz?bw:bh,M=hz?bh:bw;for(let j=0;j<M;j++)for(let i=0;i<n;i++){let m=-1;for(let k=Math.max(0,i-r);k<=Math.min(n-1,i+r);k++){const v=hz?a[j*bw+k]:a[k*bw+j];if(v>m)m=v;}hz?o[j*bw+i]=m:o[i*bw+j]=m;}return o;};
+ const mn1=(a,r,hz)=>{const o=new Float32Array(a.length),n=hz?bw:bh,M=hz?bh:bw;for(let j=0;j<M;j++)for(let i=0;i<n;i++){let m=1e9;for(let k=Math.max(0,i-r);k<=Math.min(n-1,i+r);k++){let v=hz?a[j*bw+k]:a[k*bw+j];if(v<0)continue;if(v<m)m=v;}hz?o[j*bw+i]=(m>1e8?-1:m):o[i*bw+j]=(m>1e8?-1:m);}return o;};
+ const r=Math.max(4,Math.round(Math.max(W,H)/F/45));// closing radius ≈ 2.2% of the page (> thickest poché wall)
+ let bgS=mx1(mx1(sm,r,1),r,0);bgS=mn1(mn1(bgS,r,1),r,0);
+ for(let i=0;i<bgS.length;i++)if(bgS[i]<0)bgS[i]=255;
+ // smooth 5x5 box
+ {const t=new Float32Array(bgS.length);for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let s2=0,n2=0;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<bw&&Y<bh){s2+=bgS[Y*bw+X];n2++;}}t[y*bw+x]=s2/n2;}bgS=t;}
+ const srt=Float32Array.from(bgS).sort(),bgLo=Math.max(30,.3*srt[Math.floor(srt.length*.7)]);
  const out=new Float32Array(W*H);
- for(let y=0;y<H;y++){const fy=Math.min(bh-1.001,Math.max(0,(y+.5)/B-.5)),y0=Math.floor(fy),ty=fy-y0;for(let x=0;x<W;x++){const fx=Math.min(bw-1.001,Math.max(0,(x+.5)/B-.5)),x0=Math.floor(fx),tx=fx-x0,i=y0*bw+x0,
-   bg=(bm3[i]*(1-tx)+bm3[i+1<bw*bh?i+1:i]*tx)*(1-ty)+(bm3[Math.min(i+bw,bw*bh-1)]*(1-tx)+bm3[Math.min(i+bw+1,bw*bh-1)]*tx)*ty;const v=g[y*W+x];out[y*W+x]=v<0?1:Math.min(1,v/Math.max(30,bg));}}
+ for(let y=0;y<H;y++){const fy=Math.min(bh-1.001,Math.max(0,(y+.5)/F-.5)),y0=Math.floor(fy),ty=fy-y0;for(let x=0;x<W;x++){const fx=Math.min(bw-1.001,Math.max(0,(x+.5)/F-.5)),x0=Math.floor(fx),tx=fx-x0,i=y0*bw+x0,
+   bg=(bgS[i]*(1-tx)+bgS[Math.min(i+1,bw*bh-1)]*tx)*(1-ty)+(bgS[Math.min(i+bw,bw*bh-1)]*(1-tx)+bgS[Math.min(i+bw+1,bw*bh-1)]*tx)*ty;const v=g[y*W+x];out[y*W+x]=v<0||bg<bgLo?1:Math.min(1,v/Math.max(30,bg));}}
  return out;}
-function inkMask(n,W,H,thr){const m=new Uint8Array(W*H);for(let i=0;i<W*H;i++)m[i]=n[i]<thr?1:0;return m;}
+function inkMask(n,W,H,thr){const m=new Uint8Array(W*H);for(let i=0;i<W*H;i++)m[i]=n[i]<thr?1:0;
+ // prem8 hysteresis: faint (blurred / pencil / JPEG) parts of a stroke join when they touch a confident stroke
+ // grow at most 3 px from a confident stroke; skipped on noisy (dark / grainy) pages where faint pixels are everywhere
+ const wk=Math.min(.86,thr+.2);let nw=0,ns=0;for(let i=0;i<W*H;i++){if(m[i])ns++;else if(n[i]<wk)nw++;}
+ if(nw<Math.max(.04*W*H,1.5*ns)){const D=new Uint8Array(W*H);let cur=[];for(let i=0;i<W*H;i++)if(m[i])cur.push(i);
+  for(let it=1;it<=3&&cur.length;it++){const nx=[];for(const j of cur){const x=j%W;for(const k of[j-1,j+1,j-W,j+W]){if(k<0||k>=W*H||m[k])continue;if((k===j-1&&x===0)||(k===j+1&&x===W-1))continue;if(n[k]<wk){m[k]=1;nx.push(k);}}}cur=nx;}}
+ return m;}
 // ---------- morphology (separable, box) ----------
 function dil1(m,W,H,r,hz){const o=new Uint8Array(W*H);if(hz){for(let y=0;y<H;y++){let run=-1e9;for(let x=0;x<W;x++){if(m[y*W+x])run=x;if(x-run<=r)o[y*W+x]=1;}run=1e9;for(let x=W-1;x>=0;x--){if(m[y*W+x])run=x;if(run-x<=r)o[y*W+x]=1;}}}else{for(let x=0;x<W;x++){let run=-1e9;for(let y=0;y<H;y++){if(m[y*W+x])run=y;if(y-run<=r)o[y*W+x]=1;}run=1e9;for(let y=H-1;y>=0;y--){if(m[y*W+x])run=y;if(run-y<=r)o[y*W+x]=1;}}}return o;}
 function inv(m){const o=new Uint8Array(m.length);for(let i=0;i<m.length;i++)o[i]=m[i]?0:1;return o;}
@@ -190,7 +226,7 @@ function quality(S,ops,bb,ppm,W,H){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/
  return{Q,nR,encl:encl/bbA};}
 // ---------- main ----------
 export function readPlan(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);
- if(!o.rect){const q=findPaper(c);if(q){c=warpPaper(c,q);dbg.paper=1;}}
+ if(!o.rect){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.paper=1;}}
  let n=cleanGray(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
  if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=cleanGray(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
  ink=compsFilter(ink,W,H,k=>k.n>=6);
