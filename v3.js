@@ -4,9 +4,9 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261109ca';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110a';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
-let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
+let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
 export function setCanvasSize(w,h){if(w&&h){fixedSize=[w,h];}else{fixedSize=null;return;}if(!R)return;const el=R.domElement.parentElement||R.domElement;if(el&&el.id==='v3'){el.style.width=w+'px';el.style.height=h+'px';el.style.maxWidth='none';el.style.maxHeight='none';}R.setSize(w,h,false);if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();}DIRTY=Math.max(DIRTY,60);}
 export async function ensureKit(){return loadKit();}
@@ -44,9 +44,10 @@ const roofBump=tex((x,n)=>{x.fillStyle='#808080';x.fillRect(0,0,n,n);for(let row
 roofBump.wrapS=roofBump.wrapT=THREE.RepeatWrapping;roofBump.repeat.set(5,3);
 
 const std=(o)=>new THREE.MeshStandardMaterial(o);
+const CAPM=new THREE.MeshBasicMaterial({color:0x3a3d42,toneMapped:false}); // prem8: dark wall tops read clearly from above
 const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood,roughness:.55}),ceil:std({color:0xfaf6ef,roughness:1,emissive:0xd4c4a8,emissiveIntensity:.25}),
  glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),
- door:std({color:0xcdb89a,map:wood,roughness:.55}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x9aa3ab,roughness:.72,metalness:.05}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
+ door:std({color:0xe4e0d8,roughness:.5}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x9aa3ab,roughness:.72,metalness:.05}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
  fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:pave,color:0xcfc8bb,roughness:.92}),plinth:std({color:0x2f3135,roughness:.92}),
  tile:std({map:tile,roughness:.35}),beton:std({map:beton,roughness:.85}),fab:fabric};
 if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(2,2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
@@ -299,7 +300,7 @@ function setDollViz(on){finishGrow();DOLL=!!on;roofTgt=on?0:1;roofVis=on?0:1;if(
   if(o.userData.ceil)o.visible=false;if(o.isLight&&o.userData.ceil)o.visible=false;
   if(o.userData.wallCut){const{base,h}=o.userData.wallCut;o.scale.y=1;o.position.y=base+h/2;}
   if(o.userData.doorLeaf)o.scale.y=1;
-  if(o.userData.cap)o.visible=false;
+  if(o.userData.cap)o.visible=!!on; // prem8: dark wall tops in dollhouse
  });DIRTY=Math.max(DIRTY,90);}
 /** Full-height walls + ceilings for interior/walk (never keep dollhouse cut). */
 function setInteriorViz(){finishGrow();DOLL=false;roofTgt=0;roofVis=0;if(!world)return;
@@ -340,9 +341,31 @@ function cells(ws,stairsHole){const C=.1;let xs=[],zs=[];ws.forEach(w=>{xs.push(
  nx=Math.ceil((Math.max(...xs)+.5-x0)/C),nz=Math.ceil((Math.max(...zs)+.5-z0)/C),g=new Uint8Array(nx*nz);
  ws.forEach(w=>{const G=geo(w),n=Math.ceil(G.L/(C/2)),t=w.thickness/2+.06;for(let i=0;i<=n;i++){const s=i*G.L/n;for(let k=-t;k<=t;k+=C/2){const x=G.x0+G.u[0]*s-G.u[1]*k,z=G.z0+G.u[1]*s+G.u[0]*k,ix=((x-x0)/C)|0,iz=((z-z0)/C)|0;if(ix>=0&&iz>=0&&ix<nx&&iz<nz)g[iz*nx+ix]=1;}}});
  const q=[0];g[0]=2;while(q.length){const i=q.pop(),x=i%nx,z=(i/nx)|0;for(const[dx,dz]of[[1,0],[-1,0],[0,1],[0,-1]]){const X=x+dx,Z=z+dz;if(X<0||Z<0||X>=nx||Z>=nz)continue;const j=Z*nx+X;if(!g[j]){g[j]=2;q.push(j);}}}
- const rects=[];for(let z=0;z<nz;z++){let s=-1;for(let x=0;x<=nx;x++){const cx0=x0+x*C+C/2,cz=z0+z*C+C/2;const inH=stairsHole&&stairsHole.some(h=>cx0>h[0]&&cx0<h[2]&&cz>h[1]&&cz<h[3]);const v=x<nx&&g[z*nx+x]!==2&&!inH;
-  if(v&&s<0)s=x;if(!v&&s>=0){rects.push([x0+s*C,z0+z*C,x0+x*C,z0+(z+1)*C]);s=-1;}}}
- const out=[];rects.forEach(r=>{const p=out.find(o=>o[0]===r[0]&&o[2]===r[2]&&Math.abs(o[3]-r[1])<1e-6);if(p)p[3]=r[3];else out.push(r);});return out;}
+ // prem8: label each enclosed room (4-connected interior component) so floors can follow room type
+ const lab=new Int32Array(nx*nz);let nl=0;for(let i0=0;i0<nx*nz;i0++){if(g[i0]||lab[i0])continue;nl++;const st=[i0];lab[i0]=nl;while(st.length){const i=st.pop(),x=i%nx,z=(i/nx)|0;for(const[dx,dz]of[[1,0],[-1,0],[0,1],[0,-1]]){const X=x+dx,Z=z+dz;if(X<0||Z<0||X>=nx||Z>=nz)continue;const j=Z*nx+X;if(!g[j]&&!lab[j]){lab[j]=nl;st.push(j);}}}}
+ const labelAt=(px,pz)=>{const ix=((px-x0)/C)|0,iz=((pz-z0)/C)|0;if(ix<0||iz<0||ix>=nx||iz>=nz)return 0;let L=lab[iz*nx+ix];if(L)return L;for(let r=1;r<4&&!L;r++)for(let dz=-r;dz<=r&&!L;dz++)for(let dx=-r;dx<=r&&!L;dx++){const X=ix+dx,Z=iz+dz;if(X>=0&&Z>=0&&X<nx&&Z<nz)L=lab[Z*nx+X];}return L;};
+ const rects=[];for(let z=0;z<nz;z++){let s=-1,sl=0;for(let x=0;x<=nx;x++){const cx0=x0+x*C+C/2,cz=z0+z*C+C/2;const inH=stairsHole&&stairsHole.some(h=>cx0>h[0]&&cx0<h[2]&&cz>h[1]&&cz<h[3]);const v=x<nx&&g[z*nx+x]!==2&&!inH;const L=v?(lab[z*nx+x]||sl):0;
+  if(s>=0&&(!v||(L&&L!==sl))){rects.push([x0+s*C,z0+z*C,x0+x*C,z0+(z+1)*C,sl]);s=-1;}if(v&&s<0){s=x;sl=L;}else if(v&&!sl&&L)sl=L;}}
+ const out=[];rects.forEach(r=>{const p=out.find(o=>o[0]===r[0]&&o[2]===r[2]&&o[4]===r[4]&&Math.abs(o[3]-r[1])<1e-6);if(p)p[3]=r[3];else out.push(r);});out.labelAt=labelAt;return out;}
+// prem8: room-typed floor textures (procedural, tiny canvases; cached)
+const FLT={};function floorTex(kind){if(FLT[kind])return FLT[kind];let t;
+ if(kind==='herring')t=tex((x,n)=>{x.fillStyle='#d6c09c';x.fillRect(0,0,n,n);const u=n/8;for(let r=-8;r<16;r++)for(let c=0;c<8;c++){const l=200+rnd()*28;x.save();x.translate(c*u*2,r*u+c*u);x.rotate(Math.PI/4*((c%2)?1:-1));x.fillStyle=`rgb(${l|0},${(l*.86)|0},${(l*.66)|0})`;x.fillRect(0,0,u*2.2,u*.72);x.strokeStyle='rgba(95,62,30,.38)';x.lineWidth=1.2;x.strokeRect(0,0,u*2.2,u*.72);x.restore();}},256,2);
+ else if(kind==='birch')t=tex((x,n)=>{for(let i=0;i<10;i++){const l=222+rnd()*18;x.fillStyle=`rgb(${l|0},${(l*.9)|0},${(l*.76)|0})`;x.fillRect(0,i*n/10,n,n/10+1);x.fillStyle='rgba(120,90,50,.28)';x.fillRect(0,i*n/10,n,1.5);const o=rnd()*n;x.fillRect(o,i*n/10,1.5,n/10);}for(let i=0;i<300;i++){x.fillStyle=`rgba(140,100,60,${rnd()*.07})`;x.fillRect(rnd()*n,rnd()*n,2+rnd()*30,1);}},256,2);
+ else if(kind==='wet')t=tex((x,n)=>{x.fillStyle='#b9bcbd';x.fillRect(0,0,n,n);for(let i=0;i<900;i++){const v=165+rnd()*45;x.fillStyle=`rgba(${v|0},${v|0},${(v+3)|0},.35)`;x.fillRect(rnd()*n,rnd()*n,1+rnd()*2,1+rnd()*2);}x.strokeStyle='#8e9192';x.lineWidth=2;const g=n/4;for(let i=0;i<=4;i++){x.beginPath();x.moveTo(i*g,0);x.lineTo(i*g,n);x.stroke();}for(let i=0;i<=2;i++){x.beginPath();x.moveTo(0,i*n/2);x.lineTo(n,i*n/2);x.stroke();}},128,2);
+ else if(kind==='stone')t=tex((x,n)=>{x.fillStyle='#a49d92';x.fillRect(0,0,n,n);for(let i=0;i<1400;i++){const v=140+rnd()*55;x.fillStyle=`rgba(${v|0},${(v*.96)|0},${(v*.9)|0},.3)`;x.fillRect(rnd()*n,rnd()*n,1+rnd()*3,1+rnd()*2);}x.strokeStyle='#7d776d';x.lineWidth=2;for(let i=0;i<=2;i++){x.beginPath();x.moveTo(i*n/2,0);x.lineTo(i*n/2,n);x.stroke();x.beginPath();x.moveTo(0,i*n/2);x.lineTo(n,i*n/2);x.stroke();}},128,2);
+ else if(kind==='kitchen')t=tex((x,n)=>{x.fillStyle='#8e8a84';x.fillRect(0,0,n,n);for(let i=0;i<1400;i++){const v=115+rnd()*50;x.fillStyle=`rgba(${v|0},${v|0},${(v*.97)|0},.3)`;x.fillRect(rnd()*n,rnd()*n,1+rnd()*2,1+rnd()*2);}x.strokeStyle='#6c6964';x.lineWidth=2;for(let i=0;i<=2;i++){x.beginPath();x.moveTo(i*n/2,0);x.lineTo(i*n/2,n);x.stroke();}x.beginPath();x.moveTo(0,0);x.lineTo(n,0);x.stroke();},128,2);
+ else t=wood;
+ return FLT[kind]=t;}
+// kind -> [tint, texture, metres per texture repeat]
+const ROOMFLOOR={living:[0xd2bea0,'oak',1.8],bed:[0xffffff,'herring',2.2],kids:[0xffffff,'birch',2.0],wet:[0xffffff,'wet',1.2],hall:[0xffffff,'stone',1.2],kitchen:[0xffffff,'kitchen',1.2],other:[0xd2bea0,'oak',1.8]};
+const RUGC={living:'#5d6872',bed:'#b08a7c',kids:'#8fa3b4'};
+function roomKind(types){const has=t=>types.has(t);
+ const kit=has('kitch')||has('fridge')||has('island');
+ if(has('bath')||has('shower')||has('wc')||(has('sink')&&!kit&&!has('sofa')))return'wet';
+ if(has('bed'))return'bed';if(has('bed1')||has('toy'))return'kids';
+ if(has('sofa')||has('tv')||has('table'))return'living';
+ if(has('kitch')||has('fridge')||has('island'))return'kitchen';
+ if(has('shoe')||has('coat')||has('bench')||has('runner'))return'hall';return'other';}
 function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.name]=l);let xs=[],zs=[];doorPivs=[];
  const Rroof=(H&&H.roof)||roof; if(Rroof&&Rroof!==roof) roof=Rroof;
  const add=(geom,mat,x,y,z,ry=0,nc)=>{const m=new THREE.Mesh(geom,mat);m.position.set(x,y,z);m.rotation.y=ry;m.castShadow=m.receiveShadow=mat!==M.glass;if(nc)m.userData.noCol=true;root.add(m);return m;};
@@ -370,23 +393,31 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
    s=b;});box(w,s,L,e,e+h,M.wall);});
  if(!xs.length)return null;const fp=[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];root.userData.fp=fp;
  const stairs=H.stairs||[];
- // Wet-room centers for tile floors
- const wet=[];(H.furn||[]).forEach(f=>{if(['bath','shower','wc','sink'].includes(f.t))wet.push(f.p);});
- const isWet=(cx,cz)=>wet.some(p=>Math.hypot(p[0]-cx,p[1]-cz)<1.15);
+ // prem8: floors follow room type (living oak, bedroom herringbone, kids birch, bath/wc grey tile, hall stone, kitchen tile)
+ const FMAT={};const floorMat=(kind,rw,rd)=>{const R=ROOMFLOOR[kind]||ROOMFLOOR.other;const k=kind+'|'+rw.toFixed(2)+'|'+rd.toFixed(2);if(FMAT[k])return FMAT[k];
+  const base=R[1]==='oak'?wood:floorTex(R[1]);const mt=new THREE.MeshBasicMaterial({color:R[0],map:base.clone(),toneMapped:false});mt.map.colorSpace=THREE.SRGBColorSpace;mt.map.repeat.set(Math.max(.3,rw/R[2]),Math.max(.3,rd/R[2]));mt.map.needsUpdate=true;return FMAT[k]=mt;};
+ roomKinds={};
  H.levels.forEach((l,i)=>{const ws=H.walls.filter(w=>w.level===l.name);if(!ws.length)return;const hole=stairs.filter(st=>st.level===(H.levels[i-1]||{}).name).map(stairRect);
   const topH=Math.max(...ws.map(w=>w.height||l.height));
-  cells(ws,hole).forEach(r=>{const cx=(r[0]+r[2])/2,cz=(r[1]+r[3])/2;
-   const wetR=isWet(cx,cz);
-   // BasicMaterial keeps oak/tile readable under ACES (Standard was washing to grey)
-   const mat=new THREE.MeshBasicMaterial({color: wetR?0xe4ddd2:0xd2bea0, map:(wetR?tile:wood).clone(), toneMapped:false});
-   mat.map.colorSpace=THREE.SRGBColorSpace; mat.map.repeat.set(wetR?1.5:1.8, wetR?1.5:1.8); mat.map.needsUpdate=true;
-   const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userData.floor=1;
+  const CR=cells(ws,hole),byL={};(H.furn||[]).filter(f=>f.level===l.name).forEach(f=>{const L=CR.labelAt(f.p[0],f.p[1]);if(!L)return;(byL[L]=byL[L]||{t:new Set(),k:[]}).t.add(f.t);if(['kitch','fridge','island','stool'].includes(f.t))byL[L].k.push(f);});
+  const kindOf={};Object.keys(byL).forEach(L=>kindOf[L]=roomKind(byL[L].t));roomKinds[l.name]={labelAt:CR.labelAt,kindOf};
+  CR.forEach(r=>{const cx=(r[0]+r[2])/2,cz=(r[1]+r[3])/2;
+   const kind=kindOf[r[4]]||'other';const mat=floorMat(kind,r[2]-r[0],r[3]-r[1]);
+const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userData.floor=1;
    const up=H.levels[i+1];if(!up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;
     // warm ceiling disc light (emissive) + soft point
     if(Math.min(r[2]-r[0],r[3]-r[1])>1.6){const disc=add(new THREE.CylinderGeometry(.26,.26,.012,16),std({color:0xe8dcc8,emissive:0xb89a70,emissiveIntensity:0.02,roughness:.98}),cx,l.elevation+topH-.03,cz,0,1);disc.scale.set(1,1,1);disc.castShadow=false;disc.userData.ceil=1;disc.userData.noCol=true;
      const pl=new THREE.PointLight(0xffd4a0,0.16,Math.max(r[2]-r[0],r[3]-r[1])*1.15,2);pl.position.set(cx,l.elevation+topH-.22,cz);pl.userData.ceil=1;root.add(pl);}}});});
- M.wood2.color.set((STY[H.style]||{}).wood||'#d4b48a');(H.furn||[]).forEach(f=>{const l=lv[f.level];if(!l)return;const F=FUR[f.t];if(!F)return;const S=STY[H.style]||{};
-  const g=makeFurn(f.t,F,{wood:(S.wood||'#d4b48a'),fab:S[f.t]||F.c,bed:S.bed||'#c4a882',rug:S.rug||'#c4a484',curtain:S.curtain||'#b8a890'});
+ // prem8: kitchen tile zone inside open-plan living (bbox of kitchen pieces + 0.9 m working aisle)
+ H.levels.forEach(l=>{const RK=roomKinds[l.name];if(!RK)return;const grp={};(H.furn||[]).filter(f=>f.level===l.name&&['kitch','fridge','island'].includes(f.t)).forEach(f=>{const L=RK.labelAt(f.p[0],f.p[1]);if(L&&RK.kindOf[L]==='living')(grp[L]=grp[L]||[]).push(f);});
+  Object.values(grp).forEach(fs=>{let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;fs.forEach(f=>{const F=FUR[f.t]||{w:1,d:1},rot=(f.r||0)%2,w=rot?F.d:F.w,d=rot?F.w:F.d;x0=Math.min(x0,f.p[0]-w/2);x1=Math.max(x1,f.p[0]+w/2);z0=Math.min(z0,f.p[1]-d/2);z1=Math.max(z1,f.p[1]+d/2);});
+   x0-=.9;z0-=.9;x1+=.9;z1+=.9;const fp0=root.userData.fp;x0=Math.max(x0,fp0[0]+.16);z0=Math.max(z0,fp0[1]+.16);x1=Math.min(x1,fp0[2]-.16);z1=Math.min(z1,fp0[3]-.16);if(x1-x0<.5||z1-z0<.5)return;
+   const m=add(new THREE.BoxGeometry(x1-x0,.004,z1-z0),floorMat('kitchen',x1-x0,z1-z0),(x0+x1)/2,l.elevation+.0625,(z0+z1)/2,0,1);m.receiveShadow=false;m.castShadow=false;m.userData.floor=1;});});
+ M.wood2.color.set((STY[H.style]||{}).wood||'#d4b48a');(H.furn||[]).forEach(f=>{const l=lv[f.level];if(!l)return;let F=FUR[f.t];if(!F)return;const S=STY[H.style]||{};
+  const RK=roomKinds[f.level],rk=RK?RK.kindOf[RK.labelAt(f.p[0],f.p[1])]:null;
+  if(f.t==='rug'&&(rk==='bed'||rk==='kids')&&F.w>2.6)F=rk==='bed'?{...F,w:2.6,d:2.4}:{...F,w:2.0,d:1.4}; // prem8: room-sized rugs keep floors visible
+  const rugC=(f.t==='rug'&&rk&&RUGC[rk]&&H.style==='skandi')?RUGC[rk]:(S.rug||'#c4a484');
+  const g=makeFurn(f.t,F,{wood:(S.wood||'#d4b48a'),fab:f.t==='rug'?rugC:(S[f.t]||F.c),bed:S.bed||'#c4a882',rug:rugC,curtain:S.curtain||'#b8a890'});
   g.position.set(f.p[0],l.elevation,f.p[1]);g.rotation.y=-((f.r||0)*Math.PI/2);g.userData.furn=f.t;g.userData.noCol=true;root.add(g);});
  // solid oak slab over whole footprint (guarantees readable floors from dollhouse + interior)
  if(xs.length&&zs.length){const fx0=Math.min(...xs),fx1=Math.max(...xs),fz0=Math.min(...zs),fz1=Math.max(...zs);
@@ -407,7 +438,7 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
   add(new THREE.BoxGeometry(t,h,pd),M.plinth,px1+t/2,y,cz,0,1).userData.noCol=true;}
  // soft wall caps for dollhouse (hidden until doll mode)
  if(xs.length&&zs.length){H.walls.forEach(w=>{const g=geo(w),h=w.height||2.8,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0);if(e>0.2)return;
-  const cap=add(new THREE.BoxGeometry(g.L,.04,w.thickness+.04),std({color:0xe8e4dc,roughness:.9}),g.x0+g.u[0]*g.L/2,e+h+.02,g.z0+g.u[1]*g.L/2,-Math.atan2(g.u[1],g.u[0]),1);
+  const cap=add(new THREE.BoxGeometry(g.L,.04,w.thickness+.04),CAPM,g.x0+g.u[0]*g.L/2,e+h+.02,g.z0+g.u[1]*g.L/2,-Math.atan2(g.u[1],g.u[0]),1);
   cap.userData.cap=1;cap.userData.capY=cap.position.y;cap.userData.noCol=true;cap.visible=false;cap.castShadow=false;});}
  if(roof!=='none'){const eave=.40; // ~0.4 m overhang past wall outer face
   const houseW=fp[2]-fp[0], houseD=fp[3]-fp[1];
@@ -462,6 +493,7 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
   const tw=Math.min(7.5,(xs.length?Math.max(...xs)-Math.min(...xs):6)-.6), terrZ=(zs.length?Math.max(...zs):zMax-2)+1.55;
   const terr=add(new THREE.BoxGeometry(tw,.035,2.8),M.path,hx,.018,terrZ,0,1);terr.receiveShadow=true;terr.userData.noCol=true;
   // terrace accents (lightweight)
+  if(!(H.furn||[]).some(f=>f.t==='otable'))
   {const woodAcc=M.wood2||M.door;add(new THREE.BoxGeometry(1.5,.06,.75),woodAcc,hx-1.5,.28,terrZ+.15,0,1);
    [[-0.6,-0.25],[0.6,-0.25],[-0.6,0.25],[0.6,0.25]].forEach(([a,b])=>add(new THREE.BoxGeometry(.07,.4,.07),woodAcc,hx-1.5+a,.22,terrZ+.15+b,0,1));
    add(new THREE.BoxGeometry(.5,.05,.5),woodAcc,hx+1.6,.28,terrZ+.1,0,1);}
