@@ -11,8 +11,8 @@ const CORNER={washer:1,bath:2,shower:2,ward:1,fridge:1,shelf:.5,kitch:1,plant:.8
 const DECOR=new Set(['plant','lamp','rug','toy','sideb','dresser','armch','shelf','runner','bench','coat','towel']);
 const FV=[[0,1],[1,0],[0,-1],[-1,0]];
 export const TPL={
- 'Obývačka':[['seating!','sideb','shelf','plant','plant','art','curtains'],['sofa!','tv!','ctable','armch','plant','lamp'],['sofa!','tv','armch','plant']],
- 'Obývačka s kuchyňou':[['kitch!','fridge!','seating!','table','chair4','sideb','shelf','plant','plant','art','art','curtains'],['kitch!','fridge','sofa!','tv','table','chair4','plant'],['kitch!','sofa','tv','plant']],
+ 'Obývačka':[['seating!','reading','sideb','shelf','plant','plant','art','curtains'],['sofa!','tv!','ctable','armch','plant','lamp'],['sofa!','tv','armch','plant']],
+ 'Obývačka s kuchyňou':[['kitch!','fridge!','seating!','table','chair4','reading','sideb','shelf','plant','plant','art','art','curtains'],['kitch!','fridge!','sofa!','tv','ctable','table','chair4','plant','armch'],['kitch!','sofa','tv','plant']],
  'Kuchyňa':[['kitch!','fridge!','table','chair4','shelf','plant'],['kitch!','fridge!','plant'],['kitch!','plant']],
  'Jedáleň':[['table!','chair4','sideb','plant','lamp'],['table!','chair4','plant']],
  'Spálňa':[['bed!','nstand2','ward!','dresser','plant','lamp','rug','art','curtains'],['bed!','nstand2','ward','plant'],['bed1!','nstand','ward','plant']],
@@ -30,6 +30,10 @@ export const tplKey=(typ,alt)=>{const b=(typ||'Izba').replace(/ \d+$/,'');if(alt
 // ---------- geometry ----------
 const ov=(a,b,e=0)=>a[0]<b[2]-e&&b[0]<a[2]-e&&a[1]<b[3]-e&&b[1]<a[3]-e;
 const rP=q=>[[q[0],q[1]],[q[2],q[1]],[q[2],q[3]],[q[0],q[3]]];
+// ONE door clear-zone definition, used by the layout and by the validator (both read G.doorZ):
+// swing side = leaf width + 10 cm (90-130 cm), other side 80 cm (60 cm in rooms under 4.5 m2), 10 cm past each jamb
+export const doorZoneDepth=(o,area)=>o.type==='door'&&o.swingIn?Math.min(1.3,Math.max(.9,o.s1-o.s0+.1)):(area<4.5?.6:.8);
+export function doorZones(doors,area){return doors.map(o=>opPoly(o,o.s0-.1,o.s1+.1,0,o.t/2+doorZoneDepth(o,area)));}
 function polyOv(P,Q,e=.005){for(const S of[P,Q])for(let i=0;i<S.length;i++){const a=S[i],b=S[(i+1)%S.length],ax=-(b[1]-a[1]),az=b[0]-a[0],L=Math.hypot(ax,az)||1;const nx=ax/L,nz=az/L;let p0=1e9,p1=-1e9,q0=1e9,q1=-1e9;for(const p of P){const v=p[0]*nx+p[1]*nz;p0=Math.min(p0,v);p1=Math.max(p1,v);}for(const p of Q){const v=p[0]*nx+p[1]*nz;q0=Math.min(q0,v);q1=Math.max(q1,v);}if(p1-e<=q0||q1-e<=p0)return false;}return true;}
 export function rectOf(t,x,z,r,dims){const[fw,fd]=dims(t);const w=r%2?fd:fw,d=r%2?fw:fd;return[x-w/2,z-d/2,x+w/2,z+d/2];}
 const frontR=(q,r,D)=>r===0?[q[0],q[3],q[2],q[3]+D]:r===1?[q[2],q[1],q[2]+D,q[3]]:r===2?[q[0],q[1]-D,q[2],q[1]]:[q[0]-D,q[1],q[0],q[3]];
@@ -47,7 +51,7 @@ export function makeRoom(R,room,ops,walls,dims){const c=R.c,bb=room.bb;const i0=
  const G={R,id:room.id,room,i0,j0,w,h,c,inR,wall,dims,walls:walls.map(q=>({...q,P:wallPoly(q)})),ops,X:i=>R.x0+(i0+i)*c,Z:j=>R.z0+(j0+j)*c,li:x=>Math.round((x-R.x0)/c)-i0,lj:z=>Math.round((z-R.z0)/c)-j0};
  G.doors=ops.filter(o=>o.type==='door'||(o.type==='window'&&(o.sill||0)<.4));G.wins=ops.filter(o=>o.type==='window');
  // nothing may stand in a door's swing + clear zone (swing side: leaf width + 10 cm, at least 90 cm; other side 80 cm)
- G.doorZ=G.doors.map(o=>opPoly(o,o.s0-.1,o.s1+.1,0,o.t/2+(o.type==='door'&&o.swingIn?Math.min(1.3,Math.max(.9,o.s1-o.s0+.1)):(G.room.a<4.5?.6:.8))));
+ G.doorZ=doorZones(G.doors,G.room.a);
  G.winZ=G.wins.map(o=>opPoly(o,o.s0-.05,o.s1+.05,0,o.t/2+.6));G.winB=G.wins.map(o=>opPoly(o,o.s0-.05,o.s1+.05,-o.t/2-.05,o.t/2+.35));
  G.seeds=G.doors.filter(o=>o.type==='door').map(o=>{const s=(o.s0+o.s1)/2;return[o.p0[0]+o.u[0]*s+o.n[0]*(o.t/2+.45),o.p0[1]+o.u[1]*s+o.n[1]*(o.t/2+.45)];});
  G.thr=4;const e=pathInfo(G,[]);if(!e.ok){for(const t of[3,2,1]){G.thr=t;if(pathInfo(G,[]).ok)break;}}
@@ -75,14 +79,16 @@ function pathInfo(G,items){const N=G.w*G.h,obs=new Uint8Array(N);for(let i=0;i<N
  out.near=near;return out;}
 const accessOK=(G,it,near)=>{if(NOACC.has(it.t))return true;const Z=(it.clr&&it.clr.length?it.clr:[frontR(it.q,it.r,.3)]);return Z.some(z=>{let hit=false;cellsIn(G,[z[0]-.1,z[1]-.1,z[2]+.1,z[3]+.1],(i,j,x)=>{if(x>=0&&near[x]>=0){hit=true;return false;}});return hit;});};
 // ---------- hard rules for one item against the rest ----------
+// layout checks with a slightly stricter tolerance than the validator, so rounding of saved positions can never flip a result
+let EPS=.005;
 function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k);return false;};
  if(!inRoomR(G,q))return no('outside-room');if(wallHit(G,q))return no('wall-overlap');
- if(G.doorZ.some(P=>polyOv(P,rP(q))))return no('door-zone');
- if(TALL.has(t)){const sq=rP([q[0]+.08,q[1]+.08,q[2]-.08,q[3]-.08]);let nu=0;for(let i=0;i<G.winZ.length;i++)if(polyOv(G.winZ[i],sq)){if(t==='kitch'&&(G.wins[i].sill||0)>=.85)nu=1;else return no('tall-at-window');}it.nu=nu;}
- if(!SOFT.has(t))for(const o of items){if(o===it||SOFT.has(o.t))continue;if(ov(o.q,q,.005))return no('overlap:'+o.t);
-  if(!SEAT.has(t)&&o.clr&&o.clr.some(z=>ov(z,q,.005))&&!(it.partner===o))return no('in-clearance:'+o.t);
-  if(SEAT.has(t)&&o.clr&&o.clr.some(z=>ov(z,q,.005))&&!(o.t==='table'||o.t==='desk'||o.t==='otable'))return no('seat-in-clearance:'+o.t);}
- if(it.clr)for(const z of it.clr){if(!inRoomR(G,z,.85)||wallHit(G,z))return no('clearance-blocked');for(const o of items){if(o===it||SOFT.has(o.t)||(SEAT.has(o.t)&&(t==='table'||t==='desk'||t==='otable'))||o.partner===it||it.partner===o)continue;if(ov(o.q,z,.005))return no('clearance-blocked:'+o.t);}}
+ if(G.doorZ.some(P=>polyOv(P,rP(q),EPS)))return no('door-zone');
+ if(TALL.has(t)){const sq=rP([q[0]+.08,q[1]+.08,q[2]-.08,q[3]-.08]);let nu=0;for(let i=0;i<G.winZ.length;i++)if(polyOv(G.winZ[i],sq,EPS)){if(t==='kitch'&&(G.wins[i].sill||0)>=.85)nu=1;else return no('tall-at-window');}it.nu=nu;}
+ if(!SOFT.has(t))for(const o of items){if(o===it||SOFT.has(o.t))continue;if(ov(o.q,q,EPS))return no('overlap:'+o.t);
+  if(!SEAT.has(t)&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(it.partner===o))return no('in-clearance:'+o.t);
+  if(SEAT.has(t)&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(o.t==='table'||o.t==='desk'||o.t==='otable'))return no('seat-in-clearance:'+o.t);}
+ if(it.clr)for(const z of it.clr){if(!inRoomR(G,z,.85)||wallHit(G,z))return no('clearance-blocked');for(const o of items){if(o===it||SOFT.has(o.t)||(SEAT.has(o.t)&&(t==='table'||t==='desk'||t==='otable'))||o.partner===it||it.partner===o)continue;if(ov(o.q,z,EPS))return no('clearance-blocked:'+o.t);}}
  if(!FREE.has(t)&&!SEAT.has(t)&&t!=='nstand'&&t!=='plant'&&t!=='lamp'&&wallFrac(G,backR(q,it.r,.02,.14))<.6)return no('not-against-wall');
  if(WALLSTAND.has(t)&&t!=='curtain'&&backGap(G,it).gap>.03)return no('not-flush-to-wall');
  if(t==='art'){const F=frontR(q,it.r,.5);if(items.some(o=>o!==it&&TALL.has(o.t)&&o.t!=='art'&&ov(o.q,F)))return no('art-hidden');if(items.some(o=>o!==it&&o.t==='art'&&Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1])<1.5))return no('art-crowded');}
@@ -145,13 +151,14 @@ function seating(G,S){const tvs=[];for(const[x,z,r]of wallCands(G,'tv')){const i
 // try candidates best-first; accept the first that passes every hard rule and keeps the walkways
 // compact variants of real products, tried when the standard size does not fit (small baths)
 const COMPACT={shower:[.8,.8],sink:[.5,.38],bath:[1.5,.7],wc:[.37,.6]};
-function place(G,S,t,C,extra={},lim=30){const L=[];for(const[x,z,r]of C){const it=mkItem(G,t,x,z,r,extra);if(it.q[0]<G.X(0)||it.q[1]<G.Z(0)||it.q[2]>G.X(G.w-1)||it.q[3]>G.Z(G.h-1))continue;if(!hard(G,it,S.items,globalThis.__LDBG?(globalThis.__LDBG[t]=globalThis.__LDBG[t]||[]):null))continue;
-  if(it.sides){const k=bedSides(G,it,S.items);if(!k.length)continue;it.clr=it.clr.concat(t==='bed'?k:[k[0]]);if(!hard(G,it,S.items))continue;}it.sc=scoreOf(G,it,S);L.push(it);}
+function place(G,S,t,C,extra={},lim=30){const e0=EPS;EPS=.002;try{return place0(G,S,t,C,extra,lim);}finally{EPS=e0;}}
+function place0(G,S,t,C,extra={},lim=30){const L=[];for(const[x,z,r]of C){const it=mkItem(G,t,x,z,r,extra);if(it.q[0]<G.X(0)||it.q[1]<G.Z(0)||it.q[2]>G.X(G.w-1)||it.q[3]>G.Z(G.h-1))continue;if(!hard(G,it,S.items,globalThis.__LDBG?(globalThis.__LDBG[t]=globalThis.__LDBG[t]||[]):null))continue;
+  if(it.sides){const k=bedSides(G,it,S.items);if(!k.length)continue;it.clr=it.clr.concat(t==='bed'?k:[k[0]]);if(!hard(G,it,S.items))continue;}it.sc=scoreOf(G,it,S);if(S.spread&&S.items.length){let dn=9;for(const o of S.items)dn=Math.min(dn,Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1]));it.sc+=.9*Math.min(dn,3);}L.push(it);}
  L.sort((a,b)=>b.sc-a.sc);let n=0;for(const it of L){if(n++>=lim)break;const A=S.items.concat([it]);const P=pathInfo(G,A);if(!P.ok){if(globalThis.__LDBG)(globalThis.__LDBG[t]=globalThis.__LDBG[t]||[]).push('path');continue;}if(!A.every(o=>accessOK(G,o,P.near))){if(globalThis.__LDBG)(globalThis.__LDBG[t]=globalThis.__LDBG[t]||[]).push('access');continue;}S.items.push(it);S.last[t]=it;S.score+=it.sc*.05;return it;}return null;}
 function rel(G,ref,t,sg,back=true){const[rw,rd]=[ref.q[2]-ref.q[0],ref.q[3]-ref.q[1]],[tw,td]=G.dims(t),f=FV[ref.r],tan=ref.r%2?[0,1]:[1,0];const W=ref.r%2?rd:rw,Dp=ref.r%2?rw:rd;
  const off=back?-(Dp/2-td/2):0;return[ref.p[0]+tan[0]*sg*(W/2+tw/2+.03)+f[0]*off,ref.p[1]+tan[1]*sg*(W/2+tw/2+.03)+f[1]*off,ref.r];}
 // smaller real products tried when the standard size cannot be placed under the hard rules
-const SHRINK={kitch:[[2,.6],[1.5,.6]],fridge:[[.6,.6]],sofa:[[2,.9],[1.7,.85]],seating:[[2,.9],[1.7,.85]],ward:[[1.2,.6],[.9,.55]],dresser:[[.9,.45]],bed:[[1.4,2]],desk:[[1,.55]],table:[[1.4,.85],[1.1,.75]],sideb:[[1.2,.42]],shoe:[[.8,.35]],bunk:[[.9,1.9]],shelf:[[.6,.3]],washer:[[.6,.55]],bed1:[[.9,1.9]],tv:[[1.2,.35]]};
+const SHRINK={ctable:[[.8,.5],[.6,.6]],kitch:[[2,.6],[1.5,.6]],fridge:[[.6,.6]],sofa:[[2,.9],[1.7,.85]],seating:[[2,.9],[1.7,.85]],ward:[[1.2,.6],[.9,.55]],dresser:[[.9,.45]],bed:[[1.4,2]],desk:[[1,.55]],table:[[1.4,.85],[1.1,.75]],sideb:[[1.2,.42]],shoe:[[.8,.35]],shelf:[[.6,.3]],washer:[[.6,.55]],tv:[[1.2,.35]]};
 function entry(G,S,e,opt){const base=e.replace(/[!~]/g,''),Z=SHRINK[base];if(!Z){entry0(G,S,e,opt);return;}
  const n0=S.items.length,st={req:S.req,reqOk:S.reqOk,score:S.score,last:{...S.last}};entry0(G,S,e,opt);
  const failed=e.endsWith('!')?S.reqOk===st.reqOk:S.items.length===n0;if(!failed)return;const tt=base==='seating'?'sofa':base;
@@ -164,9 +171,18 @@ function entry0(G,S,e,opt){const req=e.endsWith('!');e=e.replace('!','');const c
   let k=0;for(const[dx,dz,r]of P)if(place(G,S,'chair',[[T.p[0]+dx,T.p[1]+dz,r]],{partner:T}))k++;ok(k>=2);return;}
  if(e==='chair1'){const D=S.last.desk;if(!D)return;const f=FV[D.r],dd=(D.r%2?D.q[2]-D.q[0]:D.q[3]-D.q[1])/2+.28;ok(place(G,S,'chair',[[D.p[0]+f[0]*dd,D.p[1]+f[1]*dd,(D.r+2)%4]],{partner:D}));return;}
  if(e==='seating'){ok(seating(G,S));return;}
+ if(e==='reading'){if(G.room.a<20)return;/* second zone in big rooms: armchair + side table + floor lamp in the emptiest wall spot */const C=wallCands(G,'armch').map(c=>{let dn=9;for(const o of S.items)dn=Math.min(dn,Math.hypot(o.p[0]-c[0],o.p[1]-c[1]));return[c,dn];}).filter(x=>x[1]>=1.6).sort((a,b)=>b[1]-a[1]).slice(0,40).map(x=>x[0]);
+  for(const c of C){const a=place(G,S,'armch',[c],{},1);if(!a)continue;const tan=a.r%2?[0,1]:[1,0];let k=0;for(const sg of[1,-1]){const x=a.p[0]+tan[0]*sg*.68,z=a.p[1]+tan[1]*sg*.68;if(!k&&place(G,S,'side',[[x,z,a.r]],{},1)){k++;continue;}if(place(G,S,'lamp',[[x,z,0]],{},1))break;}ok(true);return;}return;}
  if(e==='curtains'){let k=0;for(const o of G.wins){const sm=(o.s0+o.s1)/2,r=FV.findIndex(f=>f[0]*o.n[0]+f[1]*o.n[1]>.9);if(r<0)continue;const[,cd]=G.dims('curtain');const x=o.p0[0]+o.u[0]*sm+o.n[0]*(o.t/2+cd/2+.003),z=o.p0[1]+o.u[1]*sm+o.n[1]*(o.t/2+cd/2+.003);const it=mkItem(G,'curtain',x,z,r);it.clr=[];if(inRoomR(G,it.q,.5)){S.items.push(it);k++;}}ok(k>0);return;}
  if(e==='wc?'){if(opt.hasWC||G.room.a<3)return;ok(place(G,S,'wc',wallCands(G,'wc')));return;}
- if(e==='fridge'&&S.last.kitch){const k=S.last.kitch;ok(place(G,S,'fridge',[rel(G,k,'fridge',-1),rel(G,k,'fridge',1)])||place(G,S,'fridge',wallCands(G,'fridge')));return;}
+ if(e==='fridge'&&S.last.kitch){const k=S.last.kitch;let got=place(G,S,'fridge',[rel(G,k,'fridge',-1),rel(G,k,'fridge',1)])||place(G,S,'fridge',wallCands(G,'fridge'));
+  for(const fz of[null,[.55,.6]]){if(got)break;const d0=G.dims;if(fz)G.dims=t=>t==='fridge'?fz:d0(t);try{got=place(G,S,'fridge',[rel(G,k,'fridge',-1),rel(G,k,'fridge',1)])||place(G,S,'fridge',wallCands(G,'fridge'));
+   // still nothing: shorten the kitchen run by the fridge width and put the fridge column at its end
+   if(!got){const kw=Math.max(k.q[2]-k.q[0],k.q[3]-k.q[1]),kd=Math.min(k.q[2]-k.q[0],k.q[3]-k.q[1]),fw=G.dims('fridge')[0],tan=k.r%2?[0,1]:[1,0];if(kw-fw>=.9){const i0=S.items.indexOf(k);S.items.splice(i0,1);const dk=G.dims;
+     for(const sg of[1,-1]){const kz=[kw-fw,kd];G.dims=t=>t==='kitch'?kz:dk(t);const nk=place(G,S,'kitch',[[k.p[0]-tan[0]*sg*fw/2,k.p[1]-tan[1]*sg*fw/2,k.r]],{},1);if(nk){nk.sz=kz;nk.nu=k.nu;got=place(G,S,'fridge',[rel(G,nk,'fridge',sg)]);if(got)break;S.items.splice(S.items.indexOf(nk),1);}G.dims=dk;}
+     G.dims=dk;if(!got){S.items.splice(i0,0,k);S.last.kitch=k;}}}
+   if(got&&fz)got.sz=fz;}finally{G.dims=d0;}}
+  ok(got);return;}
  const tvFor=s=>{const f=FV[s.r],opp=(s.r+2)%4;const C=wallCands(G,'tv',[opp]).filter(([x,z])=>{const v=[x-s.p[0],z-s.p[1]],al=v[0]*f[0]+v[1]*f[1],lat=Math.abs(v[0]*f[1]-v[1]*f[0]);return al>=1.8&&al<=6&&lat<1.2;});return place(G,S,'tv',C)||place(G,S,'tv',wallCands(G,'tv',[opp]).filter(([x,z])=>{const v=[x-s.p[0],z-s.p[1]],al=v[0]*f[0]+v[1]*f[1],lat=Math.abs(v[0]*f[1]-v[1]*f[0]);return al>=1.5&&al<=6&&lat<2.2;}));};
  if(e==='sofa'){/* sofa + TV wall as a pair: try the best sofa spots until the TV fits opposite */const tried=new Set();let got=null;for(let k=0;k<30&&!got;k++){const C=wallCands(G,'sofa').filter(c=>!tried.has(c.join()));const it=place(G,S,'sofa',C);if(!it)break;tried.add([it.p[0],it.p[1],it.r].join());if(tvFor(it)){got=it;break;}S.items.splice(S.items.indexOf(it),1);S.last.sofa=null;S.score-=it.sc*.05;}
   if(!got)got=place(G,S,'sofa',wallCands(G,'sofa'));ok(got);return;}
@@ -182,8 +198,10 @@ function entry0(G,S,e,opt){const req=e.endsWith('!');e=e.replace('!','');const c
 export function layoutRoom(G,typ,opt={}){const key=tplKey(typ,/ [2468]$/.test(typ||''));let T=TPL[key]||TPL['Izba'];const sty=opt.style||'rod';
  T=T.map(tp=>{if(sty==='min'){let dk=0;return tp.filter(e=>e.endsWith('!')||!DECOR.has(e)||(dk++<1));}if(sty==='mod')return tp.filter(e=>e!=='toy'&&e!=='lamp');return tp;});
  let best=null;for(const tp of T){const S={items:[],last:{},score:0,req:0,reqOk:0,fv:opt.fv||0};for(const e of tp)entry(G,S,e,opt);
-  {const tg=TARGET[key]??.2,F=FILL[key]||[];let prog=true,guard=0;while(prog&&guard++<(G.room.a>40?5:3)&&fillRatio(G,S.items)<tg){prog=false;const CAP={plant:3,art:2,lamp:2,armch:2,shelf:2,side:1,rug:1,runner:1,desk:1,chair1:1,toy:1,dresser:1,sideb:1,washer:1,table:1,chair4:1,ward:2,shoe:1,coat:1,mirror:1,bench:1,towel:1};const cnt=t=>S.items.filter(i=>i.t===t||(t==='chair1'&&i.t==='chair')).length;for(const e of F){if(fillRatio(G,S.items)>=Math.min(.4,tg+.08))break;if(cnt(e)>=(CAP[e]||2)*Math.max(1,Math.round(G.room.a/28)))continue;const n0=S.items.length;entry(G,S,e,opt);if(S.items.length>n0)prog=true;}}}
+  {const tg=TARGET[key]??.2,F=FILL[key]||[];let prog=true,guard=0;S.spread=G.room.a>=20;while(prog&&guard++<(G.room.a>40?5:3)&&fillRatio(G,S.items)<tg){prog=false;const CAP={plant:3,art:2,lamp:2,armch:2,shelf:2,side:1,rug:1,runner:1,desk:1,chair1:1,toy:1,dresser:1,sideb:1,washer:1,table:1,chair4:1,ward:2,shoe:1,coat:1,mirror:1,bench:1,towel:1};const cnt=t=>S.items.filter(i=>i.t===t||(t==='chair1'&&i.t==='chair')).length;for(const e of F){if(fillRatio(G,S.items)>=Math.min(.4,tg+.08))break;if(cnt(e)>=(CAP[e]||2)*Math.max(1,Math.round(G.room.a/28)))continue;const n0=S.items.length;entry(G,S,e,opt);if(S.items.length>n0)prog=true;}}}
   if(S.items.length<2)for(const f of['plant','shelf','lamp','side']){if(S.items.length>=2)break;place(G,S,f,wallCands(G,f));}
+  if(/^(Komora|Špajza|Technická|Šatník|Garáž|Chodba|Predsieň|Hala|Zádverie)/.test(key)&&!S.items.some(i=>['shelf','washer','ward','shoe','coat','bench'].includes(i.t))){const d0=G.dims;
+   for(const[t,z]of[['shelf',null],['shoe',null],['shelf',[.6,.3]],['shoe',[.6,.3]],['shelf',[.45,.3]]]){if(z)G.dims=q=>q===t?z:d0(q);const it=place(G,S,t,wallCands(G,t));G.dims=d0;if(it){if(z)it.sz=z;S.score+=8;break;}}}
   S.score-=10*(S.req-S.reqOk);for(const g of reqFor(key,G.room.a))if(!S.items.some(i=>g.includes(i.t)))S.score-=(g.includes('bath')||g.includes('bed')||g.includes('kitch')||g.includes('wc'))?12:8;S.score+=10*Math.min(fillRatio(G,S.items),TARGET[key]??.2);if(!best||S.score>best.score+1e-6)best=S;if(S.req===S.reqOk&&tp===T[0])break;}
  return best.items.map(it=>{const o={t:it.t,p:[+it.p[0].toFixed(3),+it.p[1].toFixed(3)],r:it.r};if(it.nu)o.nu=1;if(it.sz||(SOFT.has(it.t)&&it.t!=='art'&&it.t!=='curtain')){const z=it.sz||G.dims(it.t);o.w=z[0];o.d=z[1];}return o;});}
 
@@ -198,6 +216,9 @@ export function backGap(G,it){const f=FV[it.r],q=it.q,tan=it.r%2?[0,1]:[1,0];con
 function onOpening(G,it,types){const bg=backGap(G,it);if(!bg.w)return false;const w=bg.w,q=it.q,a=(q[0]-w.p0[0])*w.u[0]+(q[1]-w.p0[1])*w.u[1],b=(q[2]-w.p0[0])*w.u[0]+(q[3]-w.p0[1])*w.u[1],lo=Math.min(a,b),hi=Math.max(a,b);
  return G.ops.some(o=>types.includes(o.type)&&Math.abs(o.p0[0]-w.p0[0])<1e-6&&Math.abs(o.p0[1]-w.p0[1])<1e-6&&Math.abs(o.u[0]-w.u[0])<1e-6&&lo<o.s1-.02&&hi>o.s0+.02);}
 // ---------- validator: re-checks every rule for the furniture now in the room ----------
+// can this item stand in the EMPTY room at all (standard or compact size)? if not, the room shape / openings were misread
+function fitsAlone(G,t){const S0={items:[],last:{},score:0};const zs=[null].concat(SHRINK[t]||[],COMPACT[t]?[COMPACT[t]]:[]);const d0=G.dims;
+ for(const z of zs){if(z)G.dims=q=>q===t?z:d0(q);try{if(place(G,S0,t,wallCands(G,t).concat(FREE.has(t)?freeCands(G):[]),{},40))return true;}finally{G.dims=d0;}}return false;}
 export function validateRoom(G,furn,typ){const items=furn.map(f=>mkItem(G,f.t,f.p[0],f.p[1],f.r||0,f.w&&f.d?{sz:[f.w,f.d]}:undefined));const V=[];
  // re-derive partners (chairs belong to the nearest table/desk; nightstands to the bed)
  items.forEach(it=>{if(SEAT.has(it.t)||it.t==='nstand'){let b=null,bd=9;items.forEach(o=>{if(['table','desk','otable','bed','bed1','bunk'].includes(o.t)){const d=Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1]);if(d<bd){bd=d;b=o;}}});it.partner=b;}});
@@ -207,7 +228,7 @@ export function validateRoom(G,furn,typ){const items=furn.map(f=>mkItem(G,f.t,f.
   const w=[];if(!hard(G,it,items,w))V.push({t:it.t,p:it.p,rule:w[0]});});
  const P=pathInfo(G,items);if(!P.ok)V.push({t:'-',rule:'doors-not-connected'});else items.forEach(it=>{if(!accessOK(G,it,P.near))V.push({t:it.t,p:it.p,rule:'no-access-path'});});
  if(!items.length)V.push({t:'-',rule:'empty-room'});
- else if(typ){const key=tplKey(typ,/ [2468]$/.test(typ));const miss=reqFor(key,G.room.a).filter(g=>!items.some(i=>g.includes(i.t)));if(miss.length)V.push({t:'-',rule:'too-sparse:missing '+miss.map(g=>g.join('|')).join(',')});const fr=fillRatio(G,items),tg=TARGET[key]??.2;if(fr<.5*tg)V.push({t:'-',rule:'too-sparse:fill '+Math.round(fr*100)+'%<'+Math.round(.5*tg*100)+'%'});}
+ else if(typ){const key=tplKey(typ,/ [2468]$/.test(typ));const miss=reqFor(key,G.room.a).filter(g=>!items.some(i=>g.includes(i.t)));const imp=miss.filter(g=>!g.some(t=>fitsAlone(G,t)));const rest=miss.filter(g=>!imp.includes(g));if(imp.length)V.push({t:'-',rule:'read-error:room cannot hold '+imp.map(g=>g.join('|')).join(',')+' even when empty (plan geometry/openings misread?)'});if(rest.length)V.push({t:'-',rule:'too-sparse:missing '+rest.map(g=>g.join('|')).join(',')});const fr=fillRatio(G,items),tg=TARGET[key]??.2;if(fr<.5*tg&&!imp.length)V.push({t:'-',rule:'too-sparse:fill '+Math.round(fr*100)+'%<'+Math.round(.5*tg*100)+'%'});}
  return V;}
 // ---------- door / window sanity ----------
 // walls: app walls (start,end,thickness,openings); info(p) -> room id at p (>1 room, -1 wall, else outside). Returns a log of fixes.

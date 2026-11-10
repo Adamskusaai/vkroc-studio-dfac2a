@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110o';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110p';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -61,7 +61,7 @@ export function init(){if(inited)return;inited=true;loadKit().then(()=>DIRTY=Mat
   x.fillStyle=g;x.fillRect(0,0,2,256);const bt=new THREE.CanvasTexture(c);bt.colorSpace=THREE.SRGBColorSpace;bt.mapping=THREE.EquirectangularReflectionMapping;
   skyDay=bt;scene.background=bt;scene.backgroundBlurriness=0;scene.fog=new THREE.FogExp2(0xe4ebe0,.0048);DIRTY=Math.max(DIRTY,40);if(ATM.t!=='day'||ATM.w!=='sun')applyAtmo();});
  scene.add(hemiL=new THREE.HemisphereLight(0xfff0e0,0xb8a888,.95));sun=new THREE.DirectionalLight(0xffd9a0,3.1);sun.castShadow=true;const sm=TCH?1024:2048;sun.shadow.mapSize.set(sm,sm);sun.shadow.bias=-.00035;sun.shadow.normalBias=.028;sun.shadow.radius=3.5;scene.add(sun,sun.target);const fill=fillL=new THREE.DirectionalLight(0xfff0dd,0.7);fill.position.set(-8,10,6);scene.add(fill);
- const roofFill=new THREE.DirectionalLight(0xffe2b8,0.85);roofFill.position.set(6,18,-4);scene.add(roofFill);
+ const roofFill=roofFillL=new THREE.DirectionalLight(0xffe2b8,0.85);roofFill.position.set(6,18,-4);scene.add(roofFill);
  rig=new THREE.Group();cam=new THREE.PerspectiveCamera(55,1,.05,600);rig.add(cam);scene.add(rig);orb=new OrbitControls(cam,R.domElement);orb.enableDamping=true;orb.dampingFactor=.08;orb.maxPolarAngle=Math.PI*.49;orb.minDistance=2;orb.maxDistance=120;
  const g=new THREE.Mesh(new THREE.CircleGeometry(250,64).rotateX(-Math.PI/2),M.ground);grass.repeat.set(1,1);g.material.map=grass.clone();g.material.map.repeat.set(120,120);g.material.map.needsUpdate=true;g.position.y=-.03;g.receiveShadow=true;scene.add(g);
  // three's VRButton is never shown: without WebXR it would add an unlabelled 'WEBXR NOT AVAILABLE' link over our controls; with WebXR our own 'VR' mode button clicks it
@@ -588,7 +588,7 @@ export const FUR={bed:{w:1.6,d:2.05,h:.5,c:'#e9e4da'},bed1:{w:.9,d:2,h:.5,c:'#e9
 const FM={};function fm(c,soft){const k=c+(soft?'~f':'');return FM[k]||(FM[k]=new THREE.MeshStandardMaterial({color:c,roughness:soft?.85:.72,map:soft?fabric:null}));}
 const FLO={dub:[0xbea07d,'wood',.55],orech:[0x8a6448,'wood',.55],dlazba:[0xe6e2da,'tile',.35],beton:[0xb0aea8,'beton',.85],tmave:[0x5a4636,'wood',.6]};
 export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;}}
-let SUNK=1,hemiL=null,fillL=null,skyDay=null,ATM={t:'day',w:'sun'},wxObj=null,nightG=null;
+let SUNK=1,roofFillL=null,hemiL=null,fillL=null,skyDay=null,ATM={t:'day',w:'sun'},wxObj=null,nightG=null;
 let sunH=16.5,lastFp=null,doorMode='open',doorPivs=[],mktGlass=false;
 export function checkClearances(){
   if(!H)return{ok:false,doorHits:[],wallHits:[],doors:0,furn:0};
@@ -660,18 +660,23 @@ const skyTex=(a,b,c)=>{const cv=document.createElement('canvas');cv.width=2;cv.h
 const SKY={};
 export function getAtmo(){return{...ATM};}
 export function setAtmo(a){ATM={...ATM,...(a||{})};if(scene)applyAtmo();}
-function applyAtmo(){const t=ATM.t||'day',w=ATM.w||'sun',cl=w!=='sun';
- if(t==='eve')sunH=18.7;else if(t==='night')sunH=19.9;sunTween=null;
- SUNK=(t==='night'?0:t==='eve'?.75:1)*(w==='cloudy'?.35:w==='rain'?.22:w==='snow'?.4:1);
- const tk=t==='night'?.13:t==='eve'?.55:1;
- if(hemiL){hemiL.intensity=.95*tk*(cl?.9:1);hemiL.color.set(t==='night'?0x8090c0:t==='eve'?0xffd2a8:0xfff0e0);hemiL.groundColor.set(t==='night'?0x30303a:0xb8a888);}
- if(fillL)fillL.intensity=.7*(t==='night'?.08:t==='eve'?.45:1)*(cl?.7:1);
- scene.environmentIntensity=1.05*(t==='night'?.07:t==='eve'?.45:1)*(cl?.75:1);
- R.toneMappingExposure=t==='night'?1.05:1.22;
+function applyAtmo(){const t=ATM.t||'day',w=ATM.w||'sun',cl=w!=='sun',wet=w==='rain';
+ if(ATM.h!=null)sunH=ATM.h;else if(t==='eve')sunH=19;else if(t==='night')sunH=23;sunTween=null;
+ SUNK=(t==='night'?0:t==='eve'?.28:1)*(w==='cloudy'?.35:wet?.18:w==='snow'?.4:1);
+ const tk=t==='night'?.07:t==='eve'?.16:1;
+ if(hemiL){hemiL.intensity=.95*tk*(cl?.85:1)*(wet?.8:1);hemiL.color.set(t==='night'?0x34457a:t==='eve'?0xd89a78:0xfff0e0);hemiL.groundColor.set(t==='night'?0x0c0e18:t==='eve'?0x5a4a40:0xb8a888);}
+ if(fillL){fillL.intensity=(t==='night'?.22:.7*(t==='eve'?.1:1))*(cl?.6:1);fillL.color.set(t==='night'?0x5a70b0:0xfff0dd);}/* night: faint blue moonlight */
+ if(roofFillL){roofFillL.intensity=.85*(t==='night'?.03:t==='eve'?.1:1)*(cl?.6:1);roofFillL.color.set(t==='night'?0x6070b0:0xffe2b8);}
+ scene.environmentIntensity=1.05*(t==='night'?.03:t==='eve'?.15:1)*(cl?.7:1)*(wet?.8:1);
+ R.toneMappingExposure=(t==='night'?.9:t==='eve'?.95:1.22)*(wet?.88:1);
  const key=t+w;let bg=null,fc=0xe4ebe0,fd=.0048;
  if(t==='day'&&!cl)bg=skyDay;
- else{const P={day:cl?['#9aa3ad','#b9c0c7','#cfd3d6']:null,eve:cl?['#4a4f5c','#7a6e6a','#a08878']:['#2f4a7a','#e89a6a','#f6c79a'],night:['#03060f','#0b1430','#1a2238']}[t];bg=SKY[key]||(SKY[key]=skyTex(...P));fc=t==='night'?0x0b1226:t==='eve'?(cl?0x6a6260:0xd8a080):0xb4bcc4;fd=cl?.009:.006;}
+ else{const P={day:wet?['#6f7883','#8d959e','#a7adb2']:['#9aa3ad','#b9c0c7','#cfd3d6'],eve:cl?['#2c3040','#4e4a52','#6e5e5c']:['#1c2c5a','#c8704a','#f0a070'],night:['#02040c','#060c22','#0e1a3a']}[t];bg=SKY[key]||(SKY[key]=skyTex(...P));fc=t==='night'?0x060c20:t==='eve'?(cl?0x3c3a44:0x8a6a6a):(wet?0x7a828c:0xb4bcc4);fd=cl?.01:.007;}
  if(bg)scene.background=bg;scene.fog=new THREE.FogExp2(fc,fd);
+ // lit windows from outside at evening / night
+ if(M.glass){if(!M.glass.userData.d)M.glass.userData.d={op:M.glass.opacity};const lit=t!=='day';M.glass.emissive.set(lit?0xffb860:0x000000);M.glass.emissiveIntensity=t==='night'?1.4:t==='eve'?.6:0;M.glass.opacity=lit?.85:M.glass.userData.d.op;M.glass.needsUpdate=true;}
+ // wet look: darker, glossier ground and paving
+ for(const k of['lawn','ground','path']){const m=M[k];if(!m)continue;if(!m.userData.d)m.userData.d={r:m.roughness,c:m.color.getHex()};m.roughness=wet?Math.min(m.userData.d.r,.35):m.userData.d.r;m.color.setHex(m.userData.d.c);if(wet)m.color.multiplyScalar(.62);}
  if(sun)sun.castShadow=SUNK>.05;if(lastFp)fitSun(lastFp);nightLights();makeWx();DIRTY=Math.max(DIRTY,90);}
 // night: warm bulbs at floor lamps / pendants / bedside tables (max 6 lights, no shadows -> Quest stays >72 fps)
 function nightLights(){if(nightG){scene.remove(nightG);nightG.traverse(o=>o.geometry&&o.geometry.dispose());nightG=null;}if(ATM.t==='day'||!H||!H.furn)return;
@@ -679,16 +684,17 @@ function nightLights(){if(nightG){scene.remove(nightG);nightG.traverse(o=>o.geom
  const src=H.furn.filter(f=>HY[f.t]!=null).sort((a,b)=>(a.t==='lamp'?0:a.t==='pendant'?1:2)-(b.t==='lamp'?0:b.t==='pendant'?1:2));const used=[];
  const bm=new THREE.MeshBasicMaterial({color:0xffe2b0,toneMapped:false}),bg=new THREE.SphereGeometry(.07,10,8);
  for(const f of src){const y=(lv(f.level).elevation||0)+HY[f.t];if(used.some(u=>Math.hypot(u[0]-f.p[0],u[1]-f.p[1])<2.2))continue;used.push(f.p);
-  const b=new THREE.Mesh(bg,bm);b.position.set(f.p[0],y,f.p[1]);nightG.add(b);if(used.length<=6){const L=new THREE.PointLight(0xffc98a,ATM.t==='night'?5.5:2.5,7,1.6);L.position.set(f.p[0],y,f.p[1]);nightG.add(L);}}
+  const b=new THREE.Mesh(bg,bm);b.position.set(f.p[0],y,f.p[1]);nightG.add(b);if(used.length<=(TCH?4:6)){const L=new THREE.PointLight(0xffb870,ATM.t==='night'?7:3,5.5,2);L.position.set(f.p[0],y,f.p[1]);nightG.add(L);}}
  scene.add(nightG);}
 function makeWx(){if(wxObj){scene.remove(wxObj);wxObj.geometry.dispose();wxObj.material.dispose();wxObj=null;}const w=ATM.w;if(w!=='rain'&&w!=='snow')return;
- const fp=lastFp||[-10,-10,10,10],c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],r=Math.max(fp[2]-fp[0],fp[3]-fp[1])/2+8,N=w==='rain'?(TCH?900:1600):(TCH?900:1800);
+ const fp=lastFp||[-10,-10,10,10],c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],r=Math.max(fp[2]-fp[0],fp[3]-fp[1])/2+8,N=w==='rain'?(TCH?1200:2600):(TCH?900:1800);
  const P=new Float32Array(N*(w==='rain'?6:3));const box={c,r,h:14};
- for(let i=0;i<N;i++){const x=c[0]+(Math.random()*2-1)*r,z=c[1]+(Math.random()*2-1)*r,y=Math.random()*box.h;if(w==='rain'){P.set([x,y,z,x+.03,y+.45,z],i*6);}else P.set([x,y,z],i*3);}
+ for(let i=0;i<N;i++){const x=c[0]+(Math.random()*2-1)*r,z=c[1]+(Math.random()*2-1)*r,y=Math.random()*box.h;if(w==='rain'){P.set([x,y,z,x+.32,y+.9,z+.12],i*6);}else P.set([x,y,z],i*3);}
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(P,3));
- wxObj=w==='rain'?new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0xaab8c8,transparent:true,opacity:.45,fog:true})):new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:.07,sizeAttenuation:true,transparent:true,opacity:.9,depthWrite:false}));
+ wxObj=w==='rain'?new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0xdde6f0,transparent:true,opacity:.7,fog:false,toneMapped:false})):new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:.07,sizeAttenuation:true,transparent:true,opacity:.9,depthWrite:false}));
  wxObj.frustumCulled=false;wxObj.userData={box,N,w,ph:new Float32Array(N).map(()=>Math.random()*6.28)};scene.add(wxObj);}
 function wxTick(dt,xr){const o=wxObj,u=o.userData,a=o.geometry.attributes.position,A=a.array,rain=u.w==='rain';const n=xr?Math.floor(u.N*.3):u.N;o.geometry.setDrawRange(0,rain?n*2:n);
  const v=rain?11*dt:.9*dt,t=performance.now()/1000;
  for(let i=0;i<n;i++){if(rain){const k=i*6;A[k+1]-=v;A[k+4]-=v;if(A[k+1]<0){A[k+1]+=u.box.h;A[k+4]+=u.box.h;}}else{const k=i*3;A[k+1]-=v;A[k]+=Math.sin(t+u.ph[i])*.15*dt;if(A[k+1]<0)A[k+1]+=u.box.h;}}
  a.needsUpdate=true;}
+export function dbgLights(){const o=[];scene.traverse(x=>{if(x.isLight)o.push([x.type,+x.intensity.toFixed(2),x.visible]);});return{L:o,env:scene.environmentIntensity,exp:R.toneMappingExposure,ATM,SUNK,bg:scene.background&&(scene.background.isColor?'col':'tex')};}
