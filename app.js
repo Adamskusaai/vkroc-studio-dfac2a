@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261110n';
-import {readPlan} from './plan.js?v=20261110n';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings} from './layout.js?v=20261110n';
+import {detectWalls,gapMerge} from './cv.js?v=20261110o';
+import {readPlan} from './plan.js?v=20261110o';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261110o';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -165,14 +165,15 @@ const RN=['Obývačka','Obývačka s kuchyňou','Kuchyňa','Jedáleň','Spálňa
 // prem8: house-level room types. Priority: user name > label read from the plan > one consistent assignment for the whole
 // floor (≤1 kitchen per unit, bathroom next to the WC, corridor-like rooms = hall, largest = living, entrance room = predsieň)
 function roomDoors(R,L){const out=[];H.walls.filter(w=>w.level===L).forEach(w=>{const G=geo(w);(w.openings||[]).forEach(o=>{if(o.type!=='door')return;const s=o.offset+o.width/2,c=[G.x0+G.u[0]*s,G.z0+G.u[1]*s],n=[-G.u[1],G.u[0]],e=w.thickness/2+.25;
- const a=roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),b=roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);out.push({c,w:o.width,a:a>0?a:0,b:b>0?b:0});});});return out;}
+ const a=roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),b=roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);out.push({c,w:o.width,u:G.u,a:a>0?a:0,b:b>0?b:0});});});return out;}
 function assignTypes(R,L){const RS=R.r;if(!RS.length)return {};const key=R.k+'|'+JSON.stringify(H.rlab||[]);if(R.tk===key&&R.T)return R.T;
  const T={},D=roomDoors(R,L),adj={};RS.forEach(r=>adj[r.id]=new Set());let ext=new Set();
  D.forEach(d=>{if(!adj[d.a])d.a=0;if(!adj[d.b])d.b=0;if(d.a&&d.b&&d.a!==d.b){adj[d.a].add(d.b);adj[d.b].add(d.a);}else if(d.a||d.b)ext.add(d.a||d.b);});
  const info=r=>{const w=r.bb[2]-r.bb[0],d=r.bb[3]-r.bb[1];return{mn:Math.min(w,d),asp:Math.max(w,d)/Math.max(.1,Math.min(w,d)),fill:r.a/Math.max(.1,w*d)};};
  const dist=(a,b)=>Math.hypot(a.p[0]-b.p[0],a.p[1]-b.p[1]);
+ const nD=r=>D.filter(d=>d.a===r.id||d.b===r.id).length>1?60:0; // a bathroom is not a walk-through room
  // labels read from the plan
- (H.rlab||[]).filter(l=>l.level===L).forEach(l=>{const id=roomAt(R,l.p);const r=RS.find(q=>q.id===id);if(r&&!T[id])T[id]=l.n;});
+ (H.rlab||[]).filter(l=>l.level===L).forEach(l=>{const id=roomAt(R,l.p);const r=RS.find(q=>q.id===id);/* a label that cannot be true for the room size (bedroom in 3 m2) is a misread: leave it to the auto rules */if(r&&!T[id]&&!(r.a<5.5&&/^(Spálňa|Detská|Izba|Obývačka|Pracovňa|Jedáleň)/.test(l.n))&&!(r.a<3.5&&/^Kuchyňa/.test(l.n)))T[id]=l.n;});
  // units: groups of rooms joined by interior doors; two big separate groups = two dwellings (one kitchen each)
  const comp={};let cid=0;RS.forEach(r=>{if(comp[r.id])return;cid++;const st=[r.id];comp[r.id]=cid;while(st.length){const i=st.pop();adj[i].forEach(j=>{if(!comp[j]){comp[j]=cid;st.push(j);}});}});
  const units=[...new Set(Object.values(comp))].filter(c=>{const m=RS.filter(r=>comp[r.id]===c);return m.length>=3&&m.reduce((s,r)=>s+r.a,0)>=30;});
@@ -191,10 +192,10 @@ function assignTypes(R,L){const RS=R.r;if(!RS.length)return {};const key=R.k+'|'
   if(!has('Kuchyňa')&&!(liv&&T[liv.id]==='Obývačka s kuchyňou')){const c=free().filter(r=>r.a>=4.5&&r.a<=18).sort((a,b)=>((liv&&adj[liv.id].has(a.id))?-50:0)+(liv?dist(a,liv):0)-(((liv&&adj[liv.id].has(b.id))?-50:0)+(liv?dist(b,liv):0)))[0];
    const smallRest=free().filter(r=>r.a>=8).length;if(c&&!(liv&&liv.a>=26&&smallRest<3))T[c.id]='Kuchyňa';else if(liv)T[liv.id]='Obývačka s kuchyňou';}
   // bathroom next to the WC (or the smallest wet-size room)
-  if(!has('Kúpeľňa')){const wc=M.find(r=>T[r.id]==='WC');const c=free().filter(r=>r.a>=2.8&&r.a<=11).sort((a,b)=>(wc?dist(a,wc):a.a)-(wc?dist(b,wc):b.a))[0];if(c)T[c.id]='Kúpeľňa';}
+  if(!has('Kúpeľňa')){const wc=M.find(r=>T[r.id]==='WC');const c=free().filter(r=>r.a>=2.8&&r.a<=11).sort((a,b)=>(wc?dist(a,wc):a.a)+nD(a)-(wc?dist(b,wc):b.a)-nD(b))[0];if(c)T[c.id]='Kúpeľňa';}
   free().forEach(r=>{const I=info(r);if((r.a<10&&adj[r.id].size>=3)||(I.fill<.6&&I.mn<2.4&&r.a<20))hall(r);});
   if(!has('WC')){const c=free().filter(r=>r.a<4).sort((a,b)=>a.a-b.a)[0];if(c)T[c.id]='WC';}
-  if(!has('Kúpeľňa')&&M.length>=3){/* a home always has a bathroom: smallest free room up to 14 m2 */const wc=M.find(r=>T[r.id]==='WC');const c=free().filter(r=>r.a>=2.5&&r.a<=14).sort((a,b)=>a.a-b.a+(wc?.3*(dist(a,wc)-dist(b,wc)):0))[0];if(c)T[c.id]='Kúpeľňa';}
+  if(!has('Kúpeľňa')&&M.length>=3){/* a home always has a bathroom: smallest free room up to 14 m2 */const wc=M.find(r=>T[r.id]==='WC');const c=free().filter(r=>r.a>=2.5&&r.a<=14).sort((a,b)=>a.a-b.a+(wc?.3*(dist(a,wc)-dist(b,wc)):0)+nD(a)-nD(b))[0];if(c)T[c.id]='Kúpeľňa';}
   // bedrooms and the rest
   const BIG=['Spálňa','Detská izba','Detská izba','Pracovňa','Izba'],MID=['Pracovňa','Detská izba','Šatník','Izba'],SM=['Technická miestnosť','Šatník','Komora','Špajza'];let bi=0,mi=0,si=0;
   if(has('Spálňa'))bi=1;
@@ -210,8 +211,8 @@ async function nameDlg(r){const v=await dlg('Názov miestnosti','<p>'+r.a.toFixe
  if(!v||!v.v)return;const n=String(v.f.n||'').trim().slice(0,40);if(!n)return;snap();H.rn=(H.rn||[]).filter(e=>!(e.level===lvl&&roomAt(RC[lvl],e.p)===r.id));H.rn.push({level:lvl,p:[...r.p],n});save();draw();toast('Miestnosť: '+n,'ok');}
 function WC(){const ws=WL();let x=0,z=0;ws.forEach(w=>{x+=w.start[0]+w.end[0];z+=w.start[1]+w.end[1];});const n=ws.length*2||1;return[x/n,z/n];}
 const FUR={bed:['Manželská posteľ',1.6,2.05],bed1:['Posteľ',.9,2],bunk:['Poschodová posteľ',.9,2],sofa:['Pohovka',2.2,.95],armch:['Kreslo',.85,.85],table:['Jedálenský stôl',1.6,.9],ctable:['Konferenčný stolík',1.1,.6],desk:['Písací stôl',1.2,.6],tv:['TV skrinka',1.8,.42],ward:['Šatníková skriňa',1.8,.62],kitch:['Kuchynská linka',2.4,.62],fridge:['Chladnička',.6,.65],bath:['Vaňa',1.7,.75],shower:['Sprchovací kút',.9,.9],sink:['Umývadlo',.6,.45],wc:['WC',.4,.65],shelf:['Polica',.9,.35],plant:['Rastlina',.45,.45],rug:['Koberec',2.2,1.6],lamp:['Lampa',.35,.35],chair:['Stolička',.45,.5],art:['Obraz',.9,.04],curtain:['Záves',1.4,.08],shoe:['Botník',1.0,.4],bench:['Lavica',1.2,.4],nstand:['Nočný stolík',.45,.4],dresser:['Komoda',1.2,.5],sideb:['Príborník',1.6,.45],mirror:['Zrkadlo',.7,.04],towel:['Sušiak na uteráky',.55,.12],coat:['Vešiak',.5,.5],toy:['Box na hračky',.55,.4],runner:['Behúň',2.4,.7],otable:['Záhradný stôl',1.4,.8],lounge:['Ležadlo',1.6,.85],side:['Príručný stolík',.45,.45],stool:['Stolička barová',.38,.38]};
-const FURX={...FUR,runner:['Behúň',2.4,.7],nstand:['Nočný stolík',.45,.4],dresser:['Komoda',1.2,.5],sideb:['Príborník',1.6,.45],side:['Príručný stolík',.45,.45],stool:['Barová stolička',.38,.38],island:['Kuchynský ostrov',1.6,.8],pendant:['Závesné svetlo',.4,.4],mirror:['Zrkadlo',.7,.04],towel:['Uterák',.55,.12],coat:['Vešiak',.5,.5],toy:['Hračky',.55,.4],otable:['Záhradný stôl',1.4,.8],lounge:['Záhradné ležadlo',1.6,.85]};
-const fdim=f=>{const F=FURX[f.t]||['?',.5,.5];return (f.r||0)%2?[F[2],F[1]]:[F[1],F[2]];};
+const FURX={...FUR,runner:['Behúň',2.4,.7],nstand:['Nočný stolík',.45,.4],dresser:['Komoda',1.2,.5],sideb:['Príborník',1.6,.45],side:['Príručný stolík',.45,.45],stool:['Barová stolička',.38,.38],island:['Kuchynský ostrov',1.6,.8],pendant:['Závesné svetlo',.4,.4],mirror:['Zrkadlo',.7,.04],towel:['Uterák',.55,.12],coat:['Vešiak',.5,.5],toy:['Hračky',.55,.4],otable:['Záhradný stôl',1.4,.8],lounge:['Záhradné ležadlo',1.6,.85],washer:['Práčka',.6,.6]};
+const fdim=f=>{const D=DIM3[f.t]||(FURX[f.t]?[FURX[f.t][1],FURX[f.t][2]]:[.5,.5]);const w=f.w||D[0],d=f.d||D[1];return (f.r||0)%2?[d,w]:[w,d];};
 const FL=()=>(H.furn||[]).filter(f=>f.level===lvl);
 function hitFurn(p){const fs=FL();for(let i=fs.length-1;i>=0;i--){const f=fs[i],[w,d]=fdim(f);if(Math.abs(p[0]-f.p[0])<=w/2&&Math.abs(p[1]-f.p[1])<=d/2)return f;}return null;}
 let EXP=0,MEAS=null,GUIDES=[];
@@ -376,7 +377,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261110n';
+const DEMO_V='20261110o';
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
  const keep=(D.furn||[]).filter(f=>f.p[0]>15.3||f.p[0]<-.3||f.p[1]<-.3||f.p[1]>10.8);H.furn=[];furnish({demo:1});const R=RC[lvl];const nm=id=>{const e=H.rn.find(e=>roomAt(R,e.p)===id);return e?e.n:'';};
@@ -419,11 +420,11 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110n');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110o');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
-let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
+let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';{const A=H.atmo||{};$('matm').value=A.t||'day';$('mwx').value=A.w||'sun';if(m.setAtmo)m.setAtmo({t:A.t||'day',w:A.w||'sun'});}$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
 $('snap3').onclick=async()=>{const m=await v3();const u=m.snap&&m.snap();if(u){const b=await(await fetch(u)).blob();dl(b,(H.name||'dom')+'_3d.png');toast('3D snímka uložená (PNG).','ok');}};
 $('glb').onclick=async()=>{const m=await v3();try{const b=await m.glb();if(b){dl(b,(H.name||'dom')+'.glb');toast('3D model stiahnutý (GLB).','ok');}}catch(e){toast('Export zlyhal.','err');}};
@@ -499,27 +500,36 @@ const PLANS={
  'Šatník':['ward','ward','shelf','mirror'],'Špajza':['shelf','shelf','shelf'],'Komora':['shelf','shelf'],'Technická miestnosť':['shelf','shelf'],'Garáž':['shelf','shelf'],'Terasa':['otable','lounge','plant']};
 // prem8: rule-based furnishing (layout.js). Every room gets the best valid template for its type; hard rules (door swing +
 // clear zones, 80 cm walkways, clearances, windows, bed heads, wall/overlap) are never broken - optional items are dropped instead.
-const ldim=t=>{const F=FURX[t]||['',.5,.5];return[F[1],F[2]];};
+const ldim=t=>DIM3[t]||(FURX[t]?[FURX[t][1],FURX[t][2]]:[.5,.5]);
 function layoutOps(R,L){const out=[];H.walls.filter(w=>w.level===L).forEach(w=>{const G=geo(w),nW=[-G.u[1],G.u[0]],t=w.thickness;(w.openings||[]).forEach(o=>{const s=o.offset+o.width/2,c=[G.x0+G.u[0]*s,G.z0+G.u[1]*s],e=t/2+.25;
  const a=roomAt(R,[c[0]+nW[0]*e,c[1]+nW[1]*e]),b=roomAt(R,[c[0]-nW[0]*e,c[1]-nW[1]*e]),sd=o.out?-1:1;
  for(const[id,sg]of[[a,1],[b,-1]])if(id>1)out.push({room:id,type:o.type,p0:[G.x0,G.z0],u:G.u,n:[nW[0]*sg,nW[1]*sg],s0:o.offset,s1:o.offset+o.width,t,sill:o.sill||0,swingIn:o.type==='door'&&(o.kind||'single')!=='sliding'&&sd===sg});});});return out;}
 const layoutWalls=L=>H.walls.filter(w=>w.level===L).map(w=>{const g=geo(w);return{p0:[g.x0,g.z0],u:g.u,L:g.L,t:w.thickness};});
 function roomType(r,T,R,L){return(r.auto?(T[r.id]||'Izba'):((H.rn||[]).find(e=>e.level===L&&roomAt(R,e.p)===r.id)||{}).n||T[r.id]||'Izba');}
-function validateAll(L=lvl){const RS=rooms(L),R=RC[L];if(!R||!R.g)return[];const OPS=layoutOps(R,L),WS=layoutWalls(L),out=[];
- RS.forEach(r=>{const G=makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim);validateRoom(G,(H.furn||[]).filter(f=>f.level===L&&roomAt(R,f.p)===r.id)).forEach(v=>out.push({room:r.n,...v}));});
+function validateAll(L=lvl){const RS=rooms(L),R=RC[L];if(!R||!R.g)return[];const TT=assignTypes(R,L);const OPS=layoutOps(R,L),WS=layoutWalls(L),out=[];
+ RS.forEach(r=>{const G=makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim);validateRoom(G,(H.furn||[]).filter(f=>f.level===L&&roomAt(R,f.p)===r.id),roomType(r,TT,R,L)).forEach(v=>out.push({room:r.n,...v}));});
  (H.furn||[]).filter(f=>f.level===L&&!RS.some(r=>r.id===roomAt(R,f.p))&&roomAt(R,f.p)===-1&&!['art','curtain','pendant','mirror','towel'].includes(f.t)).forEach(f=>out.push({room:'-',t:f.t,p:f.p,rule:'in-wall'}));
  // door sanity: one door per room unless it is a hall / living area; never two leaves in (almost) the same opening
  const D=roomDoors(R,L);RS.forEach(r=>{if(!D.some(d=>d.a===r.id||d.b===r.id))out.push({room:r.n,t:'door',rule:'room-without-door'});});
  H.walls.filter(w=>w.level===L).forEach(w=>(w.openings||[]).forEach(o=>{if(o.type==='door'&&o.kind==='double')out.push({room:'-',t:'door',rule:'two-leaves-in-one-opening'});}));
- for(let i=0;i<D.length;i++)for(let j=i+1;j<D.length;j++)if(Math.hypot(D[i].c[0]-D[j].c[0],D[i].c[1]-D[j].c[1])<.7)out.push({room:'-',t:'door',p:D[i].c,rule:'two-leaves-in-one-opening'});
+ for(let i=0;i<D.length;i++)for(let j=i+1;j<D.length;j++)if(Math.abs(D[i].u[0]*D[j].u[0]+D[i].u[1]*D[j].u[1])>.95&&Math.hypot(D[i].c[0]-D[j].c[0],D[i].c[1]-D[j].c[1])<Math.max(.35,.6*Math.min(D[i].w,D[j].w)))out.push({room:'-',t:'door',p:D[i].c,rule:'two-leaves-in-one-opening'});
  window.__viol=out;return out;}
 window.__validate=validateAll;
+// a room the plan gives no access gets exactly one door, on the wall it shares with a hall / living / other room (logged)
+function addMissingDoors(R,L,RS,T,log){const D=roomDoors(R,L);const PR=t=>/^(Predsieň|Chodba|Hala|Zádverie)/.test(t||'')?3:/^Obývačka|^Jedáleň|^Kuchyňa/.test(t||'')?2:1;
+ RS.forEach(r=>{if(D.some(d=>d.a===r.id||d.b===r.id))return;let best=null;
+  H.walls.filter(w=>w.level===L).forEach(w=>{const G=geo(w),n=[-G.u[1],G.u[0]],e=w.thickness/2+.25,st=.05;let run=null;const ops=(w.openings||[]);
+   const flush=()=>{if(run&&run.s1-run.s0>=1.0){const nb=RS.find(q=>q.id===run.nb);const sc=PR(T[run.nb])*10+Math.min(run.s1-run.s0,3);if(!best||sc>best.sc)best={sc,w,s:(run.s0+run.s1)/2,nb:nb&&nb.n};}run=null;};
+   for(let s=.1;s<=G.L-.1;s+=st){const c=[G.x0+G.u[0]*s,G.z0+G.u[1]*s];const a=roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),b=roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);
+    const nb=a===r.id&&b>1?b:b===r.id&&a>1?a:0;const busy=ops.some(o=>s>o.offset-.15&&s<o.offset+o.width+.15);
+    if(nb&&!busy&&(!run||run.nb===nb)){if(!run)run={s0:s,s1:s,nb};else run.s1=s;}else{flush();if(nb&&!busy)run={s0:s,s1:s,nb};}}flush();});
+  if(best){const wd=.8;(best.w.openings=best.w.openings||[]).push({type:'door',kind:'single',offset:+(best.s-wd/2).toFixed(3),width:wd,height:2.05,sill:0,hinge:'R'});log.push({fix:'door-added',room:r.n,to:best.nb});}});}
 function furnish(op){const dm=!!(op&&op.demo===1);const RS=rooms();if(!RS.length){if(!dm)toast('Najprv uzavrite steny miestností.','warn');return;}if(!dm)snap();const had=(H.furn||[]).some(f=>f.level===lvl);H.fv=dm?0:had?((H.fv||0)+1)%4:0;
  const R=RC[lvl],ids=new Set(RS.map(r=>r.id));const fixes=sanitizeOpenings(H.walls.filter(w=>w.level===lvl),p=>{const v=roomAt(R,p);return v===-1?-1:ids.has(v)?v:0;});H.fixLog=fixes;
- const T=assignTypes(R,lvl);H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
+ const T=assignTypes(R,lvl);addMissingDoors(R,lvl,RS,T,fixes);H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
  const OPS=layoutOps(R,lvl),WS=layoutWalls(lvl),hasWC=RS.some(q=>/^WC/.test(T[q.id]||''));const t0=performance.now();
  RS.forEach(r=>{const G=makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim);const items=layoutRoom(G,roomType(r,T,R,lvl),{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});
-  items.forEach(it=>{H.furn.push({t:it.t,p:it.p,r:it.r,level:lvl});n++;});if(!items.length)empty.push(r.n);});
+  items.forEach(it=>{H.furn.push({...it,level:lvl});n++;});if(!items.length)empty.push(r.n);});
  const V=validateAll();window.__furnMs=Math.round(performance.now()-t0);
  if(dm){window.__furnEmpty=empty;return V;}
  save();draw();toast('Zariadené – variant '+(H.fv+1)+'/4 ('+n+' ks).'+(fixes.filter(f=>!/^suggest/.test(f.fix)).length?' Opravené dvere/okná: '+fixes.filter(f=>!/^suggest/.test(f.fix)).length+'.':'')+(empty.length?' Bez nábytku: '+empty.join(', '):'')+(V.length?' Kontrola: '+V.length+' porušení.':' Kontrola pravidiel: OK.'),V.length?'warn':'ok',5000);window.__furnEmpty=empty;}
@@ -550,7 +560,8 @@ function roomPts(){const out=[];H.levels.forEach(l=>{const RS=rooms(l.name);RS.f
 async function panoDlg(){const P=roomPts();if(!P.length){toast('Najprv uzavrite steny miestností.','warn');return;}const r=await dlg('360° panoráma','<p>Equirektangulárny obrázok 4096×2048 pre realitné portály a 360° prehliadače.</p><label>Miestnosť<select name="i"><option value="all">Všetky miestnosti</option>'+P.map((q,i)=>'<option value="'+i+'">'+esc(q.n)+'</option>').join('')+'</select></label>',[['Zrušiť',0],['Stiahnuť',1,'pri','dl']]);if(!r||!r.v)return;const was=$('vw').classList.contains('on');if(!was)show('vw');const m=await v3();await new Promise(s=>setTimeout(s,was?200:1800));const L=r.f.i==='all'?P:[P[+r.f.i]];for(const q of L){const u=m.pano(q.p[0],q.p[1],q.e);if(!u)continue;const a=document.createElement('a');a.href=u;a.download=(H.name||'projekt')+' - '+q.n+' 360.jpg';a.click();await new Promise(s=>setTimeout(s,400));}toast(L.length>1?'Panorámy stiahnuté ('+L.length+').':'Panoráma stiahnutá.','ok');}
 async function jumpsUI(v){const J=$('jumps');if(!v||!H){J.hidden=true;return;}const m=await v3();J.innerHTML='';H.levels.forEach(l=>{const RS=rooms(l.name);RS.filter(r=>r.a>=2).forEach(r=>{const c=[(r.bb[0]+r.bb[2])/2,(r.bb[1]+r.bb[3])/2],RR=RC[l.name];let p=c;if(roomAt(RR,c)!==r.id){p=null;for(let k=0;k<400&&!p;k++){const q=[r.bb[0]+Math.random()*(r.bb[2]-r.bb[0]),r.bb[1]+Math.random()*(r.bb[3]-r.bb[1])];if(roomAt(RR,q)===r.id)p=q;}}if(!p)return;const b=document.createElement('button');b.dataset.n=r.n;b.textContent=r.n+(H.levels.length>1?' · '+l.name:'');b.onclick=()=>{DOLL_ON=false;m.jump(p[0],p[1],l.elevation);wUI(true);};J.appendChild(b);});});
  const cnt={};[...J.children].forEach(b=>cnt[b.dataset.n]=(cnt[b.dataset.n]||0)+1);const seen={};[...J.children].forEach(b=>{const n=b.dataset.n;if(cnt[n]>1){seen[n]=(seen[n]||0)+1;b.textContent=b.textContent.replace(n,n+' '+seen[n]);}});J.hidden=!J.children.length;}
-const setM=async()=>{H.mat={wall:$('mwall').value,floor:$('mfloor').value,fac:$('mfac').value,roof:$('mroof').value};save();(await v3()).setMat(H.mat);};['mwall','mfloor','mfac','mroof'].forEach(k=>$(k).onchange=setM);const SP={moderny:['#f4f1ec','beton'],skandi:['#f4f1ec','dub'],klasik:['#e8e0d2','orech']};$('msty').onchange=async e=>{const s=e.target.value;snap();H.style=s||undefined;if(SP[s]){H.mat={...(H.mat||{}),wall:SP[s][0],floor:SP[s][1]};}save();if(!(H.furn||[]).length&&s)furnish();await gen();toast(s?'Štýl „'+e.target.selectedOptions[0].textContent+'“ použitý.':'Pôvodné farby.','ok');};
+const setM=async()=>{H.mat={wall:$('mwall').value,floor:$('mfloor').value,fac:$('mfac').value,roof:$('mroof').value};save();(await v3()).setMat(H.mat);};['mwall','mfloor','mfac','mroof'].forEach(k=>$(k).onchange=setM);const SP={minimal:['#f4f1ec','dub'],futur:['#f4f1ec','beton'],moderny:['#f4f1ec','beton'],skandi:['#f4f1ec','dub'],klasik:['#e8e0d2','orech']};$('msty').onchange=async e=>{const s=e.target.value;snap();H.style=s||undefined;if(SP[s]){H.mat={...(H.mat||{}),wall:SP[s][0],floor:SP[s][1]};}save();if((H.furn||[]).length||s){furnish({demo:1});save();}await gen();toast(s?'Štýl „'+e.target.selectedOptions[0].textContent+'“ použitý.':'Pôvodné farby.','ok');};
+const setA=async()=>{H.atmo={t:$('matm').value,w:$('mwx').value};save();(await v3()).setAtmo(H.atmo);};$('matm').onchange=setA;$('mwx').onchange=setA;
 $('sunh').oninput=async e=>{const h=+e.target.value;$('sunv').textContent=Math.floor(h)+':'+(h%1?'30':'00');(await v3()).setSun(h,true);};
 
 function extSides(){H.levels.forEach(l=>{rooms(l.name);const C=RC[l.name];H.walls.filter(w=>w.level===l.name).forEach(w=>{const g=geo(w),n=[-g.u[1],g.u[0]],m=[g.x0+g.u[0]*g.L/2,g.z0+g.u[1]*g.L/2],o=w.thickness/2+.15,A=C&&roomAt(C,[m[0]+n[0]*o,m[1]+n[1]*o]),B=C&&roomAt(C,[m[0]-n[0]*o,m[1]-n[1]*o]);const iA=C.r.some(q=>q.id===A),iB=C.r.some(q=>q.id===B);w._ext=iA===iB?0:iA?-1:1;});});}

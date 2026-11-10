@@ -21,7 +21,7 @@ function findPaper(c){const s=Math.min(1,360/Math.max(c.width,c.height)),w=Math.
   // several seeds (centre may sit inside a closed room) x several step tolerances (low-contrast shadowed edges leak at loose ones)
   const seeds=[];const bri=(x0,x1,y0,y1)=>{let sd=-1,sv=-1;for(let y=Math.round(h*y0);y<h*y1;y++)for(let x=Math.round(w*x0);x<w*x1;x++){const v=b[y*w+x];if(v>sv){sv=v;sd=y*w+x;}}return[sd,sv];};
   // digital page (bright, flat border all round) -> no separate sheet, skip the floods (speed)
-  {let nb=0,nt=0,mxb=0;for(let i=0;i<w*h;i++)if(b[i]>mxb)mxb=b[i];const chk=v=>{nt++;if(v>.88*mxb&&v>185)nb++;};for(let x=0;x<w;x++){chk(b[x]);chk(b[(h-1)*w+x]);}for(let y=0;y<h;y++){chk(b[y*w]);chk(b[y*w+w-1]);}if(nb>.7*nt){findPaper.src='digital';return null;}}
+  {let nb=0,nt=0,mxb=0;for(let i=0;i<w*h;i++)if(b[i]>mxb)mxb=b[i];const chk=v=>{nt++;if(v>.88*mxb&&v>185)nb++;};for(let x=0;x<w;x++){chk(b[x]);chk(b[(h-1)*w+x]);}for(let y=0;y<h;y++){chk(b[y*w]);chk(b[y*w+w-1]);}if(nb>.7*nt&&!(globalThis.__PF||{}).noDig){findPaper.src='digital';return null;}}
   seeds.push(bri(.3,.7,.3,.7),bri(.12,.25,.3,.7),bri(.75,.88,.3,.7),bri(.3,.7,.12,.25),bri(.3,.7,.75,.88));
   // edge barrier: strong local contrast over a 5x5 window stops the fill even when a blurred paper edge falls in small steps
   const E=new Uint8Array(w*h);{const r=2,mx=new Float32Array(w*h),mn=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let M=0,m=1e9;for(let k=Math.max(0,x-r);k<=Math.min(w-1,x+r);k++){const v=b[y*w+k];if(v>M)M=v;if(v<m)m=v;}mx[y*w+x]=M;mn[y*w+x]=m;}
@@ -271,13 +271,13 @@ function quality(S,ops,bb,ppm,W,H){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/
  return{Q,nR,encl:encl/bbA};}
 // ---------- main ----------
 // prem8: digital (no paper found) uploads are read with both cleanings; the reading with the more plausible rooms wins
-export function readPlan(img,o={}){if(o._cm)return readPlan1(img,o);const R=readPlan0(img,o);if(R&&R.dbg&&!(R.dbg.nR>0)&&!o._cyan){/* outline open: retry with coloured window symbols as wall body */let C=null;try{C=readPlan1(img,{...o,_cm:R.dbg.cm||'new',_cyan:1,noPaper:!R.dbg.paper});}catch(e){C=null;}if(C&&C.dbg&&(C.dbg.nR||0)>0){C.dbg.cyanRetry=1;return C;}}return R;}
-function readPlan0(img,o){const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&(A.dbg.paper||(A.dbg.Q||0)>=4.5))return A;/* photo, or a confident first reading -> no second pass (speed) */
- let B=null;try{B=readPlan1(img,{...o,_cm:'old',noPaper:1,noSketch:1});}catch(e){B=null;}if(!B)return A;if(!A)return B;
+export function readPlan(img,o={}){if(o._cm)return readPlan1(img,o);const R=readPlan0(img,o);if(R&&R.dbg&&!(R.dbg.nR>0)&&!o._cyan&&!(globalThis.__PF||{}).noCyan){/* outline open: retry with coloured window symbols as wall body */let C=null;try{C=readPlan1(img,{...o,_cm:R.dbg.cm||'new',_cyan:1,noPaper:!R.dbg.paper});}catch(e){C=null;}if(C&&C.dbg&&(C.dbg.nR||0)>0){C.dbg.cyanRetry=1;return C;}}return R;}
+function readPlan0(img,o){const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&(A.dbg.paper||((globalThis.__PF||{}).skip&&(A.dbg.Q||0)>=4.5)))return A;/* photo, or a confident first reading -> no second pass (speed) */
+ let B=null;try{B=readPlan1(img,A?{...o,_cm:'old',noPaper:1,noSketch:1}:{...o,_cm:'old'});/* first reading failed completely -> full second reading (paper + sketch) */}catch(e){B=null;}if(!B)return A;if(!A){B.dbg.aNull=1;return B;}
  const qa=(A.dbg.Q||0)+(A.dbg.scale==='dims'?.6:0),qb=(B.dbg.Q||0)+(B.dbg.scale==='dims'?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.tA=A.dbg.t;R.dbg.tB=B.dbg.t;R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
 function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.t||{};dbg.t[k]=Math.round(performance.now()-T0);};let c=imgCanvas(img,MAXD);const CG=o._cm==='old'?cleanGrayOld:cleanGray;inkMask.off=o._cm==='old';
  if(!o.rect&&!o.noPaper){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
- tm('paper');let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
+ focus.nearE=!!o._cyan;tm('paper');let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
  if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=CG(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
  tm('clean');ink=compsFilter(ink,W,H,k=>k.n>=6);
  // prem8: coloured window symbols (saturated cyan / blue bands in the wall line) close the outline as wall body and are
@@ -306,7 +306,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  {const km=Math.max(6,Math.round(.022*Math.max(W,H))),pfS=compsFilter(nTone>W*H*.0008?body:ink,W,H,k=>{const a=k.x1-k.x0+1,b=k.y1-k.y0+1;return Math.max(a,b)>=.025*Math.max(W,H)||Math.min(a,b)<.3*Math.max(a,b);}),pf0=pairFill(pfS,W,H,km,lw*2+2),pf=close1(close1(pf0,W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-pfS[i];dbg.pairD=+(d*7/(W*H)).toFixed(4);if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('pair',B.wm,B.wk,B.kOpen,B.kInt);}}
  // prem8 sketch stage: thin, wobbly, broken hand strokes (pen/pencil photo) -> looser threshold, short axis closings bridge
  // breaks and wobble, then the double-line walls are filled like 'pair'. Only when strokes are thin and no reading closes rooms.
- if(!o.noSketch&&(dbg.paper?lw<=3:lw<=2)&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
+ if(!o.noSketch&&((globalThis.__PF||{}).oldSk?lw<=3:(dbg.paper?lw<=3:lw<=2))&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
   const km=Math.max(6,Math.round(.022*mx)),pf=close1(close1(pairFill(c2,W,H,km,lw*2+5),W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-c2[i];
   if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('sk'+Math.round(skT*100),B.wm,B.wk,B.kOpen,B.kInt);}}
  const solidOK=V.length&&V[0].S.length>=4&&(base.wk>2.2*lw+2)&&sideCoverage(V[0].S,V[0].bb).n>=2;dbg.solidOK=!!solidOK;
@@ -327,7 +327,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   const tryD=(m,w,h,f,flip)=>{const b2=bb.map(v=>v*f),bq=flip?[w-b2[2],h-b2[3],w-b2[0],h-b2[1]]:b2;const R=dimScale(flip?r180(m,w,h):m,w,h,bq,tE*f,sc.ppm*f);return R?{...R,ppm:R.ppm/f,via:f+(flip?'r':'')}:null;};
   let D=tryD(ink,W,H,1,0);
   if(!D||D.n<2){const D2=tryD(ink,W,H,1,1);if(D2&&(!D||D2.n>D.n))D=D2;}
-  if((!D||D.n<2)&&W*H<4.5e6&&(dbg.paper||W*H<1.2e6)){const W2=W*2,H2=H*2,u=new Uint8Array(W2*H2);for(let y=0;y<H2;y++){const fy=Math.min(H-1.001,Math.max(0,(y-.5)/2)),y0=fy|0,ay=fy-y0;for(let x=0;x<W2;x++){const fx=Math.min(W-1.001,Math.max(0,(x-.5)/2)),x0=fx|0,ax=fx-x0,i=y0*W+x0;const v=(n[i]*(1-ax)+n[i+1]*ax)*(1-ay)+(n[i+W]*(1-ax)+n[i+W+1]*ax)*ay;u[y*W2+x]=v<.55?1:0;}}
+  if((!D||D.n<2)&&W*H<4.5e6&&(dbg.paper||W*H<1.2e6||(globalThis.__PF||{}).up)){const W2=W*2,H2=H*2,u=new Uint8Array(W2*H2);for(let y=0;y<H2;y++){const fy=Math.min(H-1.001,Math.max(0,(y-.5)/2)),y0=fy|0,ay=fy-y0;for(let x=0;x<W2;x++){const fx=Math.min(W-1.001,Math.max(0,(x-.5)/2)),x0=fx|0,ax=fx-x0,i=y0*W+x0;const v=(n[i]*(1-ax)+n[i+1]*ax)*(1-ay)+(n[i+W]*(1-ax)+n[i+W+1]*ax)*ay;u[y*W2+x]=v<.55?1:0;}}
    if(o.debug){const hh=Math.round(H2*.3),dc=mk(W2,hh),x=dc.getContext('2d'),id=x.createImageData(W2,hh);for(let i=0;i<W2*hh;i++){const v=u[i]?0:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);dbg.uimg=dc.toDataURL();}
    for(const fl of[0,1]){if(D&&D.n>=2)break;const D3=tryD(u,W2,H2,2,fl);if(D3&&(!D||D3.n>D.n))D=D3;}}
   if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};}}catch(e){dbg.dimErr=String(e);}
@@ -360,7 +360,7 @@ function focus(S){const n=S.length,par=S.map((_,i)=>i),f=i=>par[i]===i?i:(par[i]
  // prem8: wall ends facing each other across a door-sized gap belong together (thick walls with wide door gaps)
  const eb=bbox(S),ext=Math.max(eb[2]-eb[0],eb[3]-eb[1]),m2=.12*ext,ends=A=>A.hz?[[A.a,A.c],[A.b,A.c]]:[[A.c,A.a],[A.c,A.b]];
  const nearE=(A,B)=>A.t>=.6*B.t&&B.t>=.6*A.t&&ends(A).some(p=>ends(B).some(q=>Math.hypot(p[0]-q[0],p[1]-q[1])<Math.max(m2,7*Math.max(A.t,B.t))));
- for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(near(S[i],S[j])||nearE(S[i],S[j]))par[f(i)]=f(j);
+ for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(near(S[i],S[j])||(focus.nearE&&nearE(S[i],S[j])))par[f(i)]=f(j);
  const L={};S.forEach((s,i)=>{L[f(i)]=(L[f(i)]||0)+(s.b-s.a)*s.t;});const best=+Object.keys(L).sort((a,b)=>L[b]-L[a])[0];
  // also keep colinear wall pieces across door gaps (separate clusters on the same line within 3 m-ish)
  const keep=S.filter((s,i)=>f(i)===best);const kb=bbox(keep);

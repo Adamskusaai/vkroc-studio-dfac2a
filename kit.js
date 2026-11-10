@@ -180,9 +180,11 @@ function proc(type, F, cols) {
     box(g, std('#efe8de', 0.75), 0, 0.42, 0, w, 0.84, d, 0.02);
     box(g, dark, 0, 0.05, 0, w - 0.04, 0.1, d - 0.04, 0);
     box(g, std('#2a2c2e', 0.35, 0.2), 0, 0.92, 0, w + 0.12, 0.08, d + 0.14, 0.01);
+    if (!F.nu) { // no wall cabinets when the run sits under a window
     box(g, std('#ebe4da', 0.75), 0, 2.1, -d * 0.06, w * 0.98, 0.78, d * 0.7, 0.02);
     // upper cabinet underside shadow band
     box(g, std('#3a3c3e', 0.5), 0, 1.72, -d * 0.06, w * 0.96, 0.04, d * 0.68, 0);
+    }
     box(g, metal, -w * 0.28, 0.98, 0, 0.5, 0.04, 0.36, 0);
     box(g, dark, w * 0.28, 0.98, 0, 0.52, 0.04, 0.44, 0);
     for (let i = 0; i < 4; i++)
@@ -191,6 +193,10 @@ function proc(type, F, cols) {
     ao(g, w + 0.04, d + 0.04);
     box(g, std('#d8dce0', 0.35, 0.4), 0, h / 2, 0, w, h, d, 0.03);
     box(g, dark, w / 2 - 0.02, h * 0.55, d / 2 + 0.01, 0.025, 0.45, 0.015, 0);
+  } else if (type === 'washer') {
+    ao(g, w + 0.04, d + 0.04);
+    box(g, std('#f2f2f0', 0.4), 0, h / 2, 0, w, h, d, 0.03);
+    box(g, std('#3a3e44', 0.3, 0.3), 0, h * 0.5, d / 2 + 0.01, 0.36, 0.36, 0.02, 0.08);
   } else if (type === 'bath') {
     ao(g, w + 0.08, d + 0.08);
     box(g, white, 0, 0.3, 0, w, 0.58, d, 0.05);
