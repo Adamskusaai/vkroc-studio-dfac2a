@@ -193,6 +193,12 @@ function proc(type, F, cols) {
     ao(g, w + 0.04, d + 0.04);
     box(g, std('#d8dce0', 0.35, 0.4), 0, h / 2, 0, w, h, d, 0.03);
     box(g, dark, w / 2 - 0.02, h * 0.55, d / 2 + 0.01, 0.025, 0.45, 0.015, 0);
+  } else if (type === 'wshelf') {
+    // wall shelf: two boards on brackets, mounted 1.35 / 1.7 m, a few boxes and books
+    const wd = std(cols.wood || '#c4a07a', 0.6);
+    for (const y of [1.35, 1.7]) { box(g, wd, 0, y, 0, w, 0.025, d, 0.005); box(g, dark, -w * 0.4, y - 0.06, -d * 0.3, 0.02, 0.1, d * 0.4, 0); box(g, dark, w * 0.4, y - 0.06, -d * 0.3, 0.02, 0.1, d * 0.4, 0); }
+    box(g, std('#d8cfc0', 0.8), -w * 0.22, 1.43, 0, 0.22, 0.14, d * 0.7, 0.01);
+    box(g, std('#6a7a88', 0.7), w * 0.18, 1.79, 0, 0.18, 0.16, d * 0.6, 0.005);
   } else if (type === 'washer') {
     ao(g, w + 0.04, d + 0.04);
     box(g, std('#f2f2f0', 0.4), 0, h / 2, 0, w, h, d, 0.03);

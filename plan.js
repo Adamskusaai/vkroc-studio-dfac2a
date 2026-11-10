@@ -349,7 +349,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  // confidence: closed outline + reasonable count + interior walls
  const cov=sideCoverage(S,bb);const conf=Math.min(1,(cov.n/4)*.6+(S.length>=6?.25:S.length/24)+(ops.length?.15:0));
  dbg.cov=cov;dbg.ops=ops.length;dbg.scale=sc.src;dbg.ppm=+ppm.toFixed(2);
- let labels=[];if(!o.noLabels){try{const t0=performance.now();readLabels.log=[];labels=readLabels(ink,W,H,[bb[0]-2,bb[1]-2,bb[2]+2,bb[3]+2],ppm).map(l=>({n:l.n,s:l.s,t:l.t,p:[r(l.p[0]),r(l.p[1])]}));dbg.labels=labels.map(l=>l.t+'>'+l.n);dbg.words=readLabels.log.slice(0,40);dbg.tLab=Math.round(performance.now()-t0);}catch(e){dbg.labErr=String(e);}}
+ let labels=[];if(!o.noLabels){try{const t0=performance.now();readLabels.log=[];readLabels.words=[];labels=readLabels(ink,W,H,[bb[0]-2,bb[1]-2,bb[2]+2,bb[3]+2],ppm).map(l=>({n:l.n,s:l.s,t:l.t,p:[r(l.p[0]),r(l.p[1])]}));dbg.labels=labels.map(l=>l.t+'>'+l.n);dbg.wordsP=readLabels.words.map(w=>({t:w.t,p:[r(w.p[0]),r(w.p[1])]}));dbg.words=readLabels.log.slice(0,40);dbg.tLab=Math.round(performance.now()-t0);}catch(e){dbg.labErr=String(e);}}
  tm('end');return{walls,labels,canvas:c,w:Math.round(W/ppm*100)/100,guess:sc.src!=='user'&&sc.src!=='dims',mode:'plan',conf,scaleSrc:sc.src,dbg};}
 function bbox(S){return[Math.min(...S.map(s=>s.hz?s.a:s.c)),Math.min(...S.map(s=>s.hz?s.c:s.a)),Math.max(...S.map(s=>s.hz?s.b:s.c)),Math.max(...S.map(s=>s.hz?s.c:s.b))];}
 function sideCoverage(S,bb){const cov=(hz,c,lo,hi)=>S.filter(s=>s.hz===hz&&Math.abs(s.c-c)<2*s.t+3).reduce((a,s)=>a+Math.max(0,Math.min(s.b,hi)-Math.max(s.a,lo)),0)/Math.max(1,hi-lo);
@@ -405,7 +405,7 @@ export function readLabels(ink,W,H,bb,ppm){const out=[];const T=letterTemplates(
   for(const q of g){if(q.h<.45*Hh){continue;}const gr=grid(ink,W,q.x0,q.y0,q.x1,q.y1),asp=q.w/q.h,rel=(yb-q.y0)/Hh;let bc=null,bs=-1;
    for(const t of T){let d=0;for(let i=0;i<gr.length;i++)d+=Math.abs(gr[i]-t.g[i]);const s2=1-d/gr.length-Math.abs(Math.log((asp+.05)/(t.asp+.05)))*.12;if(s2>bs){bs=s2;bc=t.ch;}}
    txt+=bs>.55?bc:'?';}
-  (readLabels.log=readLabels.log||[]).push(txt+'/'+Math.round(Hh));const m=matchWord(txt);if(m)out.push({n:m.n,s:+m.s.toFixed(2),t:txt,p:[(g[0].x0+last.x1)/2,(Math.min(...g.map(q=>q.y0))+yb)/2]});}
+  (readLabels.log=readLabels.log||[]).push(txt+'/'+Math.round(Hh));const m=matchWord(txt);if(!m&&(txt.match(/[A-Za-zÁ-ž]/g)||[]).length>=2)(readLabels.words=readLabels.words||[]).push({t:txt,p:[(g[0].x0+last.x1)/2,(Math.min(...g.map(q=>q.y0))+yb)/2]});if(m)out.push({n:m.n,s:+m.s.toFixed(2),t:txt,p:[(g[0].x0+last.x1)/2,(Math.min(...g.map(q=>q.y0))+yb)/2]});}
  return out;}
 // ---------- dimension OCR (printed digits, template matching; no deps) ----------
 const GW=12,GH=18;let TPL=null;
