@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110q';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110r';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -59,7 +59,7 @@ export function init(){if(inited)return;inited=true;loadKit().then(()=>DIRTY=Mat
   const c=document.createElement('canvas');c.width=2;c.height=256;const x=c.getContext('2d');
   const g=x.createLinearGradient(0,0,0,256);g.addColorStop(0,'#b7c8da');g.addColorStop(.4,'#d5e0ea');g.addColorStop(.7,'#e8eee8');g.addColorStop(1,'#f2f0e8');
   x.fillStyle=g;x.fillRect(0,0,2,256);const bt=new THREE.CanvasTexture(c);bt.colorSpace=THREE.SRGBColorSpace;bt.mapping=THREE.EquirectangularReflectionMapping;
-  skyDay=bt;scene.background=bt;scene.backgroundBlurriness=0;scene.fog=new THREE.FogExp2(0xe4ebe0,.0048);DIRTY=Math.max(DIRTY,40);if(ATM.t!=='day'||ATM.w!=='sun')applyAtmo();});
+  skyDay=bt;scene.background=bt;scene.backgroundBlurriness=0;scene.fog=new THREE.FogExp2(0xe4ebe0,.0048);DIRTY=Math.max(DIRTY,40);applyAtmo();});
  scene.add(hemiL=new THREE.HemisphereLight(0xfff0e0,0xb8a888,.95));sun=new THREE.DirectionalLight(0xffd9a0,3.1);sun.castShadow=true;const sm=TCH?1024:2048;sun.shadow.mapSize.set(sm,sm);sun.shadow.bias=-.00035;sun.shadow.normalBias=.028;sun.shadow.radius=3.5;scene.add(sun,sun.target);const fill=fillL=new THREE.DirectionalLight(0xfff0dd,0.7);fill.position.set(-8,10,6);scene.add(fill);
  const roofFill=roofFillL=new THREE.DirectionalLight(0xffe2b8,0.85);roofFill.position.set(6,18,-4);scene.add(roofFill);
  rig=new THREE.Group();cam=new THREE.PerspectiveCamera(55,1,.05,600);rig.add(cam);scene.add(rig);orb=new OrbitControls(cam,R.domElement);orb.enableDamping=true;orb.dampingFactor=.08;orb.maxPolarAngle=Math.PI*.49;orb.minDistance=2;orb.maxDistance=120;
@@ -551,7 +551,8 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
    for(let k=0;k<L/0.18;k++){const t=(k+.5)*.18/L;if(t>1||onGate(t))continue;add(new THREE.BoxGeometry(.015,.85,.015),M.fence,a[0]+(b[0]-a[0])*t,.62,a[1]+(b[1]-a[1])*t,0,1).castShadow=false;}});}}
  root.traverse(o=>{if(o.isMesh&&o.geometry.type==='BoxGeometry'&&root.children.length>2500)o.castShadow=false;});
  return root;}
-function fitSun(fp){lastFp=fp;const c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],r=Math.max(fp[2]-fp[0],fp[3]-fp[1])*.8+6,az=(sunH-12)*15*Math.PI/180,el=Math.max(.07,62*Math.PI/180*Math.cos((sunH-12)/8*Math.PI/2)),R2=r*1.8;sun.position.set(c[0]-Math.sin(az)*Math.cos(el)*R2,Math.sin(el)*R2,c[1]+Math.cos(az)*Math.cos(el)*R2);const k=Math.min(1,Math.max(.45,Math.sin(el)*2.0));sun.intensity=3.1*k*SUNK;sun.color.setRGB(1,.78+.12*k,.55+.25*k);sun.target.position.set(c[0],0,c[1]);const sc=sun.shadow.camera;sc.left=sc.bottom=-r*1.2;sc.right=sc.top=r*1.2;sc.near=.5;sc.far=r*5;sc.updateProjectionMatrix();}
+function fitSun(fp){lastFp=fp;const c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],r=Math.max(fp[2]-fp[0],fp[3]-fp[1])*.8+6,az=(sunH-11.75)/5.25*63*Math.PI/180,el=Math.max(.035,sunEl(sunH)),R2=r*1.8;// Nov arc: rises ESE (~117°), noon S at ~22°, sets WSW (~243°)
+sun.position.set(c[0]-Math.sin(az)*Math.cos(el)*R2,Math.sin(el)*R2,c[1]+Math.cos(az)*Math.cos(el)*R2);const k=Math.min(1,.55+Math.sin(el)*1.3);sun.intensity=3.1*k*SUNK;if(ATM.h==null)sun.color.setRGB(1,.78+.12*k,.55+.25*k);sun.target.position.set(c[0],0,c[1]);const sc=sun.shadow.camera;sc.left=sc.bottom=-r*1.2;sc.right=sc.top=r*1.2;sc.near=.5;sc.far=r*5;sc.updateProjectionMatrix();}
 function place(inside,anim){if(!world)return;const fp=world.userData.fp,c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2];rig.position.set(0,0,0);rig.rotation.set(0,0,0);intro=null;
  if(R.xr.isPresenting||inside){rig.position.set(c[0],H.levels[0].elevation,c[1]);if(body){body.resolve(rig.position);}cam.position.set(0,R.xr.isPresenting?0:1.6,0);yaw=0;pitch=0;}
  else{cam.quaternion.identity();const el=R.domElement,ar=innerWidth/Math.max(1,innerHeight),S=Math.max(fp[2]-fp[0],fp[3]-fp[1],6)*(ar<1?Math.min(2,1/ar*.75):1),b=new THREE.Vector3(c[0]+S*.95,S*.75,c[1]+S*1.25);orb.target.set(c[0],1.2,c[1]);
@@ -647,7 +648,7 @@ function doorTick(){if(doorMode!=='closed'||!doorPivs.length||!cam)return;
     // open smoothly within ~2.4m, fully open by 1.5m
     const tgt=dist<=1.5?1:dist>=2.4?0: (2.4-dist)/(2.4-1.5);
     d.u+=(tgt-d.u)*0.12; p.rotation.y=d.closed+(d.open-d.closed)*d.u; if(Math.abs(tgt-d.u)>.002)DIRTY=Math.max(DIRTY,4);});}
-export function setSun(h,smooth){DIRTY=Math.max(DIRTY,90);if(smooth){sunTween={a:sunH,b:h,t:0,dur:1.8};}else{sunH=h;sunTween=null;if(lastFp)fitSun(lastFp);}}
+export function setSun(h,smooth){DIRTY=Math.max(DIRTY,90);if(ATM.h!=null&&scene){return;}if(smooth){sunTween={a:sunH,b:h,t:0,dur:1.8};}else{sunH=h;sunTween=null;if(lastFp)fitSun(lastFp);}}
 export function jump(x,z,e){DIRTY=Math.max(DIRTY,90);if(!walk)setWalk(true);rig.position.set(x,e,z);if(body&&body.resolve)body.resolve(rig.position);cam.position.set(0,1.6,0);}
 
 const WP=[M.wall,M.wall,M.wall,M.wall,M.fac,M.wall],WN=[M.wall,M.wall,M.wall,M.wall,M.wall,M.fac];
@@ -660,38 +661,70 @@ const skyTex=(a,b,c)=>{const cv=document.createElement('canvas');cv.width=2;cv.h
 const SKY={};
 export function getAtmo(){return{...ATM};}
 export function setAtmo(a){ATM={...ATM,...(a||{})};if(scene)applyAtmo();}
-function applyAtmo(){const t=ATM.t||'day',w=ATM.w||'sun',cl=w!=='sun',wet=w==='rain';
- if(ATM.h!=null)sunH=ATM.h;else if(t==='eve')sunH=19;else if(t==='night')sunH=23;sunTween=null;
- SUNK=(t==='night'?0:t==='eve'?.28:1)*(w==='cloudy'?.35:wet?.18:w==='snow'?.4:1);
- const tk=t==='night'?.11:t==='eve'?.16:1;
- if(hemiL){hemiL.intensity=.95*tk*(cl?.85:1)*(wet?.8:1);hemiL.color.set(t==='night'?0x34457a:t==='eve'?0xd89a78:0xfff0e0);hemiL.groundColor.set(t==='night'?0x0c0e18:t==='eve'?0x5a4a40:0xb8a888);}
- if(fillL){fillL.intensity=(t==='night'?.45:.7*(t==='eve'?.1:1))*(cl?.6:1);fillL.color.set(t==='night'?0x5a70b0:0xfff0dd);}/* night: faint blue moonlight */
- if(roofFillL){roofFillL.intensity=.85*(t==='night'?.03:t==='eve'?.1:1)*(cl?.6:1);roofFillL.color.set(t==='night'?0x6070b0:0xffe2b8);}
- scene.environmentIntensity=1.05*(t==='night'?.03:t==='eve'?.15:1)*(cl?.7:1)*(wet?.8:1);
- R.toneMappingExposure=(t==='night'?.9:t==='eve'?.95:1.22)*(wet?.88:1);
- const key=t+w;let bg=null,fc=0xe4ebe0,fd=.0048;
- if(t==='day'&&!cl)bg=skyDay;
- else{const P={day:wet?['#6f7883','#8d959e','#a7adb2']:['#9aa3ad','#b9c0c7','#cfd3d6'],eve:cl?['#2c3040','#4e4a52','#6e5e5c']:['#1c2c5a','#c8704a','#f0a070'],night:['#02040c','#060c22','#0e1a3a']}[t];bg=SKY[key]||(SKY[key]=skyTex(...P));fc=t==='night'?0x060c20:t==='eve'?(cl?0x3c3a44:0x8a6a6a):(wet?0x7a828c:0xb4bcc4);fd=cl?.01:.007;}
- if(bg)scene.background=bg;scene.fog=new THREE.FogExp2(fc,fd);
- // lit windows from outside at evening / night
- if(M.glass){if(!M.glass.userData.d)M.glass.userData.d={op:M.glass.opacity};const lit=t!=='day';M.glass.emissive.set(lit?0xffb860:0x000000);M.glass.emissiveIntensity=t==='night'?1.4:t==='eve'?.6:0;M.glass.opacity=lit?.85:M.glass.userData.d.op;M.glass.needsUpdate=true;}
- // wet look: darker, glossier ground and paving
- for(const k of['lawn','ground','path']){const m=M[k];if(!m)continue;if(!m.userData.d)m.userData.d={r:m.roughness,c:m.color.getHex()};m.roughness=wet?Math.min(m.userData.d.r,.35):m.userData.d.r;m.color.setHex(m.userData.d.c);if(wet)m.color.multiplyScalar(.62);}
- if(sun)sun.castShadow=SUNK>.05;if(lastFp)fitSun(lastFp);nightLights();makeWx();DIRTY=Math.max(DIRTY,90);}
+// prem8 r: one continuous clock (0:00–23:59). Keyframes for a November day in central Europe: sunrise ~6:30, sunset ~17:00.
+// Everything (sky gradient, fog, sun arc/colour, ambient, moonlight, exposure, lit glass, lamps) is interpolated between keys.
+const KF=[// h, sky top/mid/bottom, fog, hemi int, hemi col, sun col, env, exposure, moon, glass, lamps
+ [0,'#0f1d4e','#1d3268','#30477a',0x1c2a58,.42,0x6a80c0,0xffffff,.22,1.05,1,1.15,1],
+ [5.6,'#0f1d4e','#1d3268','#30477a',0x1c2a58,.42,0x6a80c0,0xffffff,.22,1.05,1,1.15,1],
+ [6.2,'#1c2c62','#5a5c92','#c58894',0x3c3c62,.48,0x9a90c0,0xff8a6a,.3,1.05,.7,.8,.75],
+ [6.7,'#4a6aa6','#d79aa4','#f6bc96',0x9a8a96,.6,0xf0c0b4,0xff9a70,.45,1.1,.25,.3,.25],
+ [7.6,'#5f92cc','#e6c8a6','#f8d8a6',0xc8c0b0,.8,0xffe0c4,0xffc890,.75,1.16,0,0,0],
+ [9.2,'#5e9be0','#a8cdf0','#dbe8f2',0xe4ebe0,.95,0xfff0e0,0xfff4e6,1.05,1.22,0,0,0],
+ [14.4,'#5e9be0','#a8cdf0','#dbe8f2',0xe4ebe0,.95,0xfff0e0,0xfff0e0,1.05,1.22,0,0,0],
+ [15.7,'#5a88c8','#efc892','#f8b474',0xd8c4a8,.8,0xffe0b8,0xffbe80,.75,1.16,0,0,0],
+ [16.6,'#3a4c86','#e07a4c','#f89c62',0x9a7a70,.6,0xf0b090,0xff7a48,.45,1.1,.15,.35,.3],
+ [17.3,'#1c2c64','#56588e','#c47c74',0x40405e,.5,0x9890c0,0xff6a40,.32,1.05,.5,.85,.8],
+ [18.3,'#11204f','#21366a','#36507e',0x1e2c5a,.44,0x7084c0,0xffffff,.24,1.05,.9,1.1,1],
+ [24,'#0f1d4e','#1d3268','#30477a',0x1c2a58,.42,0x6a80c0,0xffffff,.22,1.05,1,1.15,1]];
+const _c1=new THREE.Color(),_c2=new THREE.Color();
+const lerpHex=(a,b,k)=>{_c1.set(a);_c2.set(b);return _c1.lerp(_c2,k).getStyle();};
+function atmoAt(h){h=((h%24)+24)%24;let i=0;while(i<KF.length-2&&KF[i+1][0]<=h)i++;const A=KF[i],B=KF[i+1],k=(h-A[0])/Math.max(1e-6,B[0]-A[0]),n=v=>v;
+ const L=j=>typeof A[j]==='string'?lerpHex(A[j],B[j],k):(j===4||j===6||j===7)?new THREE.Color(A[j]).lerp(new THREE.Color(B[j]),k):A[j]+(B[j]-A[j])*k;
+ return{sky:[L(1),L(2),L(3)],fog:L(4),hemi:L(5),hemiC:L(6),sunC:L(7),env:L(8),exp:L(9),moon:L(10),glass:L(11),lamp:L(12)};}
+export var SUNRISE=6.5,SUNSET=17;
+function sunEl(h){const d=SUNSET-SUNRISE;if(h<=SUNRISE-.3||h>=SUNSET+.3)return -1;return Math.sin(Math.PI*(h-SUNRISE)/d)*22*Math.PI/180;}// Nov at 48°N: ~22° at noon
+// equirect backgrounds are converted to a cube map once per texture (cached), so a changed sky needs a NEW texture; old one disposed
+let skyCv=null,skyT=null,skyK='';function skyGrad(c){const k=c.join();if(skyT&&k===skyK)return skyT;skyK=k;const cv=document.createElement('canvas');cv.width=2;cv.height=128;
+ const x=cv.getContext('2d'),g=x.createLinearGradient(0,0,0,128);g.addColorStop(0,c[0]);g.addColorStop(.55,c[1]);g.addColorStop(1,c[2]);x.fillStyle=g;x.fillRect(0,0,2,128);
+ const old=skyT;skyCv=cv;skyT=new THREE.CanvasTexture(cv);skyT.colorSpace=THREE.SRGBColorSpace;skyT.mapping=THREE.EquirectangularReflectionMapping;if(old)setTimeout(()=>old.dispose(),0);return skyT;}
+const grey=(c,k,to)=>lerpHex(c,to,k);
+let hourDrag=false,lastShadow=0,pendH=null,hT=0;
+// live drag: lighting every call (cheap uniforms), shadow map re-rendered at most ~10 Hz; full update on release
+export function setHour(h,drag){ATM.h=h;hourDrag=!!drag;if(!scene)return;if(drag){R.shadowMap.autoUpdate=false;const t=performance.now();if(t-lastShadow>100){R.shadowMap.needsUpdate=true;lastShadow=t;}applyAtmo(true);}else{R.shadowMap.autoUpdate=true;applyAtmo();}}
+function applyAtmo(live){const h=ATM.h!=null?+ATM.h:14.5,w=ATM.w||'sun',cl=w!=='sun',wet=w==='rain';ATM.t=h>=18.3||h<6?'night':(h>=16.6||h<7.2)?'eve':'day';
+ sunH=h;sunTween=null;const A=atmoAt(h),el=sunEl(h),up=el>0?Math.min(1,el/(10*Math.PI/180)):0;// up: 0 below horizon -> 1 at 10°
+ const wk=(w==='cloudy'?.35:wet?.18:w==='snow'?.4:1);SUNK=up*wk;
+ const cm=cl?(wet?.82:.88):1;
+ if(hemiL){hemiL.intensity=A.hemi*cm;hemiL.color.copy(A.hemiC);hemiL.groundColor.copy(A.hemiC).multiplyScalar(up>0?.75:.3);}
+ // fill: daylight bounce by day, cool moonlight at night (directional, unshadowed)
+ if(fillL){const day=.7*up*(cl?.6:1),moon=.95*A.moon;fillL.intensity=day+moon;fillL.color.setRGB(1,.94,.87).lerp(_c1.setRGB(.55,.66,1),moon/(day+moon+1e-6));}
+ if(roofFillL){roofFillL.intensity=.85*(.06+.94*up)*(cl?.6:1)+.12*A.moon;roofFillL.color.setRGB(1,.89,.72).lerp(_c1.setRGB(.5,.6,1),A.moon);}
+ scene.environmentIntensity=A.env*(cl?.75:1)*(wet?.85:1);R.toneMappingExposure=A.exp*(wet?.9:1);
+ let sky=A.sky;if(cl){const gc=wet?'#7d858f':'#a4abb2',k=.55*Math.max(.25,up);sky=sky.map(c=>grey(c,k,gc));}
+ const useDay=!cl&&skyDay&&h>=9.2&&h<=14.4;scene.background=useDay?skyDay:skyGrad(sky);
+ const fc=new THREE.Color(sky[2]).lerp(new THREE.Color(A.fog),.5);if(!scene.fog||!scene.fog.isFogExp2)scene.fog=new THREE.FogExp2(fc,.005);scene.fog.color.copy(fc);scene.fog.density=cl?.009:up>0?.0048:.006;
+ if(sun){sun.color.copy(A.sunC);}
+ if(M.glass){if(!M.glass.userData.d)M.glass.userData.d={op:M.glass.opacity};const g=A.glass;M.glass.emissive.setRGB(1,.72,.38);M.glass.emissiveIntensity=g;M.glass.opacity=g>.05?Math.min(.85,M.glass.userData.d.op+g):M.glass.userData.d.op;}
+ if(!live)for(const k of['lawn','ground','path']){const m=M[k];if(!m)continue;if(!m.userData.d)m.userData.d={r:m.roughness,c:m.color.getHex()};m.roughness=wet?Math.min(m.userData.d.r,.35):m.userData.d.r;m.color.setHex(m.userData.d.c);if(wet)m.color.multiplyScalar(.62);}
+ if(sun){const cs=SUNK>.03;if(sun.castShadow!==cs){sun.castShadow=cs;}}if(lastFp)fitSun(lastFp);
+ LAMP=A.lamp;if(LAMP>.01){if(!nightG||nightG.userData.k!==lampKey())nightLights();setLamps(LAMP);}else if(nightG)nightG.visible=false;
+ if(!live)makeWx();DIRTY=Math.max(DIRTY,live?6:90);}
+let LAMP=0;const lampKey=()=>(H&&H.furn?H.furn.length:0)+'|'+(H&&H.walls?H.walls.length:0)+'|'+(TCH?1:0);
+function setLamps(k){if(!nightG)return;nightG.visible=true;nightG.traverse(o=>{if(o.isPointLight)o.intensity=o.userData.base*k;else if(o.isMesh&&o.material&&o.material.userData.lamp){o.material.opacity=Math.min(1,k*1.4);}});}
 // night: warm bulbs at floor lamps / pendants / bedside tables (max 6 lights, no shadows -> Quest stays >72 fps)
-function nightLights(){if(nightG){scene.remove(nightG);nightG.traverse(o=>o.geometry&&o.geometry.dispose());nightG=null;}if(ATM.t==='day'||!H||!H.furn)return;
- nightG=new THREE.Group();const lv=n=>(H.levels||[]).find(l=>l.name===n)||{elevation:0};const HY={lamp:1.45,pendant:2.25,nstand:.75,desk:1.05};
+function nightLights(){if(nightG){scene.remove(nightG);nightG.traverse(o=>o.geometry&&o.geometry.dispose());nightG=null;}if(!H||!H.furn)return;
+ nightG=new THREE.Group();nightG.userData.k=lampKey();const lv=n=>(H.levels||[]).find(l=>l.name===n)||{elevation:0};const HY={lamp:1.45,pendant:2.25,nstand:.75,desk:1.05};
  const src=H.furn.filter(f=>HY[f.t]!=null).sort((a,b)=>(a.t==='lamp'?0:a.t==='pendant'?1:2)-(b.t==='lamp'?0:b.t==='pendant'?1:2));const used=[];
- const bm=new THREE.MeshBasicMaterial({color:0xffe2b0,toneMapped:false}),bg=new THREE.SphereGeometry(.07,10,8);
+ const bm=new THREE.MeshBasicMaterial({color:0xffe2b0,toneMapped:false,transparent:true});bm.userData.lamp=1;const bg=new THREE.SphereGeometry(.07,10,8);
  for(const f of src){const y=(lv(f.level).elevation||0)+HY[f.t];if(used.some(u=>Math.hypot(u[0]-f.p[0],u[1]-f.p[1])<2.2))continue;used.push(f.p);
-  const b=new THREE.Mesh(bg,bm);b.position.set(f.p[0],y,f.p[1]);nightG.add(b);if(used.length<=(TCH?4:6)){const L=new THREE.PointLight(0xffb870,ATM.t==='night'?7:3,5.5,2);L.position.set(f.p[0],y,f.p[1]);nightG.add(L);}}
+  const b=new THREE.Mesh(bg,bm);b.position.set(f.p[0],y,f.p[1]);nightG.add(b);if(used.length<=(TCH?4:6)){const L=new THREE.PointLight(0xffb870,7,5.5,2);L.userData.base=7;L.position.set(f.p[0],y,f.p[1]);nightG.add(L);}}
  // facade / porch lights at exterior doors (entrance, terrace) so the house reads from the street at night
- const fp=lastFp||[0,0,0,0],cx=(fp[0]+fp[2])/2,cz=(fp[1]+fp[3])/2;let nf=0;const lm=new THREE.MeshBasicMaterial({color:0xffd9a0,toneMapped:false}),lg=new THREE.BoxGeometry(.16,.22,.08);
+ const fp=lastFp||[0,0,0,0],cx=(fp[0]+fp[2])/2,cz=(fp[1]+fp[3])/2;let nf=0;const lm=new THREE.MeshBasicMaterial({color:0xffd9a0,toneMapped:false,transparent:true});lm.userData.lamp=1;const lg=new THREE.BoxGeometry(.16,.22,.08);
  for(const w of (H.walls||[])){const lv0=lv(w.level).elevation||0;const dx=w.end[0]-w.start[0],dz=w.end[1]-w.start[1],L0=Math.hypot(dx,dz)||1,u=[dx/L0,dz/L0];
   for(const o of (w.openings||[])){if(o.type!=='door'||!(o.kind==='entrance'||o.kind==='terrace'||o.out))continue;if(nf>=(TCH?2:3))break;const s=o.offset+o.width/2;const c=[w.start[0]+u[0]*s,w.start[1]+u[1]*s];let n=[-u[1],u[0]];if((c[0]-cx)*n[0]+(c[1]-cz)*n[1]<0)n=[-n[0],-n[1]];
    const off=(w.thickness||.3)/2+.05,px=c[0]+n[0]*off+u[0]*(o.width/2+.25),pz=c[1]+n[1]*off+u[1]*(o.width/2+.25);const m=new THREE.Mesh(lg,lm);m.position.set(px,lv0+2.15,pz);m.rotation.y=Math.atan2(n[0],n[1]);nightG.add(m);
-   const P=new THREE.PointLight(0xffc888,ATM.t==='night'?6:2.5,6,1.8);P.position.set(px+n[0]*.3,lv0+2.1,pz+n[1]*.3);nightG.add(P);nf++;}}
- scene.add(nightG);}
+   const P=new THREE.PointLight(0xffc888,6,6,1.8);P.userData.base=6;P.position.set(px+n[0]*.3,lv0+2.1,pz+n[1]*.3);nightG.add(P);nf++;}}
+ scene.add(nightG);if(LAMP>.01)setLamps(LAMP);else nightG.visible=false;}
 function makeWx(){if(wxObj){scene.remove(wxObj);wxObj.geometry.dispose();wxObj.material.dispose();wxObj=null;}const w=ATM.w;if(w!=='rain'&&w!=='snow')return;
  const fp=lastFp||[-10,-10,10,10],c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],r=Math.max(fp[2]-fp[0],fp[3]-fp[1])/2+8,N=w==='rain'?(TCH?1200:2600):(TCH?900:1800);
  const P=new Float32Array(N*(w==='rain'?6:3));const box={c,r,h:14};
@@ -703,4 +736,4 @@ function wxTick(dt,xr){const o=wxObj,u=o.userData,a=o.geometry.attributes.positi
  const v=rain?11*dt:.9*dt,t=performance.now()/1000;
  for(let i=0;i<n;i++){if(rain){const k=i*6;A[k+1]-=v;A[k+4]-=v;if(A[k+1]<0){A[k+1]+=u.box.h;A[k+4]+=u.box.h;}}else{const k=i*3;A[k+1]-=v;A[k]+=Math.sin(t+u.ph[i])*.15*dt;if(A[k+1]<0)A[k+1]+=u.box.h;}}
  a.needsUpdate=true;}
-export function dbgLights(){const o=[];scene.traverse(x=>{if(x.isLight)o.push([x.type,+x.intensity.toFixed(2),x.visible]);});return{L:o,env:scene.environmentIntensity,exp:R.toneMappingExposure,ATM,SUNK,bg:scene.background&&(scene.background.isColor?'col':'tex')};}
+export function dbgLights(){const o=[];scene.traverse(x=>{if(x.isLight)o.push([x.type,+x.intensity.toFixed(2),x.visible]);});return{L:o,env:scene.environmentIntensity,exp:R.toneMappingExposure,ATM,SUNK,bg:scene.background&&(scene.background.isColor?'col':scene.background===skyDay?'day':scene.background===skyT?'grad':'tex'),px:skyCv?Array.from(skyCv.getContext('2d').getImageData(0,64,1,1).data):null};}
