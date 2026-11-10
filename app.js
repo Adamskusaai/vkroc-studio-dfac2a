@@ -1,5 +1,5 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261110f';
-import {readPlan} from './plan.js?v=20261110f';
+import {detectWalls,gapMerge} from './cv.js?v=20261110h';
+import {readPlan} from './plan.js?v=20261110h';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -13,27 +13,27 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
  // Outer 15×10.5 m ≈ 157 m² footprint (+ terrace/carport outside)
  // South facade z=0, north z=10.5, west x=0, east x=15
  W([0,0],[15,0],[
-  {type:'door',offset:1.15,width:1.05,sill:0,height:2.15,out:1,kind:'entrance'}, // vstup
-  {type:'window',offset:4.0,width:2.4,sill:.55,height:1.85}, // obývačka
-  {type:'window',offset:8.0,width:1.6,sill:.95,height:1.35},
-  {type:'window',offset:11.4,width:1.5,sill:.95,height:1.35}]);
- W([15,0],[15,10.5],[{type:'window',offset:2.2,width:1.4,sill:.9,height:1.4},{type:'window',offset:6.5,width:1.4,sill:.9,height:1.4}]);
- W([15,10.5],[0,10.5],[{type:'window',offset:2,width:1.5,sill:.9,height:1.4},{type:'window',offset:6,width:2,sill:.9,height:1.4},{type:'window',offset:11,width:1.5,sill:.9,height:1.4}]);
- W([0,10.5],[0,0],[{type:'window',offset:3.5,width:1.2,sill:.9,height:1.4},{type:'window',offset:7.2,width:1.2,sill:.9,height:1.4}]);
+  {type:'window',offset:3.0,width:1.4,sill:.95,height:1.35}, // predsieň
+  {type:'window',offset:5.9,width:.6,sill:1.5,height:.6}, // WC
+  {type:'window',offset:9.2,width:1.6,sill:.9,height:1.4}, // spálňa
+  {type:'window',offset:11.4,width:1.5,sill:.9,height:1.4}]);
+ W([15,0],[15,10.5],[{type:'window',offset:2.2,width:1.4,sill:.9,height:1.4},{type:'window',offset:5.2,width:1.4,sill:.9,height:1.4},{type:'window',offset:8.2,width:1.2,sill:.9,height:1.4}]); // spálňa, detská 1, detská 2
+ W([15,10.5],[0,10.5],[{type:'window',offset:2.3,width:1.5,sill:.9,height:1.4},{type:'window',offset:7.2,width:1.6,sill:.9,height:1.4},{type:'window',offset:9.2,width:1.6,sill:.6,height:1.7},{type:'window',offset:11,width:1.5,sill:.9,height:1.4}]); // detská 2, obývačka ×2, kuchyňa
+ W([0,10.5],[0,0],[{type:'window',offset:3.5,width:1.2,sill:.9,height:1.4},{type:'door',offset:5.75,width:.9,sill:0,height:2.15,kind:'terrace'},{type:'door',offset:8.2,width:1.05,sill:0,height:2.15,kind:'entrance'}]); // jedáleň, terasové dvere, vchod (after the mirror below this is the x=15 front facade)
  // Internal: hallway / living split
  W([0,3.6],[5.2,3.6],[{type:'door',offset:2.8,width:.9,height:2.05}],.15);
- W([5.2,0],[5.2,3.6],[{type:'door',offset:1.4,width:.85,height:2.05}],.15); // do WC/kúpeľne zóny
- W([5.2,1.9],[7.4,1.9],[],.15); W([7.4,0],[7.4,1.9],[{type:'door',offset:.4,width:.7,height:2.0}],.12); // WC
+ W([5.2,1.9],[5.2,0],[{type:'door',offset:.55,width:.8,height:2.0}],.15); // WC from the hall (opens into the WC)
+ W([5.2,1.9],[7.4,1.9],[],.15); W([7.4,0],[7.4,1.9],[],.12); // WC
  W([5.2,1.9],[5.2,3.6],[{type:'door',offset:.5,width:.8,height:2.05}],.15); // kúpeľňa
  W([7.4,1.9],[7.4,3.6],[],.15); W([5.2,3.6],[7.4,3.6],[],.15);
  // Vertical spine bedrooms / living
- W([8.2,0],[8.2,10.5],[{type:'door',offset:4.6,width:.9,height:2.05},{type:'door',offset:7.6,width:.9,height:2.05}],.15);
- W([8.2,4.2],[15,4.2],[{type:'door',offset:2.8,width:.85,height:2.05}],.15);
- W([8.2,7.4],[15,7.4],[{type:'door',offset:2.8,width:.85,height:2.05}],.15);
+ W([8.2,0],[8.2,10.5],[{type:'door',offset:3.2,width:.8,height:2.05,hinge:'R'},{type:'door',offset:4.6,width:.9,height:2.05},{type:'door',offset:7.6,width:.9,height:2.05}],.15); // spálňa, detská 1, detská 2 — each room reached from the living area
+ W([8.2,4.2],[15,4.2],[],.15);
+ W([8.2,7.4],[15,7.4],[],.15);
  // Kitchen peninsula hint wall short
  W([0,7.2],[3.8,7.2],[],.12);
  // Furniture — Scandi, door-swing clear (leaf+10cm), no wall/window solids overlap
- const FD={bed:[1.6,2.05],bed1:[.9,2],sofa:[2.4,1.0],armch:[.85,.85],table:[1.8,1.0],ctable:[1.1,.7],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.8,.62],fridge:[.65,.7],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[3.2,3.4],runner:[2.4,.7],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4],bench:[1.2,.4],nstand:[.45,.4],dresser:[1.2,.5],sideb:[1.6,.45],side:[.45,.45],stool:[.38,.38],island:[1.6,.8],pendant:[.4,.4],mirror:[.7,.04],towel:[.55,.12],coat:[.5,.5],toy:[.55,.4],otable:[1.4,.8],lounge:[1.6,.85]};
+ const FD={bed:[1.6,2.05],bed1:[.9,2],bunk:[.9,2],sofa:[2.4,1.0],armch:[.85,.85],table:[1.8,1.0],ctable:[1.1,.7],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.8,.62],fridge:[.65,.7],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[3.2,3.4],runner:[2.4,.7],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1.0,.4],bench:[1.2,.4],nstand:[.45,.4],dresser:[1.2,.5],sideb:[1.6,.45],side:[.45,.45],stool:[.38,.38],island:[1.6,.8],pendant:[.4,.4],mirror:[.7,.04],towel:[.55,.12],coat:[.5,.5],toy:[.55,.4],otable:[1.4,.8],lounge:[1.6,.85]};
  const soft=new Set(['rug','runner','curtain','lamp','art','pendant','mirror','towel','plant']); // soft vs soft OK; plant/chair still clear of doors
  const mount=new Set(['art','curtain','mirror','towel','pendant']);
  const placed=[];
@@ -63,12 +63,12 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
   // soft items (rugs/curtains/art) never block; hard items may sit on soft
   if(soft.has(t))return 0;
   for(const p of placed){if(soft.has(p.t))continue;const[pw,pd]=dim(p.t,p.r);if(Math.abs(x-p.p[0])<(w+pw)/2+.04&&Math.abs(z-p.p[1])<(d+pd)/2+.04)return 1;}return 0;};
- const F=(t,x,z,r=0,force=0)=>{if(!FD[t])return;if(!force&&hit(t,x,z,r))return;const it={t,p:[x,z],r,level:L};DEMO.furn.push(it);placed.push(it);};
+ const F=(t,x,z,r=0,force=0,ex)=>{if(!FD[t])return;if(!force&&hit(t,x,z,r)){(window.__demoSkip=window.__demoSkip||[]).push(t+'@'+x+','+z);return;}const it={t,p:[x,z],r,level:L,...(ex||{})};DEMO.furn.push(it);placed.push(it);};
  // ===== HALL / predsieň (x0–5.2, z0–3.6) =====
- F('shoe',0.7,2.55); F('bench',3.55,0.7); F('coat',4.55,0.7); F('mirror',0.25,1.15,1);
+ F('shoe',0.7,2.55); F('bench',3.55,0.7); F('coat',4.55,0.7); F('mirror',0.25,0.6,1);
  F('lamp',3.85,2.55); F('plant',4.45,2.85); F('art',2.6,3.4,2); F('runner',2.7,1.95);
  // ===== WC (5.2–7.4, 0–1.9) =====
- F('wc',6.4,0.6); F('sink',6.95,1.3,1); F('mirror',7.15,1.05,1); F('towel',5.6,0.6,1);
+ F('wc',6.4,0.6); F('sink',6.95,1.3,1); F('mirror',7.15,1.05,1); F('towel',7.3,1.0,3);
  // ===== BATH (5.2–7.4, 1.9–3.6) =====
  F('bath',6.55,2.3,0,1); F('shower',5.7,3.2,0,1); F('sink',7.0,2.5,1,1);
  F('mirror',7.15,2.5,1); F('towel',5.55,2.3,1); F('runner',6.35,3.05);
@@ -81,37 +81,42 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
  // reading corner / overflow in north-east of living
  F('armch',7.0,9.35,2,1); F('side',6.2,9.4,0,1); F('lamp',7.35,9.55);
  F('plant',4.25,6.9); F('plant',4.4,8.1); F('plant',7.3,8.9);
- F('art',4.3,3.85); F('art',6.95,3.85); F('art',7.55,6.2,1);
- F('curtain',5.4,10.3,2);
+ F('art',4.3,3.85); F('art',6.3,3.72); F('art',7.55,6.2,1);
+ F('curtain',5.0,10.3,2);
  // ===== DINING =====
  F('table',2.5,5.85);
- F('chair',1.55,5.85,1); F('chair',3.45,5.85,3);
+ F('chair',1.3,5.85,1); F('chair',3.7,5.85,3);
  F('chair',1.85,5.05); F('chair',3.15,5.05);
  F('chair',1.85,6.65,2); F('chair',3.15,6.65,2);
- F('pendant',2.5,5.85); F('sideb',0.95,4.35,1); F('plant',3.7,4.85); F('art',0.25,5.6,1);
+ F('pendant',2.5,5.85);  F('plant',3.7,4.85);
  // ===== KITCHEN =====
  F('fridge',0.65,7.5,0,1); F('kitch',0.6,9.3,1,1); F('island',2.45,8.55,0,1);
  F('stool',1.95,7.9); F('stool',2.9,7.9); F('stool',3.3,8.55,1); F('stool',2.45,9.2,2);
  F('sink',0.6,8.35,1,1); // kitchen sink along run
- F('plant',1.25,10.0); F('curtain',0.2,8.55,1); F('curtain',0.2,5.25,1);
+ F('plant',1.25,10.0); F('curtain',0.2,6.4,1);
  // ===== MASTER =====
  F('bed',11.9,1.95); F('nstand',10.75,0.9); F('nstand',13.05,0.9);
  F('lamp',10.75,0.9); F('lamp',13.05,0.9); F('ward',14.15,1.25,3); F('dresser',14.15,3.25,3,1);
- F('chair',9.55,3.25,1); F('shelf',9.05,3.45,1); F('plant',14.0,3.55);
- F('curtain',10.4,0.3); F('curtain',13.8,0.3); F('art',9.05,2.05,1); F('rug',11.9,2.55,0,1);
- // ===== KIDS 1 =====
- F('bed1',10.2,5.35); F('desk',13.65,5.2,3); F('chair',13.2,5.75,2); F('ward',14.2,6.4,2);
- F('toy',9.55,6.45,0,1); F('shelf',9.35,4.75,1); F('lamp',14.0,4.75); F('plant',10.55,6.65);
- F('curtain',11.5,4.4); F('art',12.5,7.15,2); F('rug',11.6,5.9,0,1);
- // ===== KIDS 2 =====
- F('bed1',10.2,8.55); F('desk',13.65,8.55,3); F('chair',13.2,9.1,2); F('ward',14.2,9.7,2);
- F('toy',9.55,9.55,0,1); F('shelf',9.35,9.7,1); F('lamp',14.0,9.35); F('plant',10.55,9.7);
- F('curtain',12.5,10.3,2); F('art',12.5,7.6); F('rug',11.6,8.95,0,1);
- // ===== TERRACE =====
- // prem8: on the paved rear terrace (north, z 10.65–13.45) outside the living room, not on the front lawn
- F('otable',5.6,12.15); F('chair',4.75,12.15,1); F('chair',6.45,12.15,3);
- F('chair',5.6,11.45); F('chair',5.6,12.85,2); F('lounge',9.1,12.2);
- F('plant',4.1,13.05); F('plant',10.7,13.05); F('lamp',7.6,12.95);
+ F('shelf',9.05,1.4,1); F('plant',14.0,3.55);
+ F('curtain',10.0,0.3); F('curtain',12.15,0.3); F('art',9.05,2.05,1); F('rug',11.9,2.55,0,1);
+ // ===== KIDS 1 (8.2–15 × 4.2–7.4): single bed along the north partition, desk under the east window, wardrobe south — blue/sage =====
+ F('bed1',9.35,6.85,3,0,{cb:'#5f7f96'}); F('side',10.65,7.05);
+ F('desk',14.5,5.8,3); F('chair',13.85,5.8,1); F('lamp',14.55,7.0);
+ F('ward',13.1,4.64,0); F('shelf',9.3,4.45,0);
+ F('rug',11.6,6.0,0,1,{c:'#9fb39a'}); F('art',9.35,7.3,2); F('curtain',14.85,5.9,3); F('plant',12.4,7.05);
+ // ===== KIDS 2 (8.2–15 × 7.4–10.5): bunk bed along the north wall, play rug in the middle, desk west, shelves + dresser south — terracotta/mustard =====
+ F('bunk',13.85,9.9,1,0,{cb:'#d0795e'}); F('lamp',12.5,10.1);
+ F('desk',8.6,9.6,1,0,{}); F('chair',9.2,9.6,3);
+ F('dresser',13.0,7.75,0); F('shelf',14.3,7.7,0,0,{}); F('shelf',10.3,10.15,2);
+ F('toy',9.9,7.75,0,1); F('rug',11.3,8.95,0,1,{c:'#e1b04f'}); F('art',10.4,7.48);
+ F('curtain',11.95,10.3,2); F('curtain',14.85,8.8,3); F('plant',9.3,10.1);
+ // ===== TERRACE (paved, in front of the terrace door; west here = east x 15–18 after the mirror) =====
+ F('otable',-1.9,6.1,1,1); F('chair',-1.9,5.2,0,1); F('chair',-1.9,7.0,2,1); F('chair',-1.0,6.1,3,1); F('chair',-2.8,6.1,1,1);
+ F('lounge',-3.6,5.0,1,1); F('plant',-0.45,7.45,0,1); F('plant',-2.75,7.45,0,1); F('lamp',-0.4,3.2,0,1);
+ // prem8: mirror the interior so the entrance + terrace door face the x=15 front (video camera side); outline/origin unchanged
+ const MX=15;DEMO.walls.forEach(w=>{const s0=w.start,e0=w.end,L=Math.hypot(e0[0]-s0[0],e0[1]-s0[1]);w.start=[MX-e0[0],e0[1]];w.end=[MX-s0[0],s0[1]];
+  (w.openings||[]).forEach(o=>{o.offset=+(L-o.offset-o.width).toFixed(3);if(o.type==='door')o.hinge=o.hinge==='R'?'L':'R';});});
+ DEMO.furn.forEach(f=>{f.p=[+(MX-f.p[0]).toFixed(3),f.p[1]];f.r=(f.r||0)%2?((f.r||0)+2)%4:(f.r||0);});
 })();
 let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;window.__rooms=()=>rooms().map(r=>({n:r.n,a:+r.a.toFixed(1),p:r.p}));
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
@@ -160,13 +165,13 @@ function sugName(r,big){const w=r.bb[2]-r.bb[0],d=r.bb[3]-r.bb[1],asp=Math.max(w
 function guessKind(r,big){const w=r.bb[2]-r.bb[0],d=r.bb[3]-r.bb[1],asp=Math.max(w,d)/Math.max(.1,Math.min(w,d));if(r.a<2.6)return 'WC';if(asp>2.6&&Math.min(w,d)<1.8)return 'Chodba';if(r.a<5.5)return 'Kúpeľňa';if(big&&r.a>=14)return r.a>=30?'Obývačka s kuchyňou':'Obývačka';if(r.a<9)return 'Kuchyňa';if(r.a<12)return 'Izba';return 'Spálňa';}
 function furnName(R,r,L){const n=furnName0(R,r,L);if(!n)return null;const A=r.a,ok={'Kúpeľňa':[2,16],'WC':[.8,5],'Spálňa':[6,40],'Detská izba':[5,30],'Obývačka s kuchyňou':[14,120],'Obývačka':[10,90],'Kuchyňa':[3,30],'Pracovňa':[4,30],'Predsieň':[1.5,25]}[n];return ok&&(A<ok[0]||A>ok[1])?null:n;}
 function furnName0(R,r,L){const T=new Set();(H.furn||[]).forEach(f=>{if(f.level===L&&roomAt(R,f.p)===r.id)T.add(f.t);});if(!T.size)return null;const h=t=>T.has(t),kit=h('kitch')||h('fridge')||h('island');
- if(h('bath')||h('shower'))return 'Kúpeľňa';if(h('wc'))return 'WC';if(h('bed'))return 'Spálňa';if(h('bed1')||h('toy'))return 'Detská izba';
+ if(h('bath')||h('shower'))return 'Kúpeľňa';if(h('wc'))return 'WC';if(h('bed'))return 'Spálňa';if(h('bed1')||h('bunk')||h('toy'))return 'Detská izba';
  if((h('sofa')||h('tv'))&&kit)return 'Obývačka s kuchyňou';if(h('sofa')||h('tv'))return 'Obývačka';if(kit)return 'Kuchyňa';if(h('desk'))return 'Pracovňa';if(h('shoe')||h('coat')||h('bench'))return 'Predsieň';return null;}
 function nameR(R,L){const mx=Math.max(0,...R.r.map(r=>r.a));R.r.forEach(r=>{const e=(H.rn||[]).find(e=>e.level===L&&roomAt(R,e.p)===r.id);r.n=e?e.n:(furnName(R,r,L)||sugName(r,r.a===mx));r.auto=!e;});return R.r;}
 async function nameDlg(r){const v=await dlg('Názov miestnosti','<p>'+r.a.toFixed(1).replace('.',',')+' m² · návrh: '+esc(r.n)+'</p><label>Názov<input type="text" name="n" list="rnl" value="'+esc(r.n)+'"></label><datalist id="rnl">'+RN.map(n=>'<option value="'+n+'">').join('')+'</datalist>',[['Zrušiť',0],['Uložiť',1,'go','check']]);
  if(!v||!v.v)return;const n=String(v.f.n||'').trim().slice(0,40);if(!n)return;snap();H.rn=(H.rn||[]).filter(e=>!(e.level===lvl&&roomAt(RC[lvl],e.p)===r.id));H.rn.push({level:lvl,p:[...r.p],n});save();draw();toast('Miestnosť: '+n,'ok');}
 function WC(){const ws=WL();let x=0,z=0;ws.forEach(w=>{x+=w.start[0]+w.end[0];z+=w.start[1]+w.end[1];});const n=ws.length*2||1;return[x/n,z/n];}
-const FUR={bed:['Manželská posteľ',1.6,2.05],bed1:['Posteľ',.9,2],sofa:['Pohovka',2.2,.95],armch:['Kreslo',.85,.85],table:['Jedálenský stôl',1.6,.9],ctable:['Konferenčný stolík',1.1,.6],desk:['Písací stôl',1.2,.6],tv:['TV skrinka',1.8,.42],ward:['Šatníková skriňa',1.8,.62],kitch:['Kuchynská linka',2.4,.62],fridge:['Chladnička',.6,.65],bath:['Vaňa',1.7,.75],shower:['Sprchovací kút',.9,.9],sink:['Umývadlo',.6,.45],wc:['WC',.4,.65],shelf:['Polica',.9,.35],plant:['Rastlina',.45,.45],rug:['Koberec',2.2,1.6],lamp:['Lampa',.35,.35],chair:['Stolička',.45,.5],art:['Obraz',.9,.04],curtain:['Záves',1.4,.08],shoe:['Botník',1.0,.4],bench:['Lavica',1.2,.4]};
+const FUR={bed:['Manželská posteľ',1.6,2.05],bed1:['Posteľ',.9,2],bunk:['Poschodová posteľ',.9,2],sofa:['Pohovka',2.2,.95],armch:['Kreslo',.85,.85],table:['Jedálenský stôl',1.6,.9],ctable:['Konferenčný stolík',1.1,.6],desk:['Písací stôl',1.2,.6],tv:['TV skrinka',1.8,.42],ward:['Šatníková skriňa',1.8,.62],kitch:['Kuchynská linka',2.4,.62],fridge:['Chladnička',.6,.65],bath:['Vaňa',1.7,.75],shower:['Sprchovací kút',.9,.9],sink:['Umývadlo',.6,.45],wc:['WC',.4,.65],shelf:['Polica',.9,.35],plant:['Rastlina',.45,.45],rug:['Koberec',2.2,1.6],lamp:['Lampa',.35,.35],chair:['Stolička',.45,.5],art:['Obraz',.9,.04],curtain:['Záves',1.4,.08],shoe:['Botník',1.0,.4],bench:['Lavica',1.2,.4]};
 const FURX={...FUR,runner:['Behúň',2.4,.7],nstand:['Nočný stolík',.45,.4],dresser:['Komoda',1.2,.5],sideb:['Príborník',1.6,.45],side:['Príručný stolík',.45,.45],stool:['Barová stolička',.38,.38],island:['Kuchynský ostrov',1.6,.8],pendant:['Závesné svetlo',.4,.4],mirror:['Zrkadlo',.7,.04],towel:['Uterák',.55,.12],coat:['Vešiak',.5,.5],toy:['Hračky',.55,.4],otable:['Záhradný stôl',1.4,.8],lounge:['Záhradné ležadlo',1.6,.85]};
 const fdim=f=>{const F=FURX[f.t]||['?',.5,.5];return (f.r||0)%2?[F[2],F[1]]:[F[1],F[2]];};
 const FL=()=>(H.furn||[]).filter(f=>f.level===lvl);
@@ -187,7 +192,7 @@ function draw(){WLB=[];cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#FAF9F6';cx.fi
  H.walls.filter(w=>w.level!==lvl).forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='rgba(11,11,11,.12)';quad(w,0,g.L,-t,t);});
  (H.stairs||[]).filter(st=>st.level===lvl||H.levels[H.levels.indexOf(LV())-1]?.name===st.level).forEach(st=>{const r=stairRect(st),a=toS([r[0],r[1]]),b=toS([r[2],r[3]]);cx.globalAlpha=st.level===lvl?1:.35;cx.fillStyle='#EADFCF';cx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);cx.strokeStyle='#B08D64';cx.lineWidth=1.5*devicePixelRatio;cx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);const d=st.dir||0,c=Math.cos(d),sn=Math.sin(d),L=st.length||3.6,W=st.width||1;for(let k=1;k<12;k++){const f=k/12,p1=toS([st.pos[0]+c*L*f,st.pos[1]+sn*L*f]),p2=toS([st.pos[0]+c*L*f-sn*W,st.pos[1]+sn*L*f+c*W]);cx.beginPath();cx.moveTo(...p1);cx.lineTo(...p2);cx.stroke();}const m0=toS([st.pos[0]-sn*W/2+c*.3,st.pos[1]+c*W/2+sn*.3]),m1=toS([st.pos[0]-sn*W/2+c*(L-.3),st.pos[1]+c*W/2+sn*(L-.3)]);cx.strokeStyle='#E2552D';cx.lineWidth=2*devicePixelRatio;cx.beginPath();cx.moveTo(...m0);cx.lineTo(...m1);cx.stroke();cx.fillStyle='#E2552D';cx.beginPath();cx.arc(...m1,4*devicePixelRatio,0,7);cx.fill();cx.globalAlpha=1;});
  FL().forEach(f=>{const[w,d]=fdim(f),A=toS([f.p[0]-w/2,f.p[1]-d/2]),dd=devicePixelRatio;cx.fillStyle='#F1ECE4';cx.strokeStyle='#A39A8C';cx.lineWidth=1.2*dd;cx.beginPath();cx.roundRect(A[0],A[1],w*view.s,d*view.s,3*dd);cx.fill();cx.stroke();
-  if(f.t==='bed'||f.t==='bed1'){const r=f.r||0,hp=[[0,-1],[1,0],[0,1],[-1,0]][r],P=toS([f.p[0]+hp[0]*(d/2-.3)*(r%2?0:0)+hp[0]*(w/2-.3),f.p[1]+hp[1]*(d/2-.3)]);cx.fillStyle='#fff';cx.beginPath();cx.arc(P[0],P[1],Math.min(w,d)*view.s*.16,0,7);cx.fill();cx.stroke();}
+  if(f.t==='bed'||f.t==='bed1'||f.t==='bunk'){const r=f.r||0,hp=[[0,-1],[1,0],[0,1],[-1,0]][r],P=toS([f.p[0]+hp[0]*(d/2-.3)*(r%2?0:0)+hp[0]*(w/2-.3),f.p[1]+hp[1]*(d/2-.3)]);cx.fillStyle='#fff';cx.beginPath();cx.arc(P[0],P[1],Math.min(w,d)*view.s*.16,0,7);cx.fill();cx.stroke();}
   if(Math.min(w,d)*view.s>28*dd){cx.fillStyle='#8A8174';cx.font=`500 ${9.5*dd}px Inter,system-ui`;cx.textAlign='center';const C=toS(f.p);cx.fillText((FURX[f.t]||['?'])[0].split(' ')[0],C[0],C[1]+3*dd);}});
  WL().forEach(w=>{const g=geo(w),t=w.thickness/2;cx.fillStyle='#1F1F1F';quad(w,0,g.L,-t,t);
   (w.openings||[]).forEach(o=>{cx.fillStyle=o.type==='door'?'#E2552D':'#8EC3E6';quad(w,o.offset,o.offset+o.width,-t-.03,t+.03);
@@ -302,7 +307,7 @@ function finishCorners(){if(cornerPts.length<4)return;cv._cornerMode=0;snap();co
 async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)toast('Najprv nahrajte výkres pre toto podlažie.','warn');return;}if(recBusy)return;recBusy=1;busy('Rozpoznávam steny…');await new Promise(r=>setTimeout(r,40));
  let R=null;const man=H.walls.some(w=>!w.auto);
  // new reader first (perspective, deskew, hatch, dimension text); old pipeline for site plans and as fallback
- if(!(H.underlay.site&&!man)&&!/[?&]cv=old/.test(location.search)){try{const P=readPlan(bg,{rect:H.underlay.rect||man,mW:(H.underlay.cal||man)?bgW:null});if(P&&P.walls.length>=4&&(P.conf>=.45||(P.dbg&&P.dbg.nR>=2))){R=P;if(man)R.guess=false;}window.__plan=P?{n:P.walls.length,conf:+P.conf.toFixed(2),scale:P.scaleSrc,dims:P.dbg&&P.dbg.dims,log:P.dbg&&P.dbg.dimLog}:null;}catch(e){console.warn(e);}}
+ if(!(H.underlay.site&&!man)&&!/[?&]cv=old/.test(location.search)){try{const P=readPlan(bg,{rect:H.underlay.rect||man,mW:(H.underlay.cal||man)?bgW:null});if(P&&P.walls.length>=4&&(P.conf>=.45||(P.dbg&&P.dbg.nR>=2))){R=P;if(man)R.guess=false;}window.__plan=P?{n:P.walls.length,conf:+P.conf.toFixed(2),scale:P.scaleSrc,dims:P.dbg&&P.dbg.dims,log:P.dbg&&P.dbg.dimLog,pick:P.dbg&&P.dbg.pick,nR:P.dbg&&P.dbg.nR,sw:P.dbg&&P.dbg.stackWin,ops:P.dbg&&P.dbg.ops}:null;}catch(e){console.warn(e);}}
  if(!R)try{R=detectWalls(bg,{sens:+$('sens').value,mW:H.underlay.cal||man?bgW:null,rect:H.underlay.rect||man,site:H.underlay.site&&!man,w:bgW});if(man)R.guess=false;}catch(e){console.warn(e);}
  const ws=R?R.walls:[];busy(0);recBusy=0;if(!nosnap)snap();const lv=LV();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lv.name));
  if(R&&!H.underlay.rect&&!man){H.underlay={src:R.mode==='plan'?R.canvas.toDataURL('image/jpeg',.85):H.underlay.src,w:R.w,rect:1,guess:R.guess,site:R.mode==='site'?1:0};}else if(R&&R.guess&&!H.underlay.cal){H.underlay.w=R.w;H.underlay.guess=true;}
@@ -368,7 +373,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110f');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110h');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}

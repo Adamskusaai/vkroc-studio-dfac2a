@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110f';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261110h';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -88,7 +88,7 @@ function camPathTick(dt){if(!camPath)return;const P=camPath;if(!P.paused)P.t=Mat
  if(P.kind==='reveal')revealAt(P);
  else if(P.kind==='lerp'){cam.position.lerpVectors(P.a,P.b,u);orb.target.lerpVectors(P.ta,P.tb,u);orb.update();}
  else if(P.kind==='walk'){const s=sampleWalkPath(P,u);aimWalkCam(s.p,s.look);syncEntranceDoor(s.p);
-  if(P.doorZ!=null&&s.p.z>P.doorZ+0.25&&!P._int){setInteriorViz();P._int=1;}}
+  if(P.door&&dDep(P.door,s.p)>0.25&&!P._int){setInteriorViz();P._int=1;}}
  if(P.kind==='reveal'&&P.t>=1&&!P.hold){if(!P.paused)P.over=(P.over||0)+dt/(P.dur||12);return;}
  if(P.t>=1){if(P.loop&&P.kind==='orbit'){P.t=0;}else{const n=P.next;camPath=null;if(n)startCam(n);}}}
 
@@ -128,8 +128,8 @@ function keepClearOfWalls(p, minDist=0.4, door){
   // Lock to door centre through the doorway so spline never clips the jambs
   if(door&&door.w){
     const half=Math.max(0.25, door.w*0.42);
-    if(Math.abs(p.x-door.x)<=half+0.15 && p.z>=door.z-1.35 && p.z<=door.z+1.6){
-      p.x=door.x; return p;
+    const dp=dDep(door,p);if(Math.abs(dLat(door,p))<=half+0.15 && dp>=-1.35 && dp<=1.6){
+      dLat0(door,p); return p;
     }
   }
   let x=p.x, z=p.z;
@@ -168,6 +168,9 @@ function aimWalkCam(p,look){
   orb.target.copy(look);
   DIRTY=Math.max(DIRTY,4);
 }
+// prem8: door frame helpers (inward depth / lateral offset; default = entrance on the south facade)
+const dDep=(D,p)=>(p.x-D.x)*(D.ix==null?0:D.ix)+(p.z-D.z)*(D.iz==null?1:D.iz),dLat=(D,p)=>(p.x-D.x)*(D.lx==null?1:D.lx)+(p.z-D.z)*(D.lz==null?0:D.lz);
+const dLat0=(D,p)=>{const l=dLat(D,p);p.x-=l*(D.lx==null?1:D.lx);p.z-=l*(D.lz==null?0:D.lz);return p;};
 function sampleWalkPath(P,u){
   const ee=t=>t*t*(3-2*t); const t=ee(Math.min(1,Math.max(0,u)));
   let p;
@@ -175,14 +178,14 @@ function sampleWalkPath(P,u){
   else{const a=P.pts,n=a.length-1,x=t*n,i=Math.min(n-1,x|0),f=x-i;p=a[i].clone().lerp(a[i+1],ee(f));}
   p=keepClearOfWalls(p.clone(), P.clear||0.4, P.door);
   // Hard-lock lateral position on approach so door stays dead-centre in frame
-  if(P.door && p.z < P.door.z+0.9){p.x=P.door.x;}
+  if(P.door && dDep(P.door,p) < 0.9){dLat0(P.door,p);}
   let look;
   if(P.looks&&P.looks.length>1){
     const x=t*(P.looks.length-1),i=Math.min(P.looks.length-2,x|0),f=x-i;
     look=P.looks[i].clone().lerp(P.looks[i+1],ee(f));
   }else if(P.look){look=P.look.clone();}
   else{look=p.clone(); look.y=1.45;}
-  if(P.door && p.z < P.door.z+0.55){look.x=P.door.x;}
+  if(P.door && dDep(P.door,p) < 0.55){dLat0(P.door,look);}
   return{p,look};
 }
 
@@ -218,45 +221,32 @@ function startCam(o){DIRTY=Math.max(DIRTY,999);if(!world||!orb)return;orb.autoRo
   cam.position.copy(b);orb.target.copy(tb);orb.update();
   camPath={kind:'lerp',a,b,ta,tb,t:0,dur:(o.dur||5)/(o.speed||1),next:o.next};}
  else if(o.kind==='walk'){setWalk(false);resetExterior();orb.enabled=false;rig.position.set(0,0,0);rig.rotation.set(0,0,0);if(cam){cam.fov=58;cam.updateProjectionMatrix();cam.up.set(0,1,0);}
-  let doorX=fp[0]+1.7,doorZ=fp[1], doorW=1.05;
-  try{(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(op.kind==='entrance'||(op.type==='door'&&op.out)){const g=geo(w);doorX=g.x0+g.u[0]*(op.offset+op.width/2);doorZ=g.z0+g.u[1]*(op.offset+op.width/2);doorW=op.width||1.05;}});});}catch(e){}
-  const door={x:doorX,z:doorZ,w:doorW};
-  const y=1.6, zSouth=H.plot&&H.plot.pts?Math.min(...H.plot.pts.map(p=>p[1])):fp[1]-5;
-  const gateZ=Math.min(zSouth-2.5, doorZ-10);
-  // Dense on-axis keys: door centred horizontally whole approach, then through hall into living
-  const raw=[
-    [doorX,y,gateZ],
-    [doorX,y,doorZ-6.0],
-    [doorX,y,doorZ-3.6],
-    [doorX,y,doorZ-1.9],
-    [doorX,y,doorZ-0.7],
-    [doorX,y,doorZ+0.2],
-    [doorX,y,doorZ+1.15],
-    [doorX+0.15,y,doorZ+2.7],
-    [3.8,y,4.2],
-    [5.4,y,6.4]
-  ];
-  const pts=raw.map(([x,yy,z])=>keepClearOfWalls(new THREE.Vector3(x,yy,z),0.4,door));
-  // Re-lock doorway segment after clearance (Catmull control must stay on axis)
-  for(const p of pts){ if(p.z>=doorZ-1.4 && p.z<=doorZ+1.5) p.x=doorX; }
-  const looks=[
-    new THREE.Vector3(doorX,1.55,doorZ),
-    new THREE.Vector3(doorX,1.55,doorZ),
-    new THREE.Vector3(doorX,1.52,doorZ),
-    new THREE.Vector3(doorX,1.5,doorZ+0.15),
-    new THREE.Vector3(doorX,1.48,doorZ+1.4),
-    new THREE.Vector3(doorX+0.35,1.45,doorZ+2.8),
-    new THREE.Vector3(3.6,1.4,4.2),
-    new THREE.Vector3(5.0,1.38,5.6),
-    new THREE.Vector3(5.8,1.35,7.0),
-    new THREE.Vector3(6.2,1.32,8.2)
-  ];
+  // prem8: works for an entrance on any facade — everything is laid out in the door frame (lateral, depth) and mapped to world
+  const hcx=(fp[0]+fp[2])/2,hcz=(fp[1]+fp[3])/2;let door={x:fp[0]+1.7,z:fp[1],w:1.05,ix:0,iz:1,lx:1,lz:0};
+  try{let found=0;(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(found)return;if(op.kind==='entrance'||(op.type==='door'&&op.out&&op.kind!=='terrace')){const g=geo(w),m=op.offset+op.width/2,x=g.x0+g.u[0]*m,z=g.z0+g.u[1]*m;let ix=-g.u[1],iz=g.u[0];if(ix*(hcx-x)+iz*(hcz-z)<0){ix=-ix;iz=-iz;}door={x,z,w:op.width||1.05,ix,iz,lx:iz,lz:-ix};if(op.kind==='entrance')found=1;}});});}catch(e){}
+  const D=door,W=(l,y,d)=>new THREE.Vector3(D.x+D.lx*l+D.ix*d,y,D.z+D.lz*l+D.iz*d);
+  const y=1.6;let edge=5;if(H.plot&&H.plot.pts){const P=H.plot.pts;edge=Math.max(...P.map(q=>-((q[0]-D.x)*D.ix+(q[1]-D.z)*D.iz)));}
+  const gate=-Math.max(edge+2.5,10);
+  // into the hall, then through the interior door that leads to the living room (room kinds from furniture)
+  const RK=roomKinds[(H.levels&&H.levels[0]&&H.levels[0].name)||'1NP'];const hall=W(0.15,y,1.3);let via=null,best=1e9;
+  (H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(op.type!=='door'||op.kind==='entrance'||op.kind==='terrace'||op.out)return;const g=geo(w),m=op.offset+op.width/2,x=g.x0+g.u[0]*m,z=g.z0+g.u[1]*m;
+   for(const sg of[1,-1]){const nx=-g.u[1]*sg,nz=g.u[0]*sg,fx=x+nx*.9,fz=z+nz*.9,bx=x-nx*.9,bz=z-nz*.9;const k=RK?RK.kindOf[RK.labelAt(fx,fz)]:null,kb=RK?RK.kindOf[RK.labelAt(bx,bz)]:null;
+    if(k!=='living'||kb==='living')continue;const dd=Math.hypot(bx-hall.x,bz-hall.z);if(dd<best&&dd<6){best=dd;via={x,z,nx,nz};}}});});
+  const raw=[W(0,y,gate),W(0,y,-6),W(0,y,-3.6),W(0,y,-1.9),W(0,y,-.7),W(0,y,.2),W(0,y,1.15)];const looks=[W(0,1.55,0),W(0,1.55,0),W(0,1.52,0),W(0,1.5,.15),W(0,1.48,1.4)];
+  // living-room centroid (cells whose furniture says 'living')
+  let lcx=0,lcz=0,ln=0;if(RK)for(let x=fp[0]+.3;x<fp[2];x+=.3)for(let z=fp[1]+.3;z<fp[3];z+=.3){if(RK.kindOf[RK.labelAt(x,z)]==='living'){lcx+=x;lcz+=z;ln++;}}
+  if(via){const V=(k,yy)=>new THREE.Vector3(via.x+via.nx*k,yy,via.z+via.nz*k);const a=V(.6,y);
+   const lc=ln?new THREE.Vector3(lcx/ln,y,lcz/ln):V(3,y),b=a.clone().lerp(lc,.5),c=a.clone().lerp(lc,.8),far=a.clone().lerp(lc,1.9);
+   raw.push(V(-1.0,y),V(-.35,y),a,b);looks.push(V(0,1.45),V(1.2,1.42),new THREE.Vector3(c.x,1.4,c.z),new THREE.Vector3(lc.x,1.36,lc.z),new THREE.Vector3(far.x,1.32,far.z));}
+  else{raw.push(W(.15,y,2.7),W(.6,y,4.2));looks.push(W(.35,1.45,2.8),W(.5,1.4,4.4),W(.6,1.38,5.6),W(.6,1.35,7),W(.6,1.32,8.2));}
+  const pts=raw.map(p=>keepClearOfWalls(p,0.4,door));
+  for(const p of pts){const dp=dDep(door,p);if(dp>=-1.4&&dp<=1.5)dLat0(door,p);}
   const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal',0.45);
-  camPath={kind:'walk',pts,looks,curve,clear:0.4,doorZ,door,t:0,dur:(o.dur||14)/(o.speed||1),_int:0,paused:!!o.pause};
+  camPath={kind:'walk',pts,looks,curve,clear:0.4,door,t:0,dur:(o.dur||14)/(o.speed||1),_int:0,paused:!!o.pause};
   if(o.at!=null){camPath.t=Math.min(1,Math.max(0,+o.at));}
   {const s=sampleWalkPath(camPath,camPath.t);aimWalkCam(s.p,s.look);syncEntranceDoor(s.p);
-   if(s.p.z>doorZ+0.25){setInteriorViz();camPath._int=1;}
-   else if(doorMode==='closed'&&s.p.z<doorZ-3.2){doorPivs.forEach(p=>{const d=p.userData.door;if(!d)return;d.u=0;p.rotation.y=d.closed;});}
+   const dp=dDep(door,s.p);if(dp>0.25){setInteriorViz();camPath._int=1;}
+   else if(doorMode==='closed'&&dp<-3.2){doorPivs.forEach(p=>{const d=p.userData.door;if(!d)return;d.u=0;p.rotation.y=d.closed;});}
   }
   DIRTY=Math.max(DIRTY,60);}
  else if(o.kind==='interior'){setWalk(false);setInteriorViz();
@@ -333,8 +323,8 @@ export function birdCam(x,z,h=9.5){
 
 export function scrubCam(u){if(!camPath)return;camPath.t=Math.min(1,Math.max(0,+u));camPath.over=0;
   if(camPath.kind==='walk'){const s=sampleWalkPath(camPath,camPath.t);aimWalkCam(s.p,s.look);syncEntranceDoor(s.p);
-    if(camPath.doorZ!=null&&s.p.z>camPath.doorZ+0.25){if(!camPath._int){setInteriorViz();camPath._int=1;}}
-    else if(camPath._int&&camPath.doorZ!=null&&s.p.z<=camPath.doorZ+0.15){resetExterior();camPath._int=0;}}
+    if(camPath.door&&dDep(camPath.door,s.p)>0.25){if(!camPath._int){setInteriorViz();camPath._int=1;}}
+    else if(camPath._int&&camPath.door&&dDep(camPath.door,s.p)<=0.15){resetExterior();camPath._int=0;}}
   else if(camPath.kind==='orbit'){const P=camPath,ang=P.a0+(P.a1-P.a0)*P.t;cam.position.set(P.c[0]+Math.cos(ang)*P.r,P.y,P.c[1]+Math.sin(ang)*P.r);orb.target.set(P.c[0],P.ty||1.2,P.c[1]);orb.update();}
   else camPathTick(0);DIRTY=Math.max(DIRTY,60);}
 export function dollhouse(on){DIRTY=Math.max(DIRTY,180);if(!world)return;setWalk(false);
@@ -371,7 +361,7 @@ const RUGC={living:'#5d6872',bed:'#b08a7c',kids:'#8fa3b4'};
 function roomKind(types){const has=t=>types.has(t);
  const kit=has('kitch')||has('fridge')||has('island');
  if(has('bath')||has('shower')||has('wc')||(has('sink')&&!kit&&!has('sofa')))return'wet';
- if(has('bed'))return'bed';if(has('bed1')||has('toy'))return'kids';
+ if(has('bed'))return'bed';if(has('bed1')||has('bunk')||has('toy'))return'kids';
  if(has('sofa')||has('tv')||has('table'))return'living';
  if(has('kitch')||has('fridge')||has('island'))return'kitchen';
  if(has('shoe')||has('coat')||has('bench')||has('runner'))return'hall';return'other';}
@@ -398,7 +388,7 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
       piv.userData.doorLeaf=1;piv.userData.doorH=o.height||2.05;
       if(isEnt){piv.userData.door={closed:closedRot,open:openR,u:doorMode==='closed'?0:1,cx:G.x0+G.u[0]*(a+b)/2,cz:G.z0+G.u[1]*(a+b)/2};doorPivs.push(piv);}
       root.add(piv);};
-    const lw=o.width-.1;if(kd==='double'){leaf(a+.05,lw/2,1,-1.2*sd);leaf(b-.05,lw/2,-1,1.2*sd);}else if(kd==='sliding'){leaf(a+.05+lw*.45,lw*.55,1,0);}else{const R=o.hinge==='R';leaf(R?b-.05:a+.05,lw,R?-1:1,(R?1.3:-1.3)*sd);}}
+    const lw=o.width-.1;if(kd==='double'){leaf(a+.05,lw/2,1,-Math.PI/2*sd);leaf(b-.05,lw/2,-1,Math.PI/2*sd);}else if(kd==='sliding'){leaf(a+.05+lw*.45,lw*.55,1,0);}else{const R=o.hinge==='R';leaf(R?b-.05:a+.05,lw,R?-1:1,(R?1:-1)*Math.PI/2*sd);}}
    s=b;});box(w,s,L,e,e+h,M.wall);});
  if(!xs.length)return null;const fp=[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];root.userData.fp=fp;
  const stairs=H.stairs||[];
@@ -426,7 +416,7 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
   const RK=roomKinds[f.level],rk=RK?RK.kindOf[RK.labelAt(f.p[0],f.p[1])]:null;
   if(f.t==='rug'&&(rk==='bed'||rk==='kids')&&F.w>2.6)F=rk==='bed'?{...F,w:2.6,d:2.4}:{...F,w:2.0,d:1.4}; // prem8: room-sized rugs keep floors visible
   const rugC=(f.t==='rug'&&rk&&RUGC[rk]&&H.style==='skandi')?RUGC[rk]:(S.rug||'#c4a484');
-  const g=makeFurn(f.t,F,{wood:(S.wood||'#d4b48a'),fab:f.t==='rug'?rugC:(S[f.t]||F.c),bed:S.bed||'#c4a882',rug:rugC,curtain:S.curtain||'#b8a890'});
+  const g=makeFurn(f.t,F,{wood:(S.wood||'#d4b48a'),fab:f.c||(f.t==='rug'?rugC:(S[f.t]||F.c)),bed:f.cb||S.bed||'#c4a882',rug:f.c||rugC,curtain:S.curtain||'#b8a890'});
   g.position.set(f.p[0],l.elevation,f.p[1]);g.rotation.y=-((f.r||0)*Math.PI/2);g.userData.furn=f.t;g.userData.noCol=true;root.add(g);});
  // solid oak slab over whole footprint (guarantees readable floors from dollhouse + interior)
  if(xs.length&&zs.length){const fx0=Math.min(...xs),fx1=Math.max(...xs),fz0=Math.min(...zs),fz1=Math.max(...zs);
@@ -496,11 +486,23 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
   // driveway with jointed paving
   // driveway on EAST side (away from west entrance) so walk-to-door stays clear
   const dLen=Math.max(4.5,hz-zMin+1.2),drive=add(new THREE.BoxGeometry(3.2,.025,dLen),M.path,hx+4.2,.008,(zMin+hz)/2-.1,0,1);drive.receiveShadow=true;drive.userData.noCol=true;
-  // front path to door (center-west)
+  // prem8: outward frames of the entrance / terrace doors (door centre, outward normal, along-wall)
+  const hcx=(Math.min(...xs)+Math.max(...xs))/2,hcz=(Math.min(...zs)+Math.max(...zs))/2;const dOut=k=>{let r=null;(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(r||op.type!=='door'||op.kind!==k)return;const g=geo(w),m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}r={cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3};});});return r;};
+  const ENT=dOut('entrance'),TER=dOut('terrace');
+  // distance from a door to the plot edge along its outward normal
+  const toEdge=D=>{const tx=D.nx>0?(xMax-D.cx)/D.nx:D.nx<0?(xMin-D.cx)/D.nx:1e9,tz=D.nz>0?(zMax-D.cz)/D.nz:D.nz<0?(zMin-D.cz)/D.nz:1e9;return Math.max(1.5,Math.min(tx,tz));};
+  if(ENT&&Math.abs(ENT.nx)>.9){// path to a door on an east/west facade
+   const Lp=toEdge(ENT)-.1;add(new THREE.BoxGeometry(Lp,.02,1.5),M.path,ENT.cx+ENT.nx*(ENT.t/2+Lp/2),.01,ENT.cz,0,1).userData.noCol=true;}
+  else if(ENT){const Lp=toEdge(ENT)-.1;add(new THREE.BoxGeometry(1.5,.02,Lp),M.path,ENT.cx,.01,ENT.cz+ENT.nz*(ENT.t/2+Lp/2),0,1).userData.noCol=true;}
+  else // front path to door (center-west)
   add(new THREE.BoxGeometry(1.5,.02,Math.max(2.8,hz-zMin)),M.path,Math.min(...xs)+1.7,.01,(zMin+hz)/2,0,1).userData.noCol=true;
   // terrace (south / max z of house)
   const tw=Math.min(7.5,(xs.length?Math.max(...xs)-Math.min(...xs):6)-.6), terrZ=(zs.length?Math.max(...zs):zMax-2)+1.55;
-  const terr=add(new THREE.BoxGeometry(tw,.035,2.8),M.path,hx,.018,terrZ,0,1);terr.receiveShadow=true;terr.userData.noCol=true;
+  let terr;if(TER){// slab in front of the terrace door, shifted away from the entrance
+   const tl=4.6,dp=2.9;let sh=tl/2-.7;if(ENT){const se=(ENT.cx-TER.cx)*TER.ux+(ENT.cz-TER.cz)*TER.uz;if(se>0)sh=-sh;}
+   const cx=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*sh,cz=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*sh,ew=Math.abs(TER.nx)>.9;
+   terr=add(new THREE.BoxGeometry(ew?dp:tl,.035,ew?tl:dp),M.path,cx,.018,cz,0,1);}
+  else terr=add(new THREE.BoxGeometry(tw,.035,2.8),M.path,hx,.018,terrZ,0,1);terr.receiveShadow=true;terr.userData.noCol=true;
   // terrace accents (lightweight)
   if(!(H.furn||[]).some(f=>f.t==='otable'))
   {const woodAcc=M.wood2||M.door;add(new THREE.BoxGeometry(1.5,.06,.75),woodAcc,hx-1.5,.28,terrZ+.15,0,1);
@@ -520,7 +522,7 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
   const seed=(a,b)=>{let h=Math.sin(a*12.9898+b*78.233)*43758.5453;return h-Math.floor(h);};
   const hx0=Math.min(...xs)-1,hx1=Math.max(...xs)+1,hz0=Math.min(...zs)-1,hz1=Math.max(...zs)+1;
   [[xMin+2.8,zMax-2.4,1.05],[xMax-2.8,zMax-2.6,1.0],[xMax-2.2,hz0+1.8,.9]].forEach(t=>{
-   if(t[0]>hx0&&t[0]<hx1&&t[1]>hz0&&t[1]<hz1)return;tree(t[0],t[1],t[2]);});
+   if(t[0]>hx0&&t[0]<hx1&&t[1]>hz0&&t[1]<hz1)return;if([ENT,TER].some(D=>{if(!D)return false;const tt=(t[0]-D.cx)*D.nx+(t[1]-D.cz)*D.nz,la=Math.abs((t[0]-D.cx)*D.ux+(t[1]-D.cz)*D.uz);return tt>0&&tt<9&&la<(D===TER?3.4:2.2);}))return;tree(t[0],t[1],t[2]);});
   // surrounding context: distant tree line + neighbour silhouettes (hides empty green field)
   {const sil=std({color:0x8a9488,roughness:1});
    [[-18,8,1.2],[-16,-6,1.0],[28,4,1.3],[26,-8,0.9],[8,-22,1.1],[-6,24,1.0],[22,22,1.2]].forEach(([x,z,s])=>tree(x,z,s));
@@ -582,7 +584,7 @@ export function pano(x,z,e,W=4096,keep){if(!R)return null;if(!keep)jump(x,z,e);c
  const qs=new THREE.Scene(),oc=new THREE.OrthographicCamera(-1,1,1,-1,0,1),mt=new THREE.ShaderMaterial({uniforms:{t:{value:rt.texture},yaw:{value:-yaw}},vertexShader:'varying vec2 v;void main(){v=uv;gl_Position=vec4(position.xy,0.,1.);}',fragmentShader:'uniform samplerCube t;uniform float yaw;varying vec2 v;void main(){float lo=(v.x-.5)*6.2831853+yaw,la=(v.y-.5)*3.14159265;vec3 d=vec3(cos(la)*sin(lo),sin(la),-cos(la)*cos(lo));gl_FragColor=textureCube(t,d);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}',toneMapped:true});
  qs.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),mt));const pr=R.getPixelRatio(),sz=R.getSize(new THREE.Vector2()),xr=R.xr.enabled;R.xr.enabled=false;R.setPixelRatio(1);R.setSize(W,W/2,false);R.render(qs,oc);const u=R.domElement.toDataURL('image/jpeg',.9);R.setPixelRatio(pr);R.setSize(sz.x,sz.y,false);R.xr.enabled=xr;rt.dispose();mt.dispose();DIRTY=Math.max(DIRTY,30);return u;}
 export const STY={moderny:{sofa:'#5d6470',armch:'#2f3237',table:'#2b2b2b',ctable:'#2b2b2b',desk:'#3a3a3a',ward:'#ececea',kitch:'#2f3237',shelf:'#3a3a3a',bed:'#d6d6d2',chair:'#2f3237',wood:'#3b3b3b',art:'#6a7a88',curtain:'#d0d4d8',rug:'#4a5560',lounge:'#4a5560'},skandi:{sofa:'#6a5644',armch:'#7a6550',table:'#c4a07a',ctable:'#c4a07a',desk:'#c9a882',ward:'#e8e0d4',kitch:'#ebe6de',shelf:'#c4a07a',chair:'#d8cfc0',wood:'#c4a07a',art:'#c4b8a4',curtain:'#b8a890',shoe:'#c4a07a',rug:'#7a4028',bed:'#5a3e2c',lounge:'#5a6a4a',stool:'#6a5644',runner:'#6a4a3a',pendant:'#e8dcc8'},klasik:{sofa:'#6b3f35',armch:'#8a5a3c',table:'#5a3a26',ctable:'#5a3a26',desk:'#6b4a30',ward:'#7a5a40',kitch:'#efe6d6',shelf:'#5a3a26',chair:'#7a5a40',wood:'#5a3a26',rug:'#5a3020'}};
-export const FUR={bed:{w:1.6,d:2.05,h:.5,c:'#e9e4da'},bed1:{w:.9,d:2,h:.5,c:'#e9e4da'},sofa:{w:2.4,d:1.0,h:.8,c:'#6a5644'},armch:{w:.85,d:.85,h:.8,c:'#7a6550'},table:{w:1.8,d:1.0,h:.75,c:'#d4b48a'},ctable:{w:1.1,d:.7,h:.42,c:'#d4b48a'},desk:{w:1.2,d:.6,h:.75,c:'#e0c9a6'},tv:{w:1.8,d:.42,h:.5,c:'#3b3d40'},ward:{w:1.8,d:.62,h:2.2,c:'#f4f1ea'},kitch:{w:2.8,d:.62,h:.9,c:'#f7f5f0'},fridge:{w:.65,d:.7,h:1.85,c:'#dcdcdc'},bath:{w:1.7,d:.75,h:.55,c:'#ffffff'},shower:{w:.9,d:.9,h:.1,c:'#ffffff'},sink:{w:.6,d:.45,h:.85,c:'#ffffff'},wc:{w:.4,d:.65,h:.42,c:'#ffffff'},shelf:{w:.9,d:.35,h:1.8,c:'#d4b48a'},plant:{w:.45,d:.45,h:1.1,c:'#5b7d4a'},rug:{w:3.2,d:3.4,h:.02,c:'#7a4530'},runner:{w:2.4,d:.7,h:.02,c:'#6a4a3a'},lamp:{w:.35,d:.35,h:1.3,c:'#2f3235'},chair:{w:.45,d:.5,h:.9,c:'#f1ece2'},art:{w:.9,d:.04,h:.7,c:'#c4b8a4'},curtain:{w:1.4,d:.08,h:2.0,c:'#e8e2d6'},shoe:{w:1.0,d:.4,h:.7,c:'#d4b48a'},bench:{w:1.2,d:.4,h:.45,c:'#c4a07a'},nstand:{w:.45,d:.4,h:.55,c:'#c4a07a'},dresser:{w:1.2,d:.5,h:.9,c:'#e8e0d4'},sideb:{w:1.6,d:.45,h:.85,c:'#c4a07a'},side:{w:.45,d:.45,h:.5,c:'#c4a07a'},stool:{w:.38,d:.38,h:.75,c:'#6a5644'},island:{w:1.6,d:.8,h:.9,c:'#efe8de'},pendant:{w:.4,d:.4,h:.3,c:'#e8dcc8'},mirror:{w:.7,d:.04,h:.9,c:'#c5d4e0'},towel:{w:.55,d:.12,h:.7,c:'#d8c8b0'},coat:{w:.5,d:.5,h:1.8,c:'#3a4a5a'},toy:{w:.55,d:.4,h:.5,c:'#c4783a'},otable:{w:1.4,d:.8,h:.75,c:'#a08060'},lounge:{w:1.6,d:.85,h:.55,c:'#5a6a4a'}};
+export const FUR={bed:{w:1.6,d:2.05,h:.5,c:'#e9e4da'},bed1:{w:.9,d:2,h:.5,c:'#e9e4da'},bunk:{w:.9,d:2,h:1.65,c:'#e9e4da'},sofa:{w:2.4,d:1.0,h:.8,c:'#6a5644'},armch:{w:.85,d:.85,h:.8,c:'#7a6550'},table:{w:1.8,d:1.0,h:.75,c:'#d4b48a'},ctable:{w:1.1,d:.7,h:.42,c:'#d4b48a'},desk:{w:1.2,d:.6,h:.75,c:'#e0c9a6'},tv:{w:1.8,d:.42,h:.5,c:'#3b3d40'},ward:{w:1.8,d:.62,h:2.2,c:'#f4f1ea'},kitch:{w:2.8,d:.62,h:.9,c:'#f7f5f0'},fridge:{w:.65,d:.7,h:1.85,c:'#dcdcdc'},bath:{w:1.7,d:.75,h:.55,c:'#ffffff'},shower:{w:.9,d:.9,h:.1,c:'#ffffff'},sink:{w:.6,d:.45,h:.85,c:'#ffffff'},wc:{w:.4,d:.65,h:.42,c:'#ffffff'},shelf:{w:.9,d:.35,h:1.8,c:'#d4b48a'},plant:{w:.45,d:.45,h:1.1,c:'#5b7d4a'},rug:{w:3.2,d:3.4,h:.02,c:'#7a4530'},runner:{w:2.4,d:.7,h:.02,c:'#6a4a3a'},lamp:{w:.35,d:.35,h:1.3,c:'#2f3235'},chair:{w:.45,d:.5,h:.9,c:'#f1ece2'},art:{w:.9,d:.04,h:.7,c:'#c4b8a4'},curtain:{w:1.4,d:.08,h:2.0,c:'#e8e2d6'},shoe:{w:1.0,d:.4,h:.7,c:'#d4b48a'},bench:{w:1.2,d:.4,h:.45,c:'#c4a07a'},nstand:{w:.45,d:.4,h:.55,c:'#c4a07a'},dresser:{w:1.2,d:.5,h:.9,c:'#e8e0d4'},sideb:{w:1.6,d:.45,h:.85,c:'#c4a07a'},side:{w:.45,d:.45,h:.5,c:'#c4a07a'},stool:{w:.38,d:.38,h:.75,c:'#6a5644'},island:{w:1.6,d:.8,h:.9,c:'#efe8de'},pendant:{w:.4,d:.4,h:.3,c:'#e8dcc8'},mirror:{w:.7,d:.04,h:.9,c:'#c5d4e0'},towel:{w:.55,d:.12,h:.7,c:'#d8c8b0'},coat:{w:.5,d:.5,h:1.8,c:'#3a4a5a'},toy:{w:.55,d:.4,h:.5,c:'#c4783a'},otable:{w:1.4,d:.8,h:.75,c:'#a08060'},lounge:{w:1.6,d:.85,h:.55,c:'#5a6a4a'}};
 const FM={};function fm(c,soft){const k=c+(soft?'~f':'');return FM[k]||(FM[k]=new THREE.MeshStandardMaterial({color:c,roughness:soft?.85:.72,map:soft?fabric:null}));}
 const FLO={dub:[0xbea07d,'wood',.55],orech:[0x8a6448,'wood',.55],dlazba:[0xe6e2da,'tile',.35],beton:[0xb0aea8,'beton',.85],tmave:[0x5a4636,'wood',.6]};
 export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;}}

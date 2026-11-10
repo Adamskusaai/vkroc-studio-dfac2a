@@ -98,6 +98,23 @@ function proc(type, F, cols) {
     box(g, wood, -w / 2 - 0.28, 0.22, -d / 2 + 0.35, 0.38, 0.44, 0.38, 0.04);
     if (type === 'bed') box(g, wood, w / 2 + 0.28, 0.22, -d / 2 + 0.35, 0.38, 0.44, 0.38, 0.04);
     cyl(g, std('#f5e6c8', 0.4), -w / 2 - 0.28, 0.62, -d / 2 + 0.35, 0.055, 0.055, 0.22, 6);
+  } else if (type === 'bunk') {
+    // bunk bed: 4 posts, two decks, guard rail on top, ladder at the foot end
+    ao(g, w + 0.1, d + 0.1);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => box(g, wood, (a * (w - 0.06)) / 2, h / 2, (b * (d - 0.06)) / 2, 0.06, h, 0.06, 0.01));
+    const duvet = std(cols.bed || '#5e4330', 0.9), sheet = std('#f2ebe3', 0.92), pil = std('#f5eee6', 0.95);
+    [0.2, 1.15].forEach((y) => {
+      box(g, wood, 0, y, 0, w, 0.08, d, 0.02);
+      box(g, sheet, 0, y + 0.1, 0, w - 0.1, 0.12, d - 0.1, 0.04);
+      box(g, duvet, 0, y + 0.19, d * 0.1, w - 0.12, 0.07, d * 0.66, 0.04);
+      box(g, pil, 0, y + 0.22, -d / 2 + 0.25, w * 0.5, 0.1, 0.28, 0.04);
+    });
+    // local -x = open (room) side with ladder at the foot, +x = wall side with full guard rail
+    box(g, wood, -w / 2 + 0.03, 1.45, -d * 0.12, 0.04, 0.12, d * 0.7, 0.01);
+    box(g, wood, w / 2 - 0.03, 1.45, 0, 0.04, 0.12, d - 0.1, 0.01);
+    for (let i = 0; i < 5; i++) box(g, wood, -w / 2 + 0.03, 0.35 + i * 0.25, d / 2 - 0.25, 0.04, 0.03, 0.36, 0);
+    box(g, wood, -w / 2 + 0.03, 0.85, d / 2 - 0.08, 0.04, 1.3, 0.04, 0);
+    box(g, wood, -w / 2 + 0.03, 0.85, d / 2 - 0.42, 0.04, 1.3, 0.04, 0);
   } else if (type === 'sofa') {
     ao(g, w + 0.1, d + 0.1);
     const linen = std(cols.fab || '#6e5c4a', 0.9);

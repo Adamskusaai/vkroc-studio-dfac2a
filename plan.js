@@ -161,9 +161,21 @@ function pairFill(ink,W,H,kmax,lwm){const o=new Uint8Array(ink);
     const gp=k>0?a[0]-R[k-1][1]-1:1e9,gn=k+2<R.length?R[k+2][0]-b[1]-1:1e9;if(gp<=kmax*1.2||gn<=kmax*1.2)continue;pu.push([a[1]+1,b[0]-1]);k++;}
    P.push(pu);}
   // keep only bands that continue along the wall (hatch / text give scattered pairs)
-  for(let u=0;u<N;u++)for(const[p0,p1]of P[u]){let ok=0;for(let d=-3;d<=3;d++){if(!d||u+d<0||u+d>=N)continue;if(P[u+d].some(q=>Math.abs(q[0]-p0)<=1&&Math.abs(q[1]-p1)<=1))ok++;}
-   if(ok>=5)for(let w=p0;w<=p1;w++)o[at(u,w)]=1;}}
+  for(let u=0;u<N;u++)for(const[p0,p1]of P[u]){let ok=0;for(let d=-3;d<=3;d++){if(!d||u+d<0||u+d>=N)continue;if(P[u+d].some(q=>Math.abs(q[0]-p0)<=Math.abs(d)+1&&Math.abs(q[1]-p1)<=Math.abs(d)+1))ok++;}
+   if(ok>=4)for(let w=p0;w<=p1;w++)o[at(u,w)]=1;}}
  return o;}
+function close1(m,W,H,L,hz){const r=L>>1;return inv(dil1(inv(dil1(m,W,H,r,hz)),W,H,r,hz));}
+// windows drawn as 3+ thin parallel lines inside a wall (works even when the wall body was closed over them)
+function stackWindows(S,ink,tone,W,H,ppm,lwm){const out=[];
+ S.forEach((A,i)=>{const L=A.b-A.a;if(L<.6*ppm)return;const h=Math.ceil(A.t/2)+2;const flag=new Uint8Array(Math.ceil(L)+1),sig=[];
+  for(let k=0;k<=L;k++){const u=Math.round(A.a+k);let runs=0,inRun=0,rl=0,bad=0,tn=0;const cs=[];
+   for(let d=-h;d<=h;d++){const x=A.hz?u:Math.round(A.c+d),y=A.hz?Math.round(A.c+d):u;if(x<0||y<0||x>=W||y>=H){continue;}const q=y*W+x;if(tone&&tone[q])tn++;
+    if(ink[q]){if(!inRun){runs++;inRun=1;rl=0;cs.push(d);}rl++;if(rl>lwm)bad=1;}else inRun=0;}
+   sig[k]=cs;const pv=sig[k-3];flag[k]=runs>=3&&!bad&&tn<2&&pv&&pv.length===cs.length&&cs.every((c,j)=>Math.abs(c-pv[j])<=1)?1:0;}
+  // smooth: spans of flagged positions with small holes
+  let k=0;while(k<=L){if(!flag[k]){k++;continue;}let e=k,hole=0;for(let j=k;j<=L;j++){if(flag[j]){e=j;hole=0;}else if(++hole>4)break;}
+   if(e-k>=.5*ppm&&e-k<=3.5*ppm)out.push({i,lo:A.a+k,hi:A.a+e});k=e+1;}});
+ return out;}
 // plausibility of a reading: closed rooms of sensible size (openings bridged), closed outline, few loose pieces
 function quality(S,ops,bb,ppm,W,H){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/f)+2,g=new Uint8Array(gw*gh);
  const rect=(x0,y0,x1,y1)=>{for(let y=Math.max(0,Math.floor(y0/f));y<=Math.min(gh-1,Math.ceil(y1/f));y++)for(let x=Math.max(0,Math.floor(x0/f));x<=Math.min(gw-1,Math.ceil(x1/f));x++)g[y*gw+x]=1;};
@@ -190,23 +202,23 @@ export function readPlan(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);
   const big=compsFilter(mask,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=Math.max(minLen*1.5,.04*Math.max(W,H)));
   let S=[...axisSegs(big,W,H,minLen,1),...axisSegs(big,W,H,minLen,0)];
   // second, finer pass for thin partitions between door gaps (shorter than the thick-wall length limit)
-  const mL2=Math.max(12,Math.round(Math.max(kI,4)*3));if(mL2<minLen*.8){const res=new Uint8Array(big);const pad=2;for(const q of S){const h=q.t/2+pad;const x0=Math.max(0,Math.floor(q.hz?q.a-pad:q.c-h)),x1=Math.min(W-1,Math.ceil(q.hz?q.b+pad:q.c+h)),y0=Math.max(0,Math.floor(q.hz?q.c-h:q.a-pad)),y1=Math.min(H-1,Math.ceil(q.hz?q.c+h:q.b+pad));for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)res[y*W+x]=0;}
-   const S2=[...axisSegs(res,W,H,mL2,1),...axisSegs(res,W,H,mL2,0)].filter(q=>q.b-q.a>=3*q.t&&q.t<=Math.max(kI*1.6,4));
+  const tThin=median(S.filter(q=>q.t<.6*wk).map(q=>q.t))||Math.min(kI,wk*.5);const mL2=Math.max(12,Math.round(Math.max(tThin,4)*3.5));if(mL2<minLen*.8){const res=new Uint8Array(mask);const pad=2;for(const q of S){const h=q.t/2+pad;const x0=Math.max(0,Math.floor(q.hz?q.a-pad:q.c-h)),x1=Math.min(W-1,Math.ceil(q.hz?q.b+pad:q.c+h)),y0=Math.max(0,Math.floor(q.hz?q.c-h:q.a-pad)),y1=Math.min(H-1,Math.ceil(q.hz?q.c+h:q.b+pad));for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)res[y*W+x]=0;}
+   const S2=[...axisSegs(res,W,H,mL2,1),...axisSegs(res,W,H,mL2,0)].filter(q=>q.b-q.a>=3*q.t&&q.t<=Math.max(tThin*1.8,4));
    const touch=(q,P)=>P.some(r=>{if(r===q)return false;const m=Math.max(q.t,r.t)+4;if(q.hz===r.hz)return Math.abs(q.c-r.c)<m&&(Math.abs(q.a-r.b)<m*2||Math.abs(q.b-r.a)<m*2);return r.c>q.a-m&&r.c<q.b+m&&q.c>r.a-m&&q.c<r.b+m;});
    let add2=S2.filter(q=>touch(q,S)),rest=S2.filter(q=>!add2.includes(q)),ch=1;while(ch){ch=0;for(const q of rest){if(!add2.includes(q)&&touch(q,[...S,...add2])){add2.push(q);ch=1;}}}
-   S=S.concat(add2);}
+   if(o.debug)(dbg.thin=dbg.thin||[]).push([mL2,S2.filter(q=>q.hz).map(q=>[q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]),add2.length]);S=S.concat(add2);}
   S=mergeColinear(S,2);S=snap(S);S=mergeColinear(S,1);return S;};
  const V=[];const add=(name,mask,wk,kOpen,kInt)=>{let S=run(mask,wk,/^t?h\d/.test(name),kInt||wk);if(o.debug)dbg["raw_"+name]=S.map(q=>[q.hz,q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]);if(S.length<3)return;S=focus(S);if(S.length<3)return;const bb=bbox(S);
   const ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
   V.push({name,S,mask,wk,kOpen,kInt,bb,q});dbg['q_'+name]=[S.length,+q.Q.toFixed(2),q.nR];};
  add('ink',base.wm,base.wk,base.kOpen,base.kInt);
  if(nTone>W*H*.0008){const B=wallMask(body,W,H);add('tone',B.wm,B.wk,B.kOpen,B.kInt);}
- {const km=Math.max(6,Math.round(.022*Math.max(W,H))),pf=pairFill(nTone>W*H*.0008?body:ink,W,H,km,lw*2+2);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-(ink[i]|0);if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('pair',B.wm,B.wk,B.kOpen,B.kInt);}}
+ {const km=Math.max(6,Math.round(.022*Math.max(W,H))),pfS=compsFilter(nTone>W*H*.0008?body:ink,W,H,k=>{const a=k.x1-k.x0+1,b=k.y1-k.y0+1;return Math.max(a,b)>=.025*Math.max(W,H)||Math.min(a,b)<.3*Math.max(a,b);}),pf0=pairFill(pfS,W,H,km,lw*2+2),pf=close1(close1(pf0,W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-pfS[i];dbg.pairD=+(d*7/(W*H)).toFixed(4);if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('pair',B.wm,B.wk,B.kOpen,B.kInt);}}
  const solidOK=V.length&&V[0].S.length>=4&&(base.wk>2.2*lw+2)&&sideCoverage(V[0].S,V[0].bb).n>=2;dbg.solidOK=!!solidOK;
  for(const src of solidOK?[]:nTone>W*H*.0008?[ink,body]:[ink]){const inkBig=compsFilter(src,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.025*Math.max(W,H));
   for(const kc of[5,9,13]){const kk=Math.max(kc,lw*3+1);const hm=openK(closeK(inkBig,W,H,kk),W,H,Math.max(base.kOpen,Math.round(kc*.6)));add((src===ink?'h':'th')+kc,hm,Math.max(base.wk,kk),base.kOpen,base.kInt);}}
  if(!V.length)return null;
- let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q>best.q.Q+.05)best=v;}
+ const pen=v=>v.name==='pair'?.35:0;let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q-pen(v)>best.q.Q-pen(best)+.05)best=v;}
  dbg.pick=best.name;dbg.nR=best.q.nR;let S=best.S;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
  dbg.nS=S.length;
@@ -216,13 +228,14 @@ export function readPlan(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);
  try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];const D=dimScale(ink,W,H,bb,tE,sc.ppm);dbg.dimLog=dimScale.log.slice(0,12);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};}}catch(e){dbg.dimErr=String(e);}
  if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
  ops=findOpenings(S,ink,W,H,sc.ppm,bb);
+ {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
  const ppm=sc.ppm,r=v=>Math.round(v/ppm*100)/100;
  // build walls: merge pairs with openings into one wall each
  const parent=S.map((s,i)=>i),find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
  ops.forEach(p=>{if(p.j!=null)parent[find(p.j)]=find(p.i);});
  const groups={};S.forEach((s,i)=>{(groups[find(i)]=groups[find(i)]||[]).push(i);});
  const walls=[];
- for(const g of Object.values(groups)){const ss=g.map(i=>S[i]);let a=Math.min(...ss.map(s=>s.a)),b=Math.max(...ss.map(s=>s.b));ops.filter(p=>p.j==null&&g.includes(p.i)).forEach(p=>{if(p.end==='b')b=Math.max(b,p.to);else a=Math.min(a,p.to);});const L=ss.reduce((q,s)=>q+s.b-s.a,0),cc=ss.reduce((q,s)=>q+s.c*(s.b-s.a),0)/L,t=ss.reduce((q,s)=>q+s.t*(s.b-s.a),0)/L;
+ for(const g of Object.values(groups)){const ss=g.map(i=>S[i]);let a=Math.min(...ss.map(s=>s.a)),b=Math.max(...ss.map(s=>s.b));ops.filter(p=>p.j==null&&!p.inside&&g.includes(p.i)).forEach(p=>{if(p.end==='b')b=Math.max(b,p.to);else a=Math.min(a,p.to);});const L=ss.reduce((q,s)=>q+s.b-s.a,0),cc=ss.reduce((q,s)=>q+s.c*(s.b-s.a),0)/L,t=ss.reduce((q,s)=>q+s.t*(s.b-s.a),0)/L;
   const th=Math.min(.6,Math.max(.08,Math.round(t/ppm*100)/100));
   const op=ops.filter(p=>g.includes(p.i)&&p.type!=='wall').map(p=>{const off=r(p.lo-a),w=r(p.hi-p.lo);return p.type==='window'?{type:'window',offset:off,width:w,sill:w>2.1?0:.9,height:w>2.1?2.2:1.4}:{type:'door',offset:off,width:Math.min(w,1.6),height:2.05,...(p.ext?{out:1}:{})};});
   const s0=ss[0];walls.push(s0.hz?{start:[r(a),r(cc)],end:[r(b),r(cc)],thickness:th,op}:{start:[r(cc),r(a)],end:[r(cc),r(b)],thickness:th,op});}
