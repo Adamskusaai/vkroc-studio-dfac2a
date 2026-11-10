@@ -86,10 +86,10 @@ function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k
  if(G.doorZ.some((P,i)=>!(MOUNT.has(t)&&!G.doors[i].swingIn)&&polyOv(P,rP(q),EPS)))return no('door-zone');
  if(MOUNT.has(t)&&t!=='curtain'&&onOpening(G,it,['window','door']))return no('decor-over-opening');
  if(TALL.has(t)){const sq=rP([q[0]+.08,q[1]+.08,q[2]-.08,q[3]-.08]);let nu=0;for(let i=0;i<G.winZ.length;i++)if(polyOv(G.winZ[i],sq,EPS)){if(t==='kitch'&&(G.wins[i].sill||0)>=.85)nu=1;else return no('tall-at-window');}it.nu=nu;}
- if(!SOFT.has(t))for(const o of items){if(o===it||SOFT.has(o.t))continue;if(ov(o.q,q,EPS))return no('overlap:'+o.t);
-  if(!SEAT.has(t)&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(it.partner===o))return no('in-clearance:'+o.t);
+ if(!SOFT.has(t))for(const o of items){if(o===it||SOFT.has(o.t))continue;/* wall TV hangs above low furniture */if((t==='tvw'&&LOWW.has(o.t))||(o.t==='tvw'&&LOWW.has(t)))continue;if(ov(o.q,q,EPS))return no('overlap:'+o.t);
+  if(!SEAT.has(t)&&t!=='tvw'&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(it.partner===o))return no('in-clearance:'+o.t);
   if(SEAT.has(t)&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(o.t==='table'||o.t==='desk'||o.t==='otable'))return no('seat-in-clearance:'+o.t);}
- if(it.clr)for(const z of it.clr){if(!inRoomR(G,z,.85)||wallHit(G,z))return no('clearance-blocked');for(const o of items){if(o===it||SOFT.has(o.t)||(SEAT.has(o.t)&&(t==='table'||t==='desk'||t==='otable'))||o.partner===it||it.partner===o)continue;if(ov(o.q,z,EPS))return no('clearance-blocked:'+o.t);}}
+ if(it.clr)for(const z of it.clr){if(!inRoomR(G,z,.85)||wallHit(G,z))return no('clearance-blocked');for(const o of items){if(o===it||SOFT.has(o.t)||o.t==='tvw'||(SEAT.has(o.t)&&(t==='table'||t==='desk'||t==='otable'))||o.partner===it||it.partner===o)continue;if(ov(o.q,z,EPS))return no('clearance-blocked:'+o.t);}}
  if(!FREE.has(t)&&!SEAT.has(t)&&t!=='nstand'&&t!=='plant'&&t!=='lamp'&&wallFrac(G,backR(q,it.r,.02,.14))<.6)return no('not-against-wall');
  if(WALLSTAND.has(t)&&t!=='curtain'&&backGap(G,it).gap>.03)return no('not-flush-to-wall');
  if(t==='art'){const F=frontR(q,it.r,.5);if(items.some(o=>o!==it&&TALL.has(o.t)&&o.t!=='art'&&ov(o.q,F)))return no('art-hidden');if(items.some(o=>o!==it&&o.t==='art'&&Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1])<1.5))return no('art-crowded');}
@@ -159,7 +159,7 @@ function place0(G,S,t,C,extra={},lim=30){const L=[];for(const[x,z,r]of C){const 
 function rel(G,ref,t,sg,back=true){const[rw,rd]=[ref.q[2]-ref.q[0],ref.q[3]-ref.q[1]],[tw,td]=G.dims(t),f=FV[ref.r],tan=ref.r%2?[0,1]:[1,0];const W=ref.r%2?rd:rw,Dp=ref.r%2?rw:rd;
  const off=back?-(Dp/2-td/2):0;return[ref.p[0]+tan[0]*sg*(W/2+tw/2+.03)+f[0]*off,ref.p[1]+tan[1]*sg*(W/2+tw/2+.03)+f[1]*off,ref.r];}
 // smaller real products tried when the standard size cannot be placed under the hard rules
-const SHRINK={coat:[[.4,.4]],bench:[[.8,.35]],ctable:[[.8,.5],[.6,.6]],kitch:[[2,.6],[1.5,.6]],fridge:[[.6,.6]],sofa:[[2,.9],[1.7,.85]],seating:[[2,.9],[1.7,.85]],ward:[[1.2,.6],[.9,.55]],dresser:[[.9,.45],[.7,.42]],sideb:[[1.2,.42],[.8,.4]],bed:[[1.4,2]],desk:[[1,.55]],table:[[1.4,.85],[1.1,.75],[.8,.8]],shoe:[[.8,.35]],shelf:[[.6,.3],[.45,.3]],washer:[[.6,.55]],tv:[[1.2,.35]],sink:[[.45,.35]],shower:[[.8,.8]]};
+const SHRINK={coat:[[.4,.4]],bench:[[.8,.35]],ctable:[[.8,.5],[.6,.6]],kitch:[[2,.6],[1.5,.6]],fridge:[[.6,.6]],sofa:[[2,.9],[1.7,.85]],seating:[[2,.9],[1.7,.85]],ward:[[1.2,.6],[.9,.55]],dresser:[[.9,.45],[.7,.42]],sideb:[[1.2,.42],[.8,.4]],bed:[[1.4,2]],desk:[[1,.55]],table:[[1.4,.85],[1.1,.75],[.8,.8]],shoe:[[.8,.35]],shelf:[[.6,.3],[.45,.3]],washer:[[.6,.55]],tv:[[1.2,.35]],sink:[[.45,.35],[.4,.3]],shower:[[.8,.8]]};
 function entry(G,S,e,opt){const base=e.replace(/[!~]/g,''),Z=SHRINK[base];if(!Z){entry0(G,S,e,opt);return;}
  const n0=S.items.length,st={req:S.req,reqOk:S.reqOk,score:S.score,last:{...S.last}};entry0(G,S,e,opt);
  const failed=e.endsWith('!')?S.reqOk===st.reqOk:S.items.length===n0;if(!failed)return;const tt=base==='seating'?'sofa':base;
@@ -232,6 +232,7 @@ export function layoutRoom(G,typ,opt={}){const key=tplKey(typ,/ [2468]$/.test(ty
 
 // ---------- wall snap (exact geometry): gap between the item's back and the nearest solid wall face it stands against ----------
 export const WALLSTAND=new Set(['wshelf','tvw','hooks','washer','ward','dresser','shelf','bed','bed1','bunk','kitch','fridge','bath','shower','sink','wc','desk','tv','sideb','shoe','bench','towel','mirror','art','curtain']);
+const LOWW=new Set(['sideb','side','dresser','shoe','bench']);
 export const MOUNT=new Set(['art','mirror','towel','curtain','wshelf','tvw','hooks']);
 export function backGap(G,it){const f=FV[it.r],q=it.q,tan=it.r%2?[0,1]:[1,0];const bx=it.r===1?q[0]:it.r===3?q[2]:(q[0]+q[2])/2,bz=it.r===0?q[1]:it.r===2?q[3]:(q[1]+q[3])/2;const half=(it.r%2?q[3]-q[1]:q[2]-q[0])/2;let best=9,bw=null;
  for(const w of G.walls){const nw=[-w.u[1],w.u[0]];const dp=nw[0]*f[0]+nw[1]*f[1];if(Math.abs(dp)<.95)continue;const sg=Math.sign(dp);
@@ -254,7 +255,7 @@ export function validateRoom(G,furn,typ){const items=furn.map(f=>mkItem(G,f.t,f.
  const P=pathInfo(G,items);if(!P.ok)V.push({t:'-',rule:'doors-not-connected'});else items.forEach(it=>{if(!accessOK(G,it,P.near))V.push({t:it.t,p:it.p,rule:'no-access-path'});});
  if(!items.length){const anyFit=['shelf','plant','shoe'].some(t=>fitsAlone(G,t));V.push({t:'-',rule:anyFit?'empty-room':'read-error:room has no free wall/floor outside its door zones (walk-through or misread)'});}
  else if(typ){const key=tplKey(typ,/ [2468]$/.test(typ));const miss=reqFor(key,G.room.a).filter(g=>!items.some(i=>g.includes(i.t)));const imp=miss.filter(g=>!g.some(t=>fitsAlone(G,t)));let rest=miss.filter(g=>!imp.includes(g));
- const nd=(G.doors||[]).filter(o=>o.type==='door').length,passage=nd>=2&&G.room.a<2.5;{if(rest.length&&((nd>=3&&G.room.a/nd<3)||(nd>=2&&G.room.a<2.5))){V.push({t:'-',rule:'read-error:walk-through room ('+nd+' doors on '+G.room.a.toFixed(1)+' m²) cannot hold '+rest.map(g=>g.join('|')).join(',')+' (plan doors misread?)'});rest=[];}}
+ const nd=(G.doors||[]).filter(o=>o.type==='door').length,passage=nd>=2&&G.room.a<2.5;{if(rest.length&&((nd>=3&&G.room.a/nd<3)||(nd>=5&&G.room.a/nd<4.5)||(nd>=2&&G.room.a<2.5))){V.push({t:'-',rule:'read-error:walk-through room ('+nd+' doors on '+G.room.a.toFixed(1)+' m²) cannot hold '+rest.map(g=>g.join('|')).join(',')+' (plan doors misread?)'});rest=[];}}
 if(imp.length)V.push({t:'-',rule:'read-error:room cannot hold '+imp.map(g=>g.join('|')).join(',')+' even when empty (plan geometry/openings misread?)'});if(rest.length)V.push({t:'-',rule:'too-sparse:missing '+rest.map(g=>g.join('|')).join(',')});const fr=fillRatio(G,items),tg=TARGET[key]??.2;if(fr<.5*tg&&!imp.length&&G.room.a>45&&!/^(Obývačka|Garáž|Chodba|Predsieň|Hala)/.test(key))V.push({t:'-',rule:'read-error:implausible room size '+G.room.a.toFixed(0)+' m² for '+key+' (walls misread?)'});else if(fr<.5*tg&&!imp.length&&!passage)V.push({t:'-',rule:'too-sparse:fill '+Math.round(fr*100)+'%<'+Math.round(.5*tg*100)+'%'});}
  return V;}
 // ---------- door / window sanity ----------

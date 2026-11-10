@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261110s';
-import {readPlan} from './plan.js?v=20261110s';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261110s';
+import {detectWalls,gapMerge} from './cv.js?v=20261110t';
+import {readPlan} from './plan.js?v=20261110t';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261110t';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -380,7 +380,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261110s';
+const DEMO_V='20261110t';
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
  const keep=(D.furn||[]).filter(f=>f.p[0]>15.3||f.p[0]<-.3||f.p[1]<-.3||f.p[1]>10.8);H.furn=[];furnish({demo:1});const R=RC[lvl];const nm=id=>{const e=H.rn.find(e=>roomAt(R,e.p)===id);return e?e.n:'';};
@@ -423,7 +423,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110s');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110t');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -535,14 +535,34 @@ function wetDoors(R,L,RS,T,log){const wet=new Set(RS.filter(r=>(/^(Kúpeľňa|WC
   // swing side: room a when !o.out (see layoutOps)
   const want=inA?1:0;const other=inA?b:a,oth=RS.find(r=>r.id===other);if(oth&&oth.a<3.5){o.kind='sliding';log.push({fix:'wet-door-sliding',room:T[inA?a:b]});return;}
   if((o.out?1:0)!==want){o.out=want;log.push({fix:'wet-door-swing-out',room:T[inA?a:b]});}});});}
-// furniture drawn as closed boxes with a caption ("Wall locker", "Bunk bed") is read as walls: a tiny enclosed cell with
-// text inside and no door on any side is not a room -> drop the short wall pieces that form it (logged in H.boxFix)
-function dropFurnBoxes(words,L){rooms(L);const R=RC[L];if(!R||!R.g)return;const D=roomDoors(R,L),{g,W,Hh,x0,z0,c}=R;let n=0;const kill=new Set(),seen=new Set();
- for(const w of words){if((w.t.match(/[A-Za-z]/g)||[]).length<2)continue;let id=roomAt(R,w.p);for(const o of[[0,.15],[0,-.15],[.15,0],[-.15,0],[0,.3],[0,-.3]]){if(id>1)break;id=roomAt(R,[w.p[0]+o[0],w.p[1]+o[1]]);}if(id<=1||seen.has(id))continue;seen.add(id);if(D.some(d=>d.a===id||d.b===id))continue;
-  let k=0,b=[1e9,1e9,-1e9,-1e9];for(let i=0;i<g.length;i++)if(g[i]===id){k++;const x=i%W,z=(i/W)|0;if(x<b[0])b[0]=x;if(z<b[1])b[1]=z;if(x>b[2])b[2]=x;if(z>b[3])b[3]=z;}
-  if(!k||!b[0]||!b[1]||b[2]>=W-1||b[3]>=Hh-1)continue;const a=k*c*c;b=[x0+b[0]*c,z0+b[1]*c,x0+b[2]*c,z0+b[3]*c];const bw=b[2]-b[0],bh=b[3]-b[1];if(a>8||Math.min(bw,bh)>2.2)continue;
-  H.walls.forEach(q=>{if(!q.auto||q.level!==L||(q.openings||[]).length)return;const len=Math.hypot(q.end[0]-q.start[0],q.end[1]-q.start[1]),ins=p=>p[0]>b[0]-.35&&p[0]<b[2]+.35&&p[1]>b[1]-.35&&p[1]<b[3]+.35;if(ins(q.start)&&ins(q.end)&&len<=Math.max(bw,bh)+.5)kill.add(q);});n++;}
- if(kill.size){H.walls=H.walls.filter(q=>!kill.has(q));H.boxFix={boxes:n,walls:kill.size};}}
+// furniture drawn as closed boxes with a caption ("Bunk bed", "Wall locker") is read as walls. A caption that is not a room
+// name, inside a furniture-sized cell (≤ ~2.5×1 m, ≤ 4.2 m²) -> cut that box's sides out of the thin interior walls they lie on
+// (outline walls and thick walls are never touched; gaps in box lines are often misread as doors, so doors do not veto). Logged in H.boxFix.
+function dropFurnBoxes(words,L){let n=0,cut=0;dropFurnBoxes.ws=[];const seen=new Set();
+ const all=H.walls.filter(q=>q.level===L);if(!all.length)return;const X=all.flatMap(q=>[q.start[0],q.end[0]]),Z=all.flatMap(q=>[q.start[1],q.end[1]]),ob=[Math.min(...X),Math.min(...Z),Math.max(...X),Math.max(...Z)];
+ for(let pass=0;pass<8;pass++){rooms(L);const R=RC[L];if(!R||!R.g)return;const{g,W,Hh,x0,z0,c}=R;let did=0;
+  const D0=null;for(const w of words){const nl=(w.t.match(/[A-Za-z]/g)||[]).length,lc=(w.t.match(/[a-z]/g)||[]).length;/* furniture captions are mixed case ("Bunk bed"); all-caps words are room labels ("BALCONY") */if(nl<3||nl<.75*w.t.length||lc<.6*nl)continue;const k0=w.t+w.p.join();if(seen.has(k0))continue;
+   let id=roomAt(R,w.p);for(const o of[[0,.15],[0,-.15],[.15,0],[-.15,0],[0,.3],[0,-.3]]){if(id>1)break;id=roomAt(R,[w.p[0]+o[0],w.p[1]+o[1]]);}if(id<=1)continue;
+   let k=0,b=[1e9,1e9,-1e9,-1e9];for(let i=0;i<g.length;i++)if(g[i]===id){k++;const x=i%W,z=(i/W)|0;if(x<b[0])b[0]=x;if(z<b[1])b[1]=z;if(x>b[2])b[2]=x;if(z>b[3])b[3]=z;}
+   if(!k||!b[0]||!b[1]||b[2]>=W-1||b[3]>=Hh-1)continue;const a=k*c*c;b=[x0+(b[0]-1)*c,z0+(b[1]-1)*c,x0+(b[2]+1)*c,z0+(b[3]+1)*c];const bw=b[2]-b[0],bh=b[3]-b[1];
+   if(a>4.2||Math.min(bw,bh)>1.45||Math.max(bw,bh)>3.2)continue;
+   // a real small room has a door; a door-gap in a furniture box is accepted only for a clear caption (≥4 letters, e.g. "Bunk")
+   if(nl<4&&roomDoors(R,L).some(d=>d.a===id||d.b===id))continue;seen.add(k0);
+   const nw=[];let hit=0;
+   for(const q of H.walls){if(q.level!==L||!q.auto||q.thickness>.14){nw.push(q);continue;}
+    const hz=Math.abs(q.start[1]-q.end[1])<.01,vt=Math.abs(q.start[0]-q.end[0])<.01;if(!hz&&!vt){nw.push(q);continue;}
+    const cc=hz?q.start[1]:q.start[0];const onOut=hz?(Math.abs(cc-ob[1])<.35||Math.abs(cc-ob[3])<.35):(Math.abs(cc-ob[0])<.35||Math.abs(cc-ob[2])<.35);
+    const sides=hz?[b[1],b[3]]:[b[0],b[2]],span=hz?[b[0],b[2]]:[b[1],b[3]];
+    if(onOut||!sides.some(s=>Math.abs(cc-s)<.2)){nw.push(q);continue;}
+    const s0=hz?q.start[0]:q.start[1],s1=hz?q.end[0]:q.end[1],lo=Math.min(s0,s1),hi=Math.max(s0,s1),c0=Math.max(lo,span[0]-.1),c1=Math.min(hi,span[1]+.1);
+    if(c1-c0<.25){nw.push(q);continue;}
+    hit++;const dir=s1>=s0?1:-1;const pt=v=>hz?[v,cc]:[cc,v];
+    for(const[p0,p1]of[[lo,c0],[c1,hi]]){if(p1-p0<.3)continue;const st=dir>0?p0:p1,en=dir>0?p1:p0,off0=Math.abs(st-s0);
+     const op=(q.openings||[]).map(o=>({...o,offset:+(o.offset-off0).toFixed(3)})).filter(o=>o.offset>=-.01&&o.offset+o.width<=p1-p0+.01);
+     nw.push({...q,id:q.id+'c'+Math.round(p0*100),start:pt(st),end:pt(en),openings:op});}}
+   if(hit){H.walls=nw;n++;cut+=hit;did=1;(dropFurnBoxes.ws=dropFurnBoxes.ws||[]).push(w.t+'@'+bw.toFixed(1)+'x'+bh.toFixed(1));break;}}
+  if(!did)break;}
+ if(n)H.boxFix={boxes:n,walls:cut,ws:dropFurnBoxes.ws};}
 function furnish(op){const dm=!!(op&&op.demo===1);const RS=rooms();if(!RS.length){if(!dm)toast('Najprv uzavrite steny miestností.','warn');return;}if(!dm)snap();const had=(H.furn||[]).some(f=>f.level===lvl);H.fv=dm?0:had?((H.fv||0)+1)%4:0;
  const R=RC[lvl],ids=new Set(RS.map(r=>r.id));const fixes=sanitizeOpenings(H.walls.filter(w=>w.level===lvl),p=>{const v=roomAt(R,p);return v===-1?-1:ids.has(v)?v:0;});H.fixLog=fixes;
  const T=assignTypes(R,lvl);addMissingDoors(R,lvl,RS,T,fixes);wetDoors(R,lvl,RS,T,fixes);H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
