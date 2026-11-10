@@ -2,7 +2,7 @@
 // Pure module: works on the room grid built by app.js rooms() (R={g,W,Hh,x0,z0,c}, g: room id >1, -1 wall, 0/1 outside)
 // Furniture convention: r=0 back to z0 (faces +z), 1 back to x0 (faces +x), 2 back to z1 (faces -z), 3 back to x1 (faces -x).
 // footprints as built in 3D (v3.js FUR) so plan, validator and 3D agree; rugs carry their own size
-export const DIM3={wshelf:[.8,.25],bed:[1.6,2.05],bed1:[.9,2],bunk:[.9,2],sofa:[2.4,1],armch:[.85,.85],table:[1.8,1],ctable:[1.1,.7],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.8,.62],fridge:[.65,.7],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.4,1.7],runner:[2.4,.7],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1,.4],bench:[1.2,.4],nstand:[.45,.4],dresser:[1.2,.5],sideb:[1.6,.45],side:[.45,.45],stool:[.38,.38],mirror:[.7,.04],towel:[.55,.12],coat:[.5,.5],toy:[.55,.4],otable:[1.4,.8],lounge:[1.6,.85],washer:[.6,.6]};
+export const DIM3={wshelf:[.8,.25],tvw:[1.2,.1],hooks:[.6,.1],bed:[1.6,2.05],bed1:[.9,2],bunk:[.9,2],sofa:[2.4,1],armch:[.85,.85],table:[1.8,1],ctable:[1.1,.7],desk:[1.2,.6],tv:[1.8,.42],ward:[1.8,.62],kitch:[2.8,.62],fridge:[.65,.7],bath:[1.7,.75],shower:[.9,.9],sink:[.6,.45],wc:[.4,.65],shelf:[.9,.35],plant:[.45,.45],rug:[2.4,1.7],runner:[2.4,.7],lamp:[.35,.35],chair:[.45,.5],art:[.9,.04],curtain:[1.4,.08],shoe:[1,.4],bench:[1.2,.4],nstand:[.45,.4],dresser:[1.2,.5],sideb:[1.6,.45],side:[.45,.45],stool:[.38,.38],mirror:[.7,.04],towel:[.55,.12],coat:[.5,.5],toy:[.55,.4],otable:[1.4,.8],lounge:[1.6,.85],washer:[.6,.6]};
 export const FRONT={washer:.7,sofa:.45,bed:.6,bed1:.6,bunk:.6,ward:.7,dresser:.6,sideb:.6,kitch:.9,fridge:.7,wc:.6,sink:.6,bath:.6,shower:.6,desk:.6,shelf:.5,shoe:.5,coat:.5,bench:.5,armch:.4,toy:.4,lounge:.5};
 export const TALL=new Set(['washer','ward','shelf','fridge','kitch','coat','mirror','tv','bunk','towel','art']);
 const SEAT=new Set(['chair','stool']),SOFT=new Set(['rug','runner','art','curtain','pendant']),FREE=new Set(['table','ctable','rug','runner','otable','lounge','sofa','armch']);
@@ -132,8 +132,8 @@ export const REQ={'Obývačka':[['sofa'],['tv'],['ctable','armch']],'Obývačka 
  'Pracovňa':[['desk'],['shelf','sideb']],'Kúpeľňa':[['bath','shower'],['sink']],'WC':[['wc']],'Chodba':[['shoe','coat','mirror','bench','runner','plant']],'Predsieň':[['shoe','coat','bench'],['mirror','runner','plant']],
  'Šatník':[['ward','shelf']],'Špajza':[['shelf']],'Komora':[['shelf','washer']],'Technická miestnosť':[['shelf','washer']],'Garáž':[['shelf']]};
 // small rooms: a living room under 12 m2 needs a sofa, not the full TV group
-export const reqFor=(key,a)=>(REQ[key]||[]).filter(g=>!(a<12&&/^Obývačka/.test(key)&&(g.includes('tv')||g.includes('ctable')))).map(g=>a<18&&key==='Obývačka s kuchyňou'&&g.includes('ctable')?g.concat(['side']):g);
-const AREA_SKIP=new Set(['wshelf','rug','runner','art','curtain','pendant','mirror','towel']);
+export const reqFor=(key,a)=>(REQ[key]||[]).filter(g=>!(a<12&&/^Obývačka/.test(key)&&(g.includes('tv')||g.includes('ctable')))).map(g=>a<18&&key==='Obývačka s kuchyňou'&&g.includes('ctable')?g.concat(['side']):g).map(g=>g.includes('tv')?g.concat(['tvw']):g.includes('coat')?g.concat(['hooks']):g);
+const AREA_SKIP=new Set(['wshelf','tvw','hooks','rug','runner','art','curtain','pendant','mirror','towel']);
 export const fillRatio=(G,items)=>items.filter(i=>!AREA_SKIP.has(i.t)).reduce((a,i)=>a+(i.q[2]-i.q[0])*(i.q[3]-i.q[1]),0)/Math.max(.5,G.room.a);
 // living: TV on a wall, sofa facing it at 2.2-3.5 m (flush to the opposite wall in small rooms, free-standing in big ones),
 // coffee table, armchairs at its sides, floor lamp at the sofa end, rug under the group
@@ -198,7 +198,7 @@ function entry0(G,S,e,opt){const req=e.endsWith('!');e=e.replace('!','');const c
  ok(place(G,S,e,wallCands(G,e)));}
 // ---------- repair: a required item is missing -> drop optional items (least important first) until it fits; then top the room up again ----------
 const DROP=['art','plant','lamp','side','toy','runner','rug','armch','chair','shelf','sideb','dresser','desk','bench','coat','mirror','towel','washer','ward','table','ctable'];
-const REPAIR={side:['side'],tv:['tv','seating'],sofa:['seating','sofa'],ctable:['ctable'],table:['table','chair4'],fridge:['fridge'],bed:['bed','nstand2'],bed1:['bed1'],bunk:['bunk'],desk:['desk','chair1'],sink:['sink'],bath:['bath'],shower:['shower','shower~'],wc:['wc']};
+const REPAIR={side:['side'],tv:['tv','seating'],tvw:['tvw'],hooks:['hooks'],sofa:['seating','sofa'],ctable:['ctable'],table:['table','chair4'],fridge:['fridge'],bed:['bed','nstand2'],bed1:['bed1'],bunk:['bunk'],desk:['desk','chair1'],sink:['sink'],bath:['bath'],shower:['shower','shower~'],wc:['wc']};
 function relast(S){S.last={};for(const it of S.items)S.last[it.t]=it;}
 function tryReq(G,S,g,opt){for(const t of g){const n0=S.items.length;for(const e of REPAIR[t]||[t]){if(e==='tv'&&!S.last.sofa)continue;entry(G,S,e,opt);relast(S);}if(S.items.some(i=>g.includes(i.t)))return true;S.items.length=Math.max(S.items.length,0);void n0;}return false;}
 function repair(G,S,key,opt){const R=reqFor(key,G.room.a);const reqT=new Set(R.flat());
@@ -209,7 +209,7 @@ function repair(G,S,key,opt){const R=reqFor(key,G.room.a);const reqT=new Set(R.f
    // a removed table/desk takes its chairs along
    for(let j=S.items.length-1;j>=0;j--)if(S.items[j].partner===it)S.items.splice(j,1);relast(S);if(tryReq(G,S,g,opt)){ok=true;break;}}
   if(!ok){S.items=keep;relast(S);
-   const sat=X=>R.filter(q=>X.items.some(i=>q.includes(i.t))).length,base=sat(S);let bestX=null;
+   const wq=q=>q.some(t=>['kitch','bath','shower','wc','bed','bed1','bunk','fridge','sink'].includes(t))?3:1,sat=X=>R.filter(q=>X.items.some(i=>q.includes(i.t))).reduce((a,q)=>a+wq(q),0),base=sat(S);let bestX=null;
    for(const t of g){const X={items:[],last:{},score:0,req:0,reqOk:0,fv:S.fv};for(const e of REPAIR[t]||[t]){if(e==='tv')continue;entry(G,X,e,opt);relast(X);}if(!X.items.some(i=>g.includes(i.t)))continue;
     for(const e0 of S.tp||[]){const e=e0.replace(/[!~]/g,'');const prod=e==='seating'?'sofa':e;if(reqT.has(prod)&&X.items.some(i=>i.t===prod))continue;entry(G,X,e0,opt);relast(X);}
     fillRoom(G,X,key,opt);if(sat(X)>base&&(!bestX||sat(X)>sat(bestX)))bestX=X;}
@@ -231,8 +231,8 @@ export function layoutRoom(G,typ,opt={}){const key=tplKey(typ,/ [2468]$/.test(ty
  return best.items.map(it=>{const o={t:it.t,p:[+it.p[0].toFixed(3),+it.p[1].toFixed(3)],r:it.r};if(it.nu)o.nu=1;if(it.sz||(SOFT.has(it.t)&&it.t!=='art'&&it.t!=='curtain')){const z=it.sz||G.dims(it.t);o.w=z[0];o.d=z[1];}return o;});}
 
 // ---------- wall snap (exact geometry): gap between the item's back and the nearest solid wall face it stands against ----------
-export const WALLSTAND=new Set(['wshelf','washer','ward','dresser','shelf','bed','bed1','bunk','kitch','fridge','bath','shower','sink','wc','desk','tv','sideb','shoe','bench','towel','mirror','art','curtain']);
-export const MOUNT=new Set(['art','mirror','towel','curtain','wshelf']);
+export const WALLSTAND=new Set(['wshelf','tvw','hooks','washer','ward','dresser','shelf','bed','bed1','bunk','kitch','fridge','bath','shower','sink','wc','desk','tv','sideb','shoe','bench','towel','mirror','art','curtain']);
+export const MOUNT=new Set(['art','mirror','towel','curtain','wshelf','tvw','hooks']);
 export function backGap(G,it){const f=FV[it.r],q=it.q,tan=it.r%2?[0,1]:[1,0];const bx=it.r===1?q[0]:it.r===3?q[2]:(q[0]+q[2])/2,bz=it.r===0?q[1]:it.r===2?q[3]:(q[1]+q[3])/2;const half=(it.r%2?q[3]-q[1]:q[2]-q[0])/2;let best=9,bw=null;
  for(const w of G.walls){const nw=[-w.u[1],w.u[0]];const dp=nw[0]*f[0]+nw[1]*f[1];if(Math.abs(dp)<.95)continue;const sg=Math.sign(dp);
   const s=(bx-w.p0[0])*w.u[0]+(bz-w.p0[1])*w.u[1],tu=Math.abs(tan[0]*w.u[0]+tan[1]*w.u[1]);const lo=Math.max(0,s-half*tu),hi=Math.min(w.L,s+half*tu);if(hi-lo<Math.min(.6*2*half,2*half-.02)&&!(half<.15&&s>=0&&s<=w.L))continue;

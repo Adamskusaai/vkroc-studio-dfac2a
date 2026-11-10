@@ -324,13 +324,15 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   // prem8 photo stage: dimension text may be upside down (plan shot at 180°) or too small/blurred for the 1x ink mask ->
   // retry on the 180°-rotated mask and on a 2x bilinear upscale of the cleaned page (own threshold), lengths scaled back
   const r180=(m,w,h)=>{const o=new Uint8Array(w*h);for(let i=0;i<w*h;i++)o[i]=m[w*h-1-i];return o;};
-  const tryD=(m,w,h,f,flip)=>{const b2=bb.map(v=>v*f),bq=flip?[w-b2[2],h-b2[3],w-b2[0],h-b2[1]]:b2;const R=dimScale(flip?r180(m,w,h):m,w,h,bq,tE*f,sc.ppm*f);return R?{...R,ppm:R.ppm/f,via:f+(flip?'r':'')}:null;};
+  const tryD=(m,w,h,f,flip)=>{const b2=bb.map(v=>v*f),bq=flip?[w-b2[2],h-b2[3],w-b2[0],h-b2[1]]:b2;const R=dimScale(flip?r180(m,w,h):m,w,h,bq,tE*f,sc.ppm*f);if(R&&R.lines)R.lines=R.lines.map(L=>{let v=L.v/f,a=L.a/f,b=L.b/f;if(flip){const Wv=L.rot?W:H,Wu=L.rot?H:W;v=Wv-v;[a,b]=[Wu-b,Wu-a];}return{...L,v,a,b};});return R?{...R,ppm:R.ppm/f,via:f+(flip?'r':'')}:null;};
   let D=tryD(ink,W,H,1,0);
   if(!D||D.n<2){const D2=tryD(ink,W,H,1,1);if(D2&&(!D||D2.n>D.n))D=D2;}
   if((!D||D.n<2)&&W*H<4.5e6&&(dbg.paper||W*H<1.2e6||(globalThis.__PF||{}).up)){const W2=W*2,H2=H*2,u=new Uint8Array(W2*H2);for(let y=0;y<H2;y++){const fy=Math.min(H-1.001,Math.max(0,(y-.5)/2)),y0=fy|0,ay=fy-y0;for(let x=0;x<W2;x++){const fx=Math.min(W-1.001,Math.max(0,(x-.5)/2)),x0=fx|0,ax=fx-x0,i=y0*W+x0;const v=(n[i]*(1-ax)+n[i+1]*ax)*(1-ay)+(n[i+W]*(1-ax)+n[i+W+1]*ax)*ay;u[y*W2+x]=v<.55?1:0;}}
    if(o.debug){const hh=Math.round(H2*.3),dc=mk(W2,hh),x=dc.getContext('2d'),id=x.createImageData(W2,hh);for(let i=0;i<W2*hh;i++){const v=u[i]?0:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);dbg.uimg=dc.toDataURL();}
    for(const fl of[0,1]){if(D&&D.n>=2)break;const D3=tryD(u,W2,H2,2,fl);if(D3&&(!D||D3.n>D.n))D=D3;}}
-  if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};}}catch(e){dbg.dimErr=String(e);}
+  if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};
+   // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
+   if(D.lines&&D.lines.length){const n0=S.length;S=S.filter(q=>!D.lines.some(L=>{const hz=!L.rot;if(!!q.hz!==hz)return false;if(Math.abs(q.c-L.v)>Math.max(4,q.t))return false;const ov=Math.min(q.b,L.b)-Math.max(q.a,L.a);return ov>.6*(q.b-q.a);}));dbg.dimLines=n0-S.length;}}}catch(e){dbg.dimErr=String(e);}
  tm('dims');if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
  ops=findOpenings(S,ink,W,H,sc.ppm,bb);
  {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
@@ -432,7 +434,9 @@ function readString(chars,m,W,rot){// chars: comps (in page coords) ordered alon
  for(const c of chars){const ch=rot?c.x1-c.x0:c.y1-c.y0;if(ch<.5*H){txt+=',';continue;}
   let r;if(rot){const R=rotGrid(m,W,c,rot);r=ocrChar(R.m,R.W,0,0,R.W,R.H);}else r=ocrChar(m,W,c.x0,c.y0,c.x1,c.y1);txt+=r.ch;sc+=r.s;n++;}
  return{txt,s:n?sc/n:0};}
-function parseDim(txt){const t=txt.replace(/^,+|,+$/g,'');if(!/^\d+(,\d+)?$/.test(t))return[];const v=parseFloat(t.replace(',','.'));if(!isFinite(v)||v<=0)return[];
+function parseDim(txt){// imperial: OCR reads ' and " as commas -> 32'6" = "32,6,," and 16' = "16,"
+ {const m=/^(\d{1,2}),(\d{1,2}),{1,2}$/.exec(txt);if(m&&+m[2]<12)return[+m[1]*.3048+ +m[2]*.0254];}
+ const t=txt.replace(/^,+|,+$/g,'');if(!/^\d+(,\d+)?$/.test(t))return[];const v=parseFloat(t.replace(',','.'));if(!isFinite(v)||v<=0)return[];
  if(t.includes(','))return[v];// metres "15,00"
  return[v/100,v/1000,v];}// "1500" cm, "15000" mm, "15" m
 export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max(6,tWall);
@@ -459,17 +463,22 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
   const I=S.rot?(u,v)=>(u>=0&&u<H&&v>=0&&v<W)?ink[u*W+v]:0:(u,v)=>(u>=0&&u<W&&v>=0&&v<H)?ink[v*W+u]:0;
   const uc=Math.round(S.rot?(y0+y1)/2:(x0+x1)/2),tu0=S.rot?y0:x0,tu1=S.rot?y1:x1,tv0=S.rot?x0:y0,tv1=S.rot?x1:y1;
   let seg=0,lineV=-1;
+  // inline style "<---- 32'6" ---->": the dimension line stops left/right of the text at its mid height, arrows at the ends
+  if((best.txt.match(/\d/g)||[]).length>=2){const vc=Math.round((tv0+tv1)/2),dv=Math.max(2,Math.round(th*.3)),onL=u=>{for(let q=-dv;q<=dv;q++)if(I(u,vc+q))return 1;return 0;};
+   const side=dir=>{let u=dir<0?tu0-1:tu1+1,k=0;while(k<th*1.5&&!onL(u)){u+=dir;k++;}if(!onL(u))return null;const u0=u;let g=0;while(Math.abs(u-u0)<4000){u+=dir;if(onL(u))g=0;else if(++g>2)break;}const e=u-dir*g;return Math.abs(e-u0)>th*1.5?e:null;};
+   const a=side(-1),b=side(1);if(a!=null&&b!=null&&b-a>(tu1-tu0)*3){seg=b-a;lineV={rot:S.rot,v:vc,a,b};}}
   for(let k=1;k<=Math.round(th*1.3)&&!seg;k++)for(const v of[tv1+k,tv0-k]){if(seg)break;
    if(!(I(uc,v)||I(uc-2,v)||I(uc+2,v)))continue;// line must pass under/over the text
    const on=u=>I(u,v)||I(u,v-1)||I(u,v+1);const side=v>tv1?1:-1;// text side
    const mark=u=>{let a=0,b=0;for(let d=3;d<=6;d++){a+=I(u,v+d*side*-1)?1:0;if(u<tu0-1||u>tu1+1)b+=I(u,v+d*side)?1:0;}return a>=2||b>=2;};
    const G=Math.max(3,Math.round(th*1.5));const walk=dir=>{let u=uc,g=0;for(let n=0;n<4000;n++){u+=dir;if(on(u)){g=0;if((dir<0?u<tu0-1:u>tu1+1)&&mark(u)){let e=u;for(let q=u+dir,gq=0;Math.abs(q-u)<16&&gq<=3;q+=dir){if(mark(q)){e=q;gq=0;}else gq++;}return (u+e)/2;}}else if(++g>G)return u-dir*g;}return null;};
    const a=walk(-1),b=walk(1);if(a!=null&&b!=null&&b-a>(tu1-tu0)*1.1){seg=b-a;lineV=v;}}
-  if(!seg)continue;
-  out.push({txt:best.txt,s:+best.s.toFixed(2),ext:seg,vals,rot:S.rot});}
+  dimScale.log&&dimScale.log.push('@'+best.txt+'>'+seg+':1');if(!seg)continue;
+  out.push({txt:best.txt,s:+best.s.toFixed(2),ext:seg,vals,rot:S.rot,line:typeof lineV==='object'?lineV:null});}
  if(!out.length)return null;
  // every reading votes for ppm under each unit interpretation; keep the value most strings agree on
  const bw=Math.max(bb[2]-bb[0],bb[3]-bb[1]);const cand=[];out.forEach((o,k)=>o.vals.forEach(v=>{const p=o.ext/v;const m=bw/p,t=tWall/p;if(m>=3&&m<=60&&t>=.05&&t<=.8)cand.push({p,k});}));
  let best=null;for(const c of cand){const sup=new Set(cand.filter(d=>Math.abs(d.p/c.p-1)<.035).map(d=>d.k));const ps=cand.filter(d=>Math.abs(d.p/c.p-1)<.035).map(d=>d.p);const sc=sup.size;if(!best||sc>best.cons)best={ppm:median(ps),cons:sc};}
- if(best&&best.cons<2&&!(prior&&Math.abs(best.ppm/prior-1)<.3))best=null;
- return best?{ppm:best.ppm,n:best.cons,dims:out.map(o=>o.txt+'@'+o.ext+'/'+o.s)}:null;}
+ // a single overall dimension (line spans most of the house, confident read) is trusted even when far from the door/wall guess
+ if(best&&best.cons<2&&!(prior&&Math.abs(best.ppm/prior-1)<.3)){const ov=cand.find(c=>Math.abs(c.p/best.ppm-1)<.035&&out[c.k].ext>=.6*bw&&out[c.k].s>=.85);if(!ov)best=null;else best.via='overall';}
+ return best?{ppm:best.ppm,n:best.cons,dims:out.map(o=>o.txt+'@'+o.ext+'/'+o.s),lines:out.filter(o=>o.line).map(o=>o.line)}:null;}

@@ -193,6 +193,16 @@ function proc(type, F, cols) {
     ao(g, w + 0.04, d + 0.04);
     box(g, std('#d8dce0', 0.35, 0.4), 0, h / 2, 0, w, h, d, 0.03);
     box(g, dark, w / 2 - 0.02, h * 0.55, d / 2 + 0.01, 0.025, 0.45, 0.015, 0);
+  } else if (type === 'hooks') {
+    // wall coat rail with pegs at 1.7 m and one hanging jacket
+    box(g, std(cols.wood || '#8a6a4a', 0.6), 0, 1.7, 0, w, 0.09, 0.025, 0.01);
+    for (let i = 0; i < 4; i++) box(g, dark, -w * 0.375 + i * w * 0.25, 1.68, 0.04, 0.02, 0.02, 0.06, 0);
+    box(g, std('#4a5a6a', 0.9), -w * 0.12, 1.38, 0.06, 0.34, 0.55, 0.08, 0.03);
+  } else if (type === 'tvw') {
+    // wall-mounted flat TV, centre at 1.15 m, slim bracket
+    box(g, std('#15171b', 0.3, 0.2), 0, 1.15, 0, w, 0.68, 0.045, 0.01);
+    box(g, std('#0a0c10', 0.08, 0.1), 0, 1.15, 0.024, w * 0.96, 0.62, 0.005, 0);
+    box(g, dark, 0, 1.15, -0.03, 0.3, 0.2, 0.02, 0);
   } else if (type === 'wshelf') {
     // wall shelf: two boards on brackets, mounted 1.35 / 1.7 m, a few boxes and books
     const wd = std(cols.wood || '#c4a07a', 0.6);
