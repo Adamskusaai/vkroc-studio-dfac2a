@@ -20,6 +20,8 @@ function findPaper(c){const s=Math.min(1,360/Math.max(c.width,c.height)),w=Math.
  {const b=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let s2=0,n2=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<w&&Y<h){s2+=g[Y*w+X];n2++;}}b[y*w+x]=s2/n2;}
   // several seeds (centre may sit inside a closed room) x several step tolerances (low-contrast shadowed edges leak at loose ones)
   const seeds=[];const bri=(x0,x1,y0,y1)=>{let sd=-1,sv=-1;for(let y=Math.round(h*y0);y<h*y1;y++)for(let x=Math.round(w*x0);x<w*x1;x++){const v=b[y*w+x];if(v>sv){sv=v;sd=y*w+x;}}return[sd,sv];};
+  // digital page (bright, flat border all round) -> no separate sheet, skip the floods (speed)
+  {let nb=0,nt=0,mxb=0;for(let i=0;i<w*h;i++)if(b[i]>mxb)mxb=b[i];const chk=v=>{nt++;if(v>.88*mxb&&v>185)nb++;};for(let x=0;x<w;x++){chk(b[x]);chk(b[(h-1)*w+x]);}for(let y=0;y<h;y++){chk(b[y*w]);chk(b[y*w+w-1]);}if(nb>.7*nt){findPaper.src='digital';return null;}}
   seeds.push(bri(.3,.7,.3,.7),bri(.12,.25,.3,.7),bri(.75,.88,.3,.7),bri(.3,.7,.12,.25),bri(.3,.7,.75,.88));
   // edge barrier: strong local contrast over a 5x5 window stops the fill even when a blurred paper edge falls in small steps
   const E=new Uint8Array(w*h);{const r=2,mx=new Float32Array(w*h),mn=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let M=0,m=1e9;for(let k=Math.max(0,x-r);k<=Math.min(w-1,x+r);k++){const v=b[y*w+k];if(v>M)M=v;if(v<m)m=v;}mx[y*w+x]=M;mn[y*w+x]=m;}
@@ -269,14 +271,19 @@ function quality(S,ops,bb,ppm,W,H){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/
  return{Q,nR,encl:encl/bbA};}
 // ---------- main ----------
 // prem8: digital (no paper found) uploads are read with both cleanings; the reading with the more plausible rooms wins
-export function readPlan(img,o={}){if(o._cm)return readPlan1(img,o);const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&A.dbg.paper)return A;
- let B=null;try{B=readPlan1(img,{...o,_cm:'old'});}catch(e){B=null;}if(!B)return A;if(!A)return B;
- const qa=(A.dbg.Q||0)+(A.dbg.scale==='dims'?.6:0),qb=(B.dbg.Q||0)+(B.dbg.scale==='dims'?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
-function readPlan1(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);const CG=o._cm==='old'?cleanGrayOld:cleanGray;inkMask.off=o._cm==='old';
- if(!o.rect){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
- let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
+export function readPlan(img,o={}){if(o._cm)return readPlan1(img,o);const R=readPlan0(img,o);if(R&&R.dbg&&!(R.dbg.nR>0)&&!o._cyan){/* outline open: retry with coloured window symbols as wall body */let C=null;try{C=readPlan1(img,{...o,_cm:R.dbg.cm||'new',_cyan:1,noPaper:!R.dbg.paper});}catch(e){C=null;}if(C&&C.dbg&&(C.dbg.nR||0)>0){C.dbg.cyanRetry=1;return C;}}return R;}
+function readPlan0(img,o){const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&(A.dbg.paper||(A.dbg.Q||0)>=4.5))return A;/* photo, or a confident first reading -> no second pass (speed) */
+ let B=null;try{B=readPlan1(img,{...o,_cm:'old',noPaper:1,noSketch:1});}catch(e){B=null;}if(!B)return A;if(!A)return B;
+ const qa=(A.dbg.Q||0)+(A.dbg.scale==='dims'?.6:0),qb=(B.dbg.Q||0)+(B.dbg.scale==='dims'?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.tA=A.dbg.t;R.dbg.tB=B.dbg.t;R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
+function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.t||{};dbg.t[k]=Math.round(performance.now()-T0);};let c=imgCanvas(img,MAXD);const CG=o._cm==='old'?cleanGrayOld:cleanGray;inkMask.off=o._cm==='old';
+ if(!o.rect&&!o.noPaper){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
+ tm('paper');let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
  if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=CG(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
- ink=compsFilter(ink,W,H,k=>k.n>=6);
+ tm('clean');ink=compsFilter(ink,W,H,k=>k.n>=6);
+ // prem8: coloured window symbols (saturated cyan / blue bands in the wall line) close the outline as wall body and are
+ // turned into window openings after the walls are found (instead of being stripped with the colour fills)
+ let cyan=null;if(o._cyan){const d=c.getContext('2d').getImageData(0,0,W,H).data,cm=new Uint8Array(W*H);let nc=0;for(let i=0;i<W*H;i++){const r0=d[i*4],g0=d[i*4+1],b0=d[i*4+2],mx=Math.max(r0,g0,b0),mn=Math.min(r0,g0,b0);if(b0>130&&b0-r0>60&&mx-mn>60&&g0>=r0){cm[i]=1;nc++;}}
+  if(nc>W*H*.0003&&nc<W*H*.05){const mxD=Math.max(W,H);cyan=compsFilter(cm,W,H,k=>{const a2=k.x1-k.x0+1,b2=k.y1-k.y0+1;const mw=k.n/Math.max(a2,b2);return Math.max(a2,b2)>=.015*mxD&&mw<=.05*mxD&&(Math.max(a2,b2)>=3*Math.min(a2,b2)||(mw<=.35*Math.max(a2,b2)&&k.n<.6*a2*b2));});let nk=0;for(let i=0;i<W*H;i++)if(cyan[i]){nk++;ink[i]=1;}dbg.cyan=nk;if(!nk)cyan=null;}}
  // wall bodies may be grey (poché) rather than black: add mid-grey tone to the body mask
  let tone=new Uint8Array(W*H);for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x,v=n[i];if(v<.86&&v>.2&&!ink[i]){let g=0;for(const j of[i-1,i+1,i-W,i+W]){if(!ink[j])g=Math.max(g,Math.abs(v-n[j]));}if(g<.045)tone[i]=1;}}dbg.tone0=tone.reduce((a,b)=>a+b,0);tone=openK(tone,W,H,3);const body=new Uint8Array(W*H);let nTone=0;for(let i=0;i<W*H;i++){body[i]=ink[i]||tone[i]?1:0;nTone+=tone[i];}dbg.tone=+(nTone/(W*H)).toFixed(3);
  // several readings of the wall bodies; keep the one that forms the most plausible closed rooms
@@ -291,7 +298,7 @@ function readPlan1(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);const CG=o._
    let add2=S2.filter(q=>touch(q,S)),rest=S2.filter(q=>!add2.includes(q)),ch=1;while(ch){ch=0;for(const q of rest){if(!add2.includes(q)&&touch(q,[...S,...add2])){add2.push(q);ch=1;}}}
    if(o.debug)(dbg.thin=dbg.thin||[]).push([mL2,S2.filter(q=>q.hz).map(q=>[q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]),add2.length]);S=S.concat(add2);}
   S=mergeColinear(S,2);S=snap(S);S=mergeColinear(S,1);return S;};
- const V=[];const add=(name,mask,wk,kOpen,kInt)=>{let S=run(mask,wk,/^t?h\d/.test(name),kInt||wk);if(o.debug)dbg["raw_"+name]=S.map(q=>[q.hz,q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]);if(S.length<3)return;S=focus(S);if(S.length<3)return;const bb=bbox(S);
+ const V=[];const add=(name,mask,wk,kOpen,kInt)=>{let S=run(mask,wk,/^t?h\d/.test(name),kInt||wk);if(o.debug)dbg["raw_"+name]=S.map(q=>[q.hz,q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]);if(S.length<3)return;S=focus(S);if(S.length<3)return;S=o._cyan?closeCorners(S):S;void(S);const bb=bbox(S);
   const ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
   V.push({name,S,mask,wk,kOpen,kInt,bb,q});dbg['q_'+name]=[S.length,+q.Q.toFixed(2),q.nR];};
  add('ink',base.wm,base.wk,base.kOpen,base.kInt);
@@ -299,20 +306,20 @@ function readPlan1(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);const CG=o._
  {const km=Math.max(6,Math.round(.022*Math.max(W,H))),pfS=compsFilter(nTone>W*H*.0008?body:ink,W,H,k=>{const a=k.x1-k.x0+1,b=k.y1-k.y0+1;return Math.max(a,b)>=.025*Math.max(W,H)||Math.min(a,b)<.3*Math.max(a,b);}),pf0=pairFill(pfS,W,H,km,lw*2+2),pf=close1(close1(pf0,W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-pfS[i];dbg.pairD=+(d*7/(W*H)).toFixed(4);if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('pair',B.wm,B.wk,B.kOpen,B.kInt);}}
  // prem8 sketch stage: thin, wobbly, broken hand strokes (pen/pencil photo) -> looser threshold, short axis closings bridge
  // breaks and wobble, then the double-line walls are filled like 'pair'. Only when strokes are thin and no reading closes rooms.
- if(lw<=3&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
+ if(!o.noSketch&&(dbg.paper?lw<=3:lw<=2)&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
   const km=Math.max(6,Math.round(.022*mx)),pf=close1(close1(pairFill(c2,W,H,km,lw*2+5),W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-c2[i];
   if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('sk'+Math.round(skT*100),B.wm,B.wk,B.kOpen,B.kInt);}}
  const solidOK=V.length&&V[0].S.length>=4&&(base.wk>2.2*lw+2)&&sideCoverage(V[0].S,V[0].bb).n>=2;dbg.solidOK=!!solidOK;
  for(const src of solidOK?[]:nTone>W*H*.0008?[ink,body]:[ink]){const inkBig=compsFilter(src,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.025*Math.max(W,H));
   for(const kc of[5,9,13]){const kk=Math.max(kc,lw*3+1);const hm=openK(closeK(inkBig,W,H,kk),W,H,Math.max(base.kOpen,Math.round(kc*.6)));add((src===ink?'h':'th')+kc,hm,Math.max(base.wk,kk),base.kOpen,base.kInt);}}
- if(!V.length)return null;
+ tm('var');if(!V.length)return null;
  const pen=v=>v.name==='pair'?.35:0;let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q-pen(v)>best.q.Q-pen(best)+.05)best=v;}
  dbg.pick=best.name;dbg.nR=best.q.nR;dbg.Q=best.q.Q;let S=pruneLoose(best.S);dbg.pruned=best.S.length-S.length;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
  dbg.nS=S.length;
  let bb=best.bb;
  let ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
- let sc=estimateScale(S,ops,bb);dbg.est=estimateScale.last.map(v=>+v.toFixed(1));
+ tm('pick');let sc=estimateScale(S,ops,bb);dbg.est=estimateScale.last.map(v=>+v.toFixed(1));
  try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];
   // prem8 photo stage: dimension text may be upside down (plan shot at 180°) or too small/blurred for the 1x ink mask ->
   // retry on the 180°-rotated mask and on a 2x bilinear upscale of the cleaned page (own threshold), lengths scaled back
@@ -320,13 +327,15 @@ function readPlan1(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);const CG=o._
   const tryD=(m,w,h,f,flip)=>{const b2=bb.map(v=>v*f),bq=flip?[w-b2[2],h-b2[3],w-b2[0],h-b2[1]]:b2;const R=dimScale(flip?r180(m,w,h):m,w,h,bq,tE*f,sc.ppm*f);return R?{...R,ppm:R.ppm/f,via:f+(flip?'r':'')}:null;};
   let D=tryD(ink,W,H,1,0);
   if(!D||D.n<2){const D2=tryD(ink,W,H,1,1);if(D2&&(!D||D2.n>D.n))D=D2;}
-  if((!D||D.n<2)&&W*H<4.5e6){const W2=W*2,H2=H*2,u=new Uint8Array(W2*H2);for(let y=0;y<H2;y++){const fy=Math.min(H-1.001,Math.max(0,(y-.5)/2)),y0=fy|0,ay=fy-y0;for(let x=0;x<W2;x++){const fx=Math.min(W-1.001,Math.max(0,(x-.5)/2)),x0=fx|0,ax=fx-x0,i=y0*W+x0;const v=(n[i]*(1-ax)+n[i+1]*ax)*(1-ay)+(n[i+W]*(1-ax)+n[i+W+1]*ax)*ay;u[y*W2+x]=v<.55?1:0;}}
+  if((!D||D.n<2)&&W*H<4.5e6&&(dbg.paper||W*H<1.2e6)){const W2=W*2,H2=H*2,u=new Uint8Array(W2*H2);for(let y=0;y<H2;y++){const fy=Math.min(H-1.001,Math.max(0,(y-.5)/2)),y0=fy|0,ay=fy-y0;for(let x=0;x<W2;x++){const fx=Math.min(W-1.001,Math.max(0,(x-.5)/2)),x0=fx|0,ax=fx-x0,i=y0*W+x0;const v=(n[i]*(1-ax)+n[i+1]*ax)*(1-ay)+(n[i+W]*(1-ax)+n[i+W+1]*ax)*ay;u[y*W2+x]=v<.55?1:0;}}
    if(o.debug){const hh=Math.round(H2*.3),dc=mk(W2,hh),x=dc.getContext('2d'),id=x.createImageData(W2,hh);for(let i=0;i<W2*hh;i++){const v=u[i]?0:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);dbg.uimg=dc.toDataURL();}
    for(const fl of[0,1]){if(D&&D.n>=2)break;const D3=tryD(u,W2,H2,2,fl);if(D3&&(!D||D3.n>D.n))D=D3;}}
   if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};}}catch(e){dbg.dimErr=String(e);}
- if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
+ tm('dims');if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
  ops=findOpenings(S,ink,W,H,sc.ppm,bb);
  {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
+ if(cyan){let nw=0;S.forEach((A,i)=>{const L=A.b-A.a;let run=-1;const h=Math.max(2,A.t/2+2);const isC=u=>{for(let v=-h;v<=h;v+=1){const x=Math.round(A.hz?u:A.c+v),y=Math.round(A.hz?A.c+v:u);if(x>=0&&y>=0&&x<W&&y<H&&cyan[y*W+x])return true;}return false;};
+  for(let u=A.a;u<=A.b+1;u++){const on=u<=A.b&&isC(u);if(on&&run<0)run=u;if(!on&&run>=0){const lo=run,hi=u-1;run=-1;if(hi-lo>=.4*sc.ppm&&!ops.some(p=>p.i===i&&p.lo<hi&&p.hi>lo)){ops.push({i,j:null,end:'x',to:null,type:'window',lo,hi,inside:1,ext:true,g:hi-lo});nw++;}}}});dbg.cyanWin=nw;}
  const ppm=sc.ppm,r=v=>Math.round(v/ppm*100)/100;
  // build walls: merge pairs with openings into one wall each
  const parent=S.map((s,i)=>i),find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
@@ -340,23 +349,64 @@ function readPlan1(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);const CG=o._
  // confidence: closed outline + reasonable count + interior walls
  const cov=sideCoverage(S,bb);const conf=Math.min(1,(cov.n/4)*.6+(S.length>=6?.25:S.length/24)+(ops.length?.15:0));
  dbg.cov=cov;dbg.ops=ops.length;dbg.scale=sc.src;dbg.ppm=+ppm.toFixed(2);
- return{walls,canvas:c,w:Math.round(W/ppm*100)/100,guess:sc.src!=='user'&&sc.src!=='dims',mode:'plan',conf,scaleSrc:sc.src,dbg};}
+ let labels=[];if(!o.noLabels){try{const t0=performance.now();readLabels.log=[];labels=readLabels(ink,W,H,[bb[0]-2,bb[1]-2,bb[2]+2,bb[3]+2],ppm).map(l=>({n:l.n,s:l.s,t:l.t,p:[r(l.p[0]),r(l.p[1])]}));dbg.labels=labels.map(l=>l.t+'>'+l.n);dbg.words=readLabels.log.slice(0,40);dbg.tLab=Math.round(performance.now()-t0);}catch(e){dbg.labErr=String(e);}}
+ tm('end');return{walls,labels,canvas:c,w:Math.round(W/ppm*100)/100,guess:sc.src!=='user'&&sc.src!=='dims',mode:'plan',conf,scaleSrc:sc.src,dbg};}
 function bbox(S){return[Math.min(...S.map(s=>s.hz?s.a:s.c)),Math.min(...S.map(s=>s.hz?s.c:s.a)),Math.max(...S.map(s=>s.hz?s.b:s.c)),Math.max(...S.map(s=>s.hz?s.c:s.b))];}
 function sideCoverage(S,bb){const cov=(hz,c,lo,hi)=>S.filter(s=>s.hz===hz&&Math.abs(s.c-c)<2*s.t+3).reduce((a,s)=>a+Math.max(0,Math.min(s.b,hi)-Math.max(s.a,lo)),0)/Math.max(1,hi-lo);
  const v=[cov(1,bb[1],bb[0],bb[2]),cov(1,bb[3],bb[0],bb[2]),cov(0,bb[0],bb[1],bb[3]),cov(0,bb[2],bb[1],bb[3])];return{v:v.map(x=>+x.toFixed(2)),n:v.filter(x=>x>.45).length};}
 // keep segments connected (by touching / near) to the largest wall network
 function focus(S){const n=S.length,par=S.map((_,i)=>i),f=i=>par[i]===i?i:(par[i]=f(par[i]));
  const near=(A,B)=>{const ax0=A.hz?A.a:A.c-A.t,ax1=A.hz?A.b:A.c+A.t,ay0=A.hz?A.c-A.t:A.a,ay1=A.hz?A.c+A.t:A.b,bx0=B.hz?B.a:B.c-B.t,bx1=B.hz?B.b:B.c+B.t,by0=B.hz?B.c-B.t:B.a,by1=B.hz?B.c+B.t:B.b,m=Math.max(A.t,B.t)*1.5+4;if(A.hz===B.hz&&Math.abs(A.c-B.c)<Math.max(A.t,B.t)&&Math.max(A.a,B.a)-Math.min(A.b,B.b)<Math.max(A.t,B.t)*9)return true;return ax0<bx1+m&&bx0<ax1+m&&ay0<by1+m&&by0<ay1+m;};
- for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(near(S[i],S[j]))par[f(i)]=f(j);
+ // prem8: wall ends facing each other across a door-sized gap belong together (thick walls with wide door gaps)
+ const eb=bbox(S),ext=Math.max(eb[2]-eb[0],eb[3]-eb[1]),m2=.12*ext,ends=A=>A.hz?[[A.a,A.c],[A.b,A.c]]:[[A.c,A.a],[A.c,A.b]];
+ const nearE=(A,B)=>A.t>=.6*B.t&&B.t>=.6*A.t&&ends(A).some(p=>ends(B).some(q=>Math.hypot(p[0]-q[0],p[1]-q[1])<Math.max(m2,7*Math.max(A.t,B.t))));
+ for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(near(S[i],S[j])||nearE(S[i],S[j]))par[f(i)]=f(j);
  const L={};S.forEach((s,i)=>{L[f(i)]=(L[f(i)]||0)+(s.b-s.a)*s.t;});const best=+Object.keys(L).sort((a,b)=>L[b]-L[a])[0];
  // also keep colinear wall pieces across door gaps (separate clusters on the same line within 3 m-ish)
  const keep=S.filter((s,i)=>f(i)===best);const kb=bbox(keep);
  return S.filter((s,i)=>f(i)===best||(s.hz?(s.c>=kb[1]-s.t&&s.c<=kb[3]+s.t&&s.a>=kb[0]-s.t&&s.b<=kb[2]+s.t):(s.c>=kb[0]-s.t&&s.c<=kb[2]+s.t&&s.a>=kb[1]-s.t&&s.b<=kb[3]+s.t)));}
+// prem8: a door placed right at a corner leaves an L-gap (wall end near the perpendicular wall's end): extend the wall to
+// the corner so the room closes; the empty stretch is then found as an opening
+function closeCorners(S){const out=S.map(q=>({...q}));for(const A of out)for(const B of out){if(A.hz===B.hz||!A.hz)continue;const t=Math.max(A.t,B.t);
+  for(const[endB,yb]of[['a',B.a],['b',B.b]]){if(Math.abs(yb-A.c)>1.2*t)continue;// B (vertical) ends at A's line
+   const gL=A.a-B.c,gR=B.c-A.b;if(gL>1.5*t&&gL<7*t){if(!out.some(C=>C!==A&&C!==B&&!C.hz&&C.c>B.c&&C.c<A.a&&C.a<A.c&&C.b>A.c))A.a=B.c;}
+   else if(gR>1.5*t&&gR<7*t){if(!out.some(C=>C!==A&&C!==B&&!C.hz&&C.c<B.c&&C.c>A.b&&C.a<A.c&&C.b>A.c))A.b=B.c;}}
+  for(const[endA,xa]of[['a',A.a],['b',A.b]]){if(Math.abs(xa-B.c)>1.2*t)continue;const gT=B.a-A.c,gB=A.c-B.b;if(gT>1.5*t&&gT<7*t)B.a=A.c;else if(gB>1.5*t&&gB<7*t)B.b=A.c;}}
+ return out;}
 // prem8: a segment touching nothing and lying outside the bbox of all the others is a dimension line / text stroke, not a wall
 function pruneLoose(S){let ch=1;while(ch&&S.length>4){ch=0;for(const s of S){const R=S.filter(q=>q!==s),m=s.t+8;
   const box=q=>q.hz?[q.a-q.t/2,q.c-q.t/2,q.b+q.t/2,q.c+q.t/2]:[q.c-q.t/2,q.a-q.t/2,q.c+q.t/2,q.b+q.t/2];const A=box(s);
   const touch=R.some(q=>{const B=box(q);return A[0]<B[2]+m&&B[0]<A[2]+m&&A[1]<B[3]+m&&B[1]<A[3]+m;});if(touch)continue;
   const bb=bbox(R),out=s.hz?(s.c<bb[1]-s.t||s.c>bb[3]+s.t):(s.c<bb[0]-s.t||s.c>bb[2]+s.t);if(out){S=R;ch=1;break;}}}return S;}
+
+// ---------- room labels (printed words, letter templates + fuzzy dictionary; SK/CZ/DE/EN incl. abbreviations) ----------
+let LTPL=null;const LCH='ABCDEFGHIJKLMNOPRSTUVWZYabcdefghijklmnoprstuvwzy';
+function letterTemplates(){if(LTPL)return LTPL;LTPL=[];const fams=['Arial','DejaVu Sans','Liberation Sans','Roboto','Verdana','Arial Narrow','sans-serif'];const c=mk(80,80),x=c.getContext('2d');
+ for(const f of fams)for(const wt of['normal','bold'])for(const ch of LCH){x.setTransform(1,0,0,1,0,0);x.fillStyle='#fff';x.fillRect(0,0,80,80);x.fillStyle='#000';x.font=`${wt} 52px ${f}`;x.textBaseline='alphabetic';x.fillText(ch,8,62);
+  const d=x.getImageData(0,0,80,80).data,m=new Uint8Array(6400);for(let i=0;i<6400;i++)m[i]=d[i*4]<128?1:0;let x0=80,y0=80,x1=-1,y1=-1;for(let y=0;y<80;y++)for(let xx=0;xx<80;xx++)if(m[y*80+xx]){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(y<y0)y0=y;if(y>y1)y1=y;}
+  if(x1<0)continue;LTPL.push({ch,g:grid(m,80,x0,y0,x1+1,y1+1),asp:(x1-x0+1)/(y1-y0+1),top:y0,bot:y1});}
+ return LTPL;}
+const LDICT=[['OBYVACKA','Obývačka'],['OBYVACIA','Obývačka'],['OBYVAK','Obývačka'],['OBYV','Obývačka'],['OB','Obývačka'],['KUCHYNA','Kuchyňa'],['KUCHYNKA','Kuchyňa'],['KUCH','Kuchyňa'],['JEDALEN','Jedáleň'],['SPALNA','Spálňa'],['SP','Spálňa'],['DETSKA','Detská izba'],['DI','Detská izba'],['IZBA','Izba'],['PRACOVNA','Pracovňa'],
+ ['KUPELNA','Kúpeľňa'],['KUP','Kúpeľňa'],['WC','WC'],['CHODBA','Chodba'],['ZADVERIE','Predsieň'],['ZAD','Predsieň'],['PREDSIEN','Predsieň'],['VSTUP','Predsieň'],['SPAJZA','Špajza'],['SPAJZ','Špajza'],['KOMORA','Komora'],['SATNIK','Šatník'],['TECHNICKA','Technická miestnosť'],['TECH','Technická miestnosť'],['KOTOLNA','Technická miestnosť'],['GARAZ','Garáž'],['TERASA','Terasa'],
+ ['WOHNZIMMER','Obývačka'],['WOHNEN','Obývačka'],['KUCHE','Kuchyňa'],['KOCHEN','Kuchyňa'],['SCHLAFZIMMER','Spálňa'],['SCHLAFEN','Spálňa'],['ELTERN','Spálňa'],['KINDERZIMMER','Detská izba'],['KIND','Detská izba'],['ZIMMER','Izba'],['BAD','Kúpeľňa'],['DUSCHE','Kúpeľňa'],['FLUR','Chodba'],['DIELE','Chodba'],['ABSTELLRAUM','Komora'],['ESSEN','Jedáleň'],
+ ['LIVING','Obývačka'],['LOUNGE','Obývačka'],['KITCHEN','Kuchyňa'],['BEDROOM','Spálňa'],['BATHROOM','Kúpeľňa'],['BATH','Kúpeľňa'],['HALL','Chodba'],['HALLWAY','Chodba'],['LANDING','Chodba'],['CORRIDOR','Chodba'],['DINING','Jedáleň'],['STUDY','Pracovňa'],['OFFICE','Pracovňa'],['STORAGE','Komora'],['PANTRY','Špajza'],['TOILET','WC'],['GARAGE','Garáž']];
+function lev(a,b){const d=[];for(let i=0;i<=a.length;i++){d[i]=[i];}for(let j=1;j<=b.length;j++)d[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[a.length][b.length];}
+function matchWord(t){const u=t.toUpperCase().replace(/[^A-Z]/g,'');if(u.length<2)return null;let best=null;
+ for(const[k,n]of LDICT){let sc;if(k.length<=3){if(u!==k)continue;sc=1;}else{const L=Math.max(k.length,u.length);sc=1-lev(u,k)/L;if(u.length>k.length+1&&u.startsWith(k.slice(0,4)))sc=Math.max(sc,.8);}const thr=(k.length>=5&&u.length>=4&&u[0]===k[0])?.6:.72;if(sc>=thr&&(!best||sc>best.s))best={n,s:sc,k};}return best;}
+export function readLabels(ink,W,H,bb,ppm){const out=[];const T=letterTemplates();const lab=new Int32Array(W*H),st=[];let id=0;const comps=[];
+ const hMin=Math.max(5,.08*ppm),hMax=Math.max(12,.7*ppm);
+ for(let y=Math.max(0,Math.floor(bb[1]));y<Math.min(H,Math.ceil(bb[3]));y++)for(let x=Math.max(0,Math.floor(bb[0]));x<Math.min(W,Math.ceil(bb[2]));x++){const i=y*W+x;if(!ink[i]||lab[i])continue;id++;st.push(i);lab[i]=id;let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0;
+  while(st.length){const j=st.pop();n++;const X=j%W,Y=(j/W)|0;if(X<x0)x0=X;if(X>x1)x1=X;if(Y<y0)y0=Y;if(Y>y1)y1=Y;if(n>4000)continue;for(const k of[j-1,j+1,j-W,j+W])if(k>=0&&k<W*H&&ink[k]&&!lab[k]){lab[k]=id;st.push(k);}}
+  const w=x1-x0+1,h=y1-y0+1;if(n>4000||h>hMax||w>hMax*1.6)continue;comps.push({x0,y0,x1:x1+1,y1:y1+1,n,h,w});}
+ const big=comps.filter(c=>c.h>=hMin);big.sort((a,b)=>a.x0-b.x0);const used=new Set();
+ for(const c of big){if(used.has(c))continue;const g=[c];used.add(c);let last=c,hM=c.h;
+  for(const d of big){if(used.has(d)||d.x0<last.x0)continue;const ov=Math.min(last.y1,d.y1)-Math.max(last.y0,d.y0),gap=d.x0-last.x1;if(ov>.35*Math.min(hM,d.h)&&gap>-2&&gap<.42*hM&&d.h<2.2*hM&&d.h>.3*hM){g.push(d);used.add(d);last=d;hM=Math.max(hM,d.h);}}
+  if(g.length<2||g.length>14)continue;const yb=Math.max(...g.map(q=>q.y1)),Hh=hM;let txt='';
+  for(const q of g){if(q.h<.45*Hh){continue;}const gr=grid(ink,W,q.x0,q.y0,q.x1,q.y1),asp=q.w/q.h,rel=(yb-q.y0)/Hh;let bc=null,bs=-1;
+   for(const t of T){let d=0;for(let i=0;i<gr.length;i++)d+=Math.abs(gr[i]-t.g[i]);const s2=1-d/gr.length-Math.abs(Math.log((asp+.05)/(t.asp+.05)))*.12;if(s2>bs){bs=s2;bc=t.ch;}}
+   txt+=bs>.55?bc:'?';}
+  (readLabels.log=readLabels.log||[]).push(txt+'/'+Math.round(Hh));const m=matchWord(txt);if(m)out.push({n:m.n,s:+m.s.toFixed(2),t:txt,p:[(g[0].x0+last.x1)/2,(Math.min(...g.map(q=>q.y0))+yb)/2]});}
+ return out;}
 // ---------- dimension OCR (printed digits, template matching; no deps) ----------
 const GW=12,GH=18;let TPL=null;
 function templates(){if(TPL)return TPL;TPL=[];const fams=['Arial','Arial Narrow','Helvetica','DejaVu Sans','Liberation Sans','Liberation Sans Narrow','Verdana','Roboto','Roboto Condensed','Times New Roman','Liberation Serif','Courier New','ISOCPEUR','sans-serif','serif','monospace'];
