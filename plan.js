@@ -41,7 +41,7 @@ function warpPaper(c,q){const d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);let W=Mat
 // ---------- cleaning ----------
 // remove coloured pen / highlighter (chroma) and normalise illumination -> Float32 "whiteness" 0..1
 function cleanGray(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Float32Array(W*H);
- for(let i=0;i<W*H;i++){const r=d[i*4],gg=d[i*4+1],b=d[i*4+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),y=r*.3+gg*.59+b*.11;g[i]=(mx-mn>45&&(mx-mn)>.35*mx)?-1:y;}
+ for(let i=0;i<W*H;i++){const r=d[i*4],gg=d[i*4+1],b=d[i*4+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),y=r*.3+gg*.59+b*.11;g[i]=(mx-mn>28&&(mx-mn)>.16*mx)?-1:y;}
  // background (paper) level: block max then smooth
  const B=Math.max(8,Math.round(Math.max(W,H)/40)),bw=Math.ceil(W/B),bh=Math.ceil(H/B),bm=new Float32Array(bw*bh);
  for(let by=0;by<bh;by++)for(let bx=0;bx<bw;bx++){const vals=[];for(let y=by*B;y<Math.min(H,by*B+B);y+=2)for(let x=bx*B;x<Math.min(W,bx*B+B);x+=2){const v=g[y*W+x];if(v>=0)vals.push(v);}vals.sort((a,b)=>a-b);bm[by*bw+bx]=vals.length?vals[Math.floor(vals.length*.9)]:255;}
@@ -128,6 +128,12 @@ function findOpenings(S,ink,W,H,ppm,bb){const out=[];const used=new Set();
  pairs.sort((a,b)=>a[0]-b[0]);
  for(const[g,i,j]of pairs){if(used.has('b'+i)||used.has('a'+j))continue;used.add('b'+i);used.add('a'+j);const A=S[i],B=S[j],t=(A.t+B.t)/2,lo=A.b,hi=B.a,c=(A.c+B.c)/2;
   out.push({i,j,type:classifyGap(A,lo,hi,c,t,ink,W,H),lo,hi,ext:isExt(A,c,t),g});}
+ // exterior walls are continuous: bridge any remaining colinear gap on the outline (bay, chimney, wide glazing)
+ for(let i=0;i<S.length;i++){if(used.has('b'+i))continue;const A=S[i];if(!isExt(A,A.c,A.t))continue;let bj=-1,bg=1e9;
+  for(let j=0;j<S.length;j++){if(j===i||used.has('a'+j))continue;const B=S[j];if(B.hz!==A.hz||Math.abs(B.c-A.c)>Math.max(A.t,B.t)+2)continue;const g=B.a-A.b;if(g>0&&g<bg){bg=g;bj=j;}}
+  if(bj<0||bg>.5*Math.max(bb[2]-bb[0],bb[3]-bb[1]))continue;const B=S[bj];if(S.some((C,k)=>k!==i&&k!==bj&&C.hz===A.hz&&Math.abs(C.c-A.c)<A.t&&C.a<B.a-1&&C.b>A.b+1))continue;
+  used.add('b'+i);used.add('a'+bj);const t=(A.t+B.t)/2,lo=A.b,hi=B.a,c=(A.c+B.c)/2,ty=classifyGap(A,lo,hi,c,t,ink,W,H);
+  out.push({i,j:bj,type:bg>3.2*ppm&&ty!=='window'?'wall':ty,lo,hi,ext:true,g:bg});}
  // free ends: gap up to a perpendicular wall (door next to a corner / junction)
  S.forEach((A,i)=>{for(const end of['a','b']){if(used.has(end+i))continue;const p=A[end],dir=end==='b'?1:-1;
    // already touching a perpendicular wall?
@@ -146,30 +152,65 @@ function estimateScale(S,ops,bb){const bw=Math.max(bb[2]-bb[0],bb[3]-bb[1]);cons
  const doors=ops.filter(o=>o.type==='door'&&!o.ext).map(o=>o.g),pD=doors.length?median(doors)/.85:0;
  let ppm,src;if(ok(pD)&&ok(pT)&&doors.length>=2){ppm=Math.sqrt(pD*pT);src='doors+walls';}else if(ok(pD)&&doors.length>=2){ppm=pD;src='doors';}else if(ok(pT)){ppm=pT;src='walls';}else{ppm=bw/12;src='size';}
  return{ppm,src};}
+// outline walls: two thin parallel lines with nothing between (white or grey) -> fill the band.
+// Stacks of 3+ lines (windows) and hatch are left alone.
+function pairFill(ink,W,H,kmax,lwm){const o=new Uint8Array(ink);
+ for(const hz of[1,0]){const N=hz?W:H,L=hz?H:W;const at=(u,v)=>hz?v*W+u:u*W+v;const P=[];// scan across the wall direction
+  for(let u=0;u<N;u++){const R=[];let v=0;while(v<L){if(ink[at(u,v)]){const v0=v;while(v<L&&ink[at(u,v)])v++;R.push([v0,v-1]);}else v++;}const pu=[];
+   for(let k=0;k+1<R.length;k++){const a=R[k],b=R[k+1],g=b[0]-a[1]-1;if(g<1||g>kmax)continue;if(a[1]-a[0]>lwm||b[1]-b[0]>lwm)continue;
+    const gp=k>0?a[0]-R[k-1][1]-1:1e9,gn=k+2<R.length?R[k+2][0]-b[1]-1:1e9;if(gp<=kmax*1.2||gn<=kmax*1.2)continue;pu.push([a[1]+1,b[0]-1]);k++;}
+   P.push(pu);}
+  // keep only bands that continue along the wall (hatch / text give scattered pairs)
+  for(let u=0;u<N;u++)for(const[p0,p1]of P[u]){let ok=0;for(let d=-3;d<=3;d++){if(!d||u+d<0||u+d>=N)continue;if(P[u+d].some(q=>Math.abs(q[0]-p0)<=1&&Math.abs(q[1]-p1)<=1))ok++;}
+   if(ok>=5)for(let w=p0;w<=p1;w++)o[at(u,w)]=1;}}
+ return o;}
+// plausibility of a reading: closed rooms of sensible size (openings bridged), closed outline, few loose pieces
+function quality(S,ops,bb,ppm,W,H){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/f)+2,g=new Uint8Array(gw*gh);
+ const rect=(x0,y0,x1,y1)=>{for(let y=Math.max(0,Math.floor(y0/f));y<=Math.min(gh-1,Math.ceil(y1/f));y++)for(let x=Math.max(0,Math.floor(x0/f));x<=Math.min(gw-1,Math.ceil(x1/f));x++)g[y*gw+x]=1;};
+ const seg=(hz,c,a,b,t)=>{const h=Math.max(t,f*1.5)/2;hz?rect(a,c-h,b,c+h):rect(c-h,a,c+h,b);};
+ S.forEach(s=>seg(s.hz,s.c,s.a-s.t/2,s.b+s.t/2,s.t));ops.forEach(p=>{const A=S[p.i];seg(A.hz,A.c,p.lo-2,p.hi+2,A.t);});
+ const lab=new Int32Array(gw*gh),st=[];let id=1;const areas=[];
+ for(let i=0;i<gw*gh;i++){if(g[i]||lab[i])continue;id++;let n=0,edge=false,bx0=1e9,by0=1e9,bx1=-1,by1=-1;st.push(i);lab[i]=id;while(st.length){const k=st.pop(),x=k%gw,y=(k/gw)|0;n++;if(x<bx0)bx0=x;if(x>bx1)bx1=x;if(y<by0)by0=y;if(y>by1)by1=y;if(!x||!y||x===gw-1||y===gh-1)edge=true;for(const j of[x>0?k-1:-1,x<gw-1?k+1:-1,y>0?k-gw:-1,y<gh-1?k+gw:-1])if(j>=0&&!g[j]&&!lab[j]){lab[j]=id;st.push(j);}}
+  if(!edge){const mn=Math.min(bx1-bx0+1,by1-by0+1)*f/ppm;areas.push(mn<.75?-(n*f*f/(ppm*ppm)):n*f*f/(ppm*ppm));}}
+ const good=areas.filter(a=>a>=1.2&&a<=150),tiny=areas.filter(a=>(a<1.2&&a>.15)||a<-.15).length;const encl=good.reduce((a,b)=>a+b,0),bbA=Math.max(1,(bb[2]-bb[0])*(bb[3]-bb[1])/(ppm*ppm));
+ const cov=sideCoverage(S,bb);const nR=Math.min(good.length,30);
+ const Q=nR*.6+Math.min(1,encl/bbA)*3+cov.n*.4-.3*tiny-.04*Math.max(0,S.length-3*nR-8);
+ return{Q,nR,encl:encl/bbA};}
 // ---------- main ----------
 export function readPlan(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);
  if(!o.rect){const q=findPaper(c);if(q){c=warpPaper(c,q);dbg.paper=1;}}
  let n=cleanGray(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
  if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=cleanGray(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
  ink=compsFilter(ink,W,H,k=>k.n>=6);
- const {wm,lw,wk,kInt,kOpen}=wallMask(ink,W,H);dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
- const run=(mask)=>{const hh=strokeWidths(mask,W,H).h;let wkM=wk,bv=0;for(let k=3;k<64;k++){const v=hh[k]*k;if(v>bv){bv=v;wkM=k;}}const minLen=Math.max(12,Math.round(Math.max(wk,wkM,4)*2.5));
-  // drop small blobs (text / symbols): keep components with a long side
+ // wall bodies may be grey (poché) rather than black: add mid-grey tone to the body mask
+ let tone=new Uint8Array(W*H);for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x,v=n[i];if(v<.86&&v>.2&&!ink[i]){let g=0;for(const j of[i-1,i+1,i-W,i+W]){if(!ink[j])g=Math.max(g,Math.abs(v-n[j]));}if(g<.045)tone[i]=1;}}dbg.tone0=tone.reduce((a,b)=>a+b,0);tone=openK(tone,W,H,3);const body=new Uint8Array(W*H);let nTone=0;for(let i=0;i<W*H;i++){body[i]=ink[i]||tone[i]?1:0;nTone+=tone[i];}dbg.tone=+(nTone/(W*H)).toFixed(3);
+ // several readings of the wall bodies; keep the one that forms the most plausible closed rooms
+ const base=wallMask(ink,W,H);const lw=base.lw;
+ const run=(mask,wk,useM,kI)=>{let wkM=wk;if(useM){const hh=strokeWidths(mask,W,H).h;let bv=0;for(let k=3;k<64;k++){const v=hh[k]*k;if(v>bv){bv=v;wkM=k;}}}const minLen=Math.max(12,Math.round(Math.min(Math.max(wk,wkM,4)*2.5,.07*Math.max(W,H))));
   const big=compsFilter(mask,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=Math.max(minLen*1.5,.04*Math.max(W,H)));
   let S=[...axisSegs(big,W,H,minLen,1),...axisSegs(big,W,H,minLen,0)];
+  // second, finer pass for thin partitions between door gaps (shorter than the thick-wall length limit)
+  const mL2=Math.max(12,Math.round(Math.max(kI,4)*3));if(mL2<minLen*.8){const res=new Uint8Array(big);const pad=2;for(const q of S){const h=q.t/2+pad;const x0=Math.max(0,Math.floor(q.hz?q.a-pad:q.c-h)),x1=Math.min(W-1,Math.ceil(q.hz?q.b+pad:q.c+h)),y0=Math.max(0,Math.floor(q.hz?q.c-h:q.a-pad)),y1=Math.min(H-1,Math.ceil(q.hz?q.c+h:q.b+pad));for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)res[y*W+x]=0;}
+   const S2=[...axisSegs(res,W,H,mL2,1),...axisSegs(res,W,H,mL2,0)].filter(q=>q.b-q.a>=3*q.t&&q.t<=Math.max(kI*1.6,4));
+   const touch=(q,P)=>P.some(r=>{if(r===q)return false;const m=Math.max(q.t,r.t)+4;if(q.hz===r.hz)return Math.abs(q.c-r.c)<m&&(Math.abs(q.a-r.b)<m*2||Math.abs(q.b-r.a)<m*2);return r.c>q.a-m&&r.c<q.b+m&&q.c>r.a-m&&q.c<r.b+m;});
+   let add2=S2.filter(q=>touch(q,S)),rest=S2.filter(q=>!add2.includes(q)),ch=1;while(ch){ch=0;for(const q of rest){if(!add2.includes(q)&&touch(q,[...S,...add2])){add2.push(q);ch=1;}}}
+   S=S.concat(add2);}
   S=mergeColinear(S,2);S=snap(S);S=mergeColinear(S,1);return S;};
- let S=run(wm),dbgMask=wm;
- const len=s=>s.reduce((a,q)=>a+(q.b-q.a)*Math.min(q.t,30),0);
- // hatched / outlined walls: close the hatch first; keep whichever reading finds clearly more wall body
- const solidOK=S.length>=4&&(wk>2.2*lw+2)&&sideCoverage(S,bbox(S)).n>=2;dbg.solidOK=solidOK;
- const inkBig=solidOK?null:compsFilter(ink,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.025*Math.max(W,H));
- if(!solidOK)for(const kc of[5,9,13]){const hm=openK(closeK(inkBig,W,H,Math.max(kc,lw*3+1)),W,H,Math.max(kOpen,Math.round(kc*.6)));const S2=run(hm);dbg['h'+kc]=[S2.length,Math.round(len(S2))];if(o.forceHatch===kc){S=S2;dbgMask=hm;break;}
-  if(len(S2)>len(S)*1.35&&S2.length<=Math.max(S.length*2+6,40)){S=S2;dbg.hatch=kc;dbgMask=hm;}}
+ const V=[];const add=(name,mask,wk,kOpen,kInt)=>{let S=run(mask,wk,/^t?h\d/.test(name),kInt||wk);if(o.debug)dbg["raw_"+name]=S.map(q=>[q.hz,q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]);if(S.length<3)return;S=focus(S);if(S.length<3)return;const bb=bbox(S);
+  const ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
+  V.push({name,S,mask,wk,kOpen,kInt,bb,q});dbg['q_'+name]=[S.length,+q.Q.toFixed(2),q.nR];};
+ add('ink',base.wm,base.wk,base.kOpen,base.kInt);
+ if(nTone>W*H*.0008){const B=wallMask(body,W,H);add('tone',B.wm,B.wk,B.kOpen,B.kInt);}
+ {const km=Math.max(6,Math.round(.022*Math.max(W,H))),pf=pairFill(nTone>W*H*.0008?body:ink,W,H,km,lw*2+2);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-(ink[i]|0);if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('pair',B.wm,B.wk,B.kOpen,B.kInt);}}
+ const solidOK=V.length&&V[0].S.length>=4&&(base.wk>2.2*lw+2)&&sideCoverage(V[0].S,V[0].bb).n>=2;dbg.solidOK=!!solidOK;
+ for(const src of solidOK?[]:nTone>W*H*.0008?[ink,body]:[ink]){const inkBig=compsFilter(src,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.025*Math.max(W,H));
+  for(const kc of[5,9,13]){const kk=Math.max(kc,lw*3+1);const hm=openK(closeK(inkBig,W,H,kk),W,H,Math.max(base.kOpen,Math.round(kc*.6)));add((src===ink?'h':'th')+kc,hm,Math.max(base.wk,kk),base.kOpen,base.kInt);}}
+ if(!V.length)return null;
+ let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q>best.q.Q+.05)best=v;}
+ dbg.pick=best.name;dbg.nR=best.q.nR;let S=best.S;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
- if(S.length<3)return null;
- // keep the main building cluster (drop dimension-line remnants far outside)
- dbg.nS=S.length;S=focus(S);dbg.nF=S.length;if(S.length<3)return null;
- let bb=bbox(S);
+ dbg.nS=S.length;
+ let bb=best.bb;
  let ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
  let sc=estimateScale(S,ops,bb);
  try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];const D=dimScale(ink,W,H,bb,tE,sc.ppm);dbg.dimLog=dimScale.log.slice(0,12);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};}}catch(e){dbg.dimErr=String(e);}
@@ -183,7 +224,7 @@ export function readPlan(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);
  const walls=[];
  for(const g of Object.values(groups)){const ss=g.map(i=>S[i]);let a=Math.min(...ss.map(s=>s.a)),b=Math.max(...ss.map(s=>s.b));ops.filter(p=>p.j==null&&g.includes(p.i)).forEach(p=>{if(p.end==='b')b=Math.max(b,p.to);else a=Math.min(a,p.to);});const L=ss.reduce((q,s)=>q+s.b-s.a,0),cc=ss.reduce((q,s)=>q+s.c*(s.b-s.a),0)/L,t=ss.reduce((q,s)=>q+s.t*(s.b-s.a),0)/L;
   const th=Math.min(.6,Math.max(.08,Math.round(t/ppm*100)/100));
-  const op=ops.filter(p=>g.includes(p.i)).map(p=>{const off=r(p.lo-a),w=r(p.hi-p.lo);return p.type==='window'?{type:'window',offset:off,width:w,sill:w>2.1?0:.9,height:w>2.1?2.2:1.4}:{type:'door',offset:off,width:Math.min(w,1.6),height:2.05,...(p.ext?{out:1}:{})};});
+  const op=ops.filter(p=>g.includes(p.i)&&p.type!=='wall').map(p=>{const off=r(p.lo-a),w=r(p.hi-p.lo);return p.type==='window'?{type:'window',offset:off,width:w,sill:w>2.1?0:.9,height:w>2.1?2.2:1.4}:{type:'door',offset:off,width:Math.min(w,1.6),height:2.05,...(p.ext?{out:1}:{})};});
   const s0=ss[0];walls.push(s0.hz?{start:[r(a),r(cc)],end:[r(b),r(cc)],thickness:th,op}:{start:[r(cc),r(a)],end:[r(cc),r(b)],thickness:th,op});}
  // confidence: closed outline + reasonable count + interior walls
  const cov=sideCoverage(S,bb);const conf=Math.min(1,(cov.n/4)*.6+(S.length>=6?.25:S.length/24)+(ops.length?.15:0));
@@ -202,9 +243,9 @@ function focus(S){const n=S.length,par=S.map((_,i)=>i),f=i=>par[i]===i?i:(par[i]
  return S.filter((s,i)=>f(i)===best||(s.hz?(s.c>=kb[1]-s.t&&s.c<=kb[3]+s.t&&s.a>=kb[0]-s.t&&s.b<=kb[2]+s.t):(s.c>=kb[0]-s.t&&s.c<=kb[2]+s.t&&s.a>=kb[1]-s.t&&s.b<=kb[3]+s.t)));}
 // ---------- dimension OCR (printed digits, template matching; no deps) ----------
 const GW=12,GH=18;let TPL=null;
-function templates(){if(TPL)return TPL;TPL=[];const fams=['Arial','Helvetica','DejaVu Sans','Liberation Sans','Verdana','Times New Roman','Liberation Serif','Courier New','sans-serif','serif','monospace'];
+function templates(){if(TPL)return TPL;TPL=[];const fams=['Arial','Arial Narrow','Helvetica','DejaVu Sans','Liberation Sans','Liberation Sans Narrow','Verdana','Roboto','Roboto Condensed','Times New Roman','Liberation Serif','Courier New','ISOCPEUR','sans-serif','serif','monospace'];
  const c=mk(80,80),x=c.getContext('2d');
- for(const f of fams)for(const wt of['normal','bold'])for(const ch of'0123456789'){x.fillStyle='#fff';x.fillRect(0,0,80,80);x.fillStyle='#000';x.font=`${wt} 56px ${f}`;x.textBaseline='alphabetic';x.fillText(ch,10,64);
+ for(const f of fams)for(const wt of['300','normal','bold'])for(const sx of[1,.72])for(const ch of'0123456789'){x.setTransform(1,0,0,1,0,0);x.fillStyle='#fff';x.fillRect(0,0,80,80);x.fillStyle='#000';x.font=`${wt} 56px ${f}`;x.textBaseline='alphabetic';x.setTransform(sx,0,0,1,10,0);x.fillText(ch,0,64);x.setTransform(1,0,0,1,0,0);
   const d=x.getImageData(0,0,80,80).data,m=new Uint8Array(6400);for(let i=0;i<6400;i++)m[i]=d[i*4]<128?1:0;let x0=80,y0=80,x1=-1,y1=-1;for(let y=0;y<80;y++)for(let xx=0;xx<80;xx++)if(m[y*80+xx]){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(y<y0)y0=y;if(y>y1)y1=y;}
   if(x1<0)continue;TPL.push({ch,g:grid(m,80,x0,y0,x1+1,y1+1),asp:(x1-x0+1)/(y1-y0+1)});}
  return TPL;}
@@ -233,10 +274,10 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
  for(let i=0;i<W*H;i++){if(!ink[i]||lab[i])continue;id++;st.push(i);lab[i]=id;let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0;while(st.length){const j=st.pop();n++;const x=j%W,y=(j/W)|0;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
    if(x>0&&ink[j-1]&&!lab[j-1]){lab[j-1]=id;st.push(j-1);}if(x<W-1&&ink[j+1]&&!lab[j+1]){lab[j+1]=id;st.push(j+1);}if(y>0&&ink[j-W]&&!lab[j-W]){lab[j-W]=id;st.push(j-W);}if(y<H-1&&ink[j+W]&&!lab[j+W]){lab[j+W]=id;st.push(j+W);}}
   const w=x1-x0+1,h=y1-y0+1;if(Math.max(w,h)>.06*Math.max(W,H)||Math.max(w,h)<4)continue;
-  const outside=x1<bb[0]-pad||x0>bb[2]+pad||y1<bb[1]-pad||y0>bb[3]+pad;if(!outside)continue;comps.push({x0,y0,x1:x1+1,y1:y1+1,n});}
+  comps.push({x0,y0,x1:x1+1,y1:y1+1,n});}
  // group into strings: horizontal (side zones above/below) and vertical (left/right)
  const strings=[];
- for(const rot of[0,1]){const used=new Set();const cs=comps.filter(c=>rot?(c.x1<bb[0]-pad||c.x0>bb[2]+pad):(c.y1<bb[1]-pad||c.y0>bb[3]+pad));
+ for(const rot of[0,1]){const used=new Set();const cs=comps;
   const key=c=>rot?c.y0:c.x0;cs.sort((a,b)=>key(a)-key(b));
   for(const c of cs){if(used.has(c))continue;const g=[c];used.add(c);let last=c,hM=rot?c.x1-c.x0:c.y1-c.y0;
    for(const d of cs){if(used.has(d))continue;const hL=hM;
@@ -246,19 +287,23 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
  for(const S of strings){const ord=S.rot?[...S.g].sort((a,b)=>b.y0-a.y0):S.g;// vertical text reads bottom->top
   let best=null;for(const dir of S.rot?[1,-1]:[0]){const chars=S.rot?(dir>0?ord:[...ord].reverse()):ord;const r=readString(chars,ink,W,dir);if(!best||r.s>best.s)best={...r,dir};}
   dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;
-  // dimension line: longest thin ink run parallel to the text, next to it
+  // dimension line next to the text, then the nearest perpendicular marks (ticks / extension lines) on each side
   const x0=Math.min(...S.g.map(c=>c.x0)),x1=Math.max(...S.g.map(c=>c.x1)),y0=Math.min(...S.g.map(c=>c.y0)),y1=Math.max(...S.g.map(c=>c.y1)),th=S.rot?x1-x0:y1-y0;
-  let ext=0;const cx=(x0+x1)/2,cy=(y0+y1)/2;
-  for(let k=1;k<=Math.round(th*1.4);k++)for(const sg of[1,-1]){
-   if(!S.rot){const y=Math.round(sg>0?y1+k:y0-k);if(y<0||y>=H)continue;if(!ink[y*W+Math.round(cx)])continue;const on=x=>x>=0&&x<W&&(ink[y*W+x]||ink[(y-1)*W+x]||ink[(y+1)*W+x]);const G=Math.round(th*3);let a=Math.round(cx),b=a,g=0;for(let x=a-1;x>=0&&g<=G;x--){if(on(x)){a=x;g=0;}else g++;}g=0;for(let x=b+1;x<W&&g<=G;x++){if(on(x)){b=x;g=0;}else g++;}ext=Math.max(ext,b-a);}
-   else{const x=Math.round(sg>0?x1+k:x0-k);if(x<1||x>=W-1)continue;if(!ink[Math.round(cy)*W+x])continue;const on=y=>y>=0&&y<H&&(ink[y*W+x]||ink[y*W+x-1]||ink[y*W+x+1]);const G=Math.round(th*3);let a=Math.round(cy),b=a,g=0;for(let y=a-1;y>=0&&g<=G;y--){if(on(y)){a=y;g=0;}else g++;}g=0;for(let y=b+1;y<H&&g<=G;y++){if(on(y)){b=y;g=0;}else g++;}ext=Math.max(ext,b-a);}}
-  if(ext<(S.rot?y1-y0:x1-x0)*1.5)continue;const bS=S.rot?bb[3]-bb[1]:bb[2]-bb[0];if(ext>bS*1.08+2*tWall)ext=bS+tWall;
-  out.push({txt:best.txt,s:+best.s.toFixed(2),ext,vals,rot:S.rot});}
+  // work in (u along line, v across) coordinates
+  const I=S.rot?(u,v)=>(u>=0&&u<H&&v>=0&&v<W)?ink[u*W+v]:0:(u,v)=>(u>=0&&u<W&&v>=0&&v<H)?ink[v*W+u]:0;
+  const uc=Math.round(S.rot?(y0+y1)/2:(x0+x1)/2),tu0=S.rot?y0:x0,tu1=S.rot?y1:x1,tv0=S.rot?x0:y0,tv1=S.rot?x1:y1;
+  let seg=0,lineV=-1;
+  for(let k=1;k<=Math.round(th*1.3)&&!seg;k++)for(const v of[tv1+k,tv0-k]){if(seg)break;
+   if(!(I(uc,v)||I(uc-2,v)||I(uc+2,v)))continue;// line must pass under/over the text
+   const on=u=>I(u,v)||I(u,v-1)||I(u,v+1);const side=v>tv1?1:-1;// text side
+   const mark=u=>{let a=0,b=0;for(let d=3;d<=6;d++){a+=I(u,v+d*side*-1)?1:0;if(u<tu0-1||u>tu1+1)b+=I(u,v+d*side)?1:0;}return a>=2||b>=2;};
+   const G=Math.max(3,Math.round(th*1.5));const walk=dir=>{let u=uc,g=0;for(let n=0;n<4000;n++){u+=dir;if(on(u)){g=0;if((dir<0?u<tu0-1:u>tu1+1)&&mark(u)){let e=u;for(let q=u+dir,gq=0;Math.abs(q-u)<16&&gq<=3;q+=dir){if(mark(q)){e=q;gq=0;}else gq++;}return (u+e)/2;}}else if(++g>G)return u-dir*g;}return null;};
+   const a=walk(-1),b=walk(1);if(a!=null&&b!=null&&b-a>(tu1-tu0)*1.1){seg=b-a;lineV=v;}}
+  if(!seg)continue;
+  out.push({txt:best.txt,s:+best.s.toFixed(2),ext:seg,vals,rot:S.rot});}
  if(!out.length)return null;
- // pick the unit interpretation that is plausible and consistent across dimensions
- const bw=Math.max(bb[2]-bb[0],bb[3]-bb[1]);let best=null;
- for(let u=0;u<3;u++){const pp=out.map(o=>o.ext/(o.vals[Math.min(u,o.vals.length-1)])).filter(p=>p>0);if(!pp.length)continue;pp.sort((a,b)=>a-b);const p=pp[pp.length>>1],m=bw/p,t=tWall/p;
-  const cons=pp.filter(q=>Math.abs(q/p-1)<.06).length;const ok=m>=4&&m<=60&&t>=.05&&t<=.8;if(ok&&(!best||cons>best.cons))best={ppm:p,cons,u};}
- if(best&&out.length>=2&&best.cons<2&&!(prior&&Math.abs(best.ppm/prior-1)<.3))best=null;
- if(best&&out.length==1&&prior&&Math.abs(best.ppm/prior-1)>.3)best=null;
+ // every reading votes for ppm under each unit interpretation; keep the value most strings agree on
+ const bw=Math.max(bb[2]-bb[0],bb[3]-bb[1]);const cand=[];out.forEach((o,k)=>o.vals.forEach(v=>{const p=o.ext/v;const m=bw/p,t=tWall/p;if(m>=3&&m<=60&&t>=.05&&t<=.8)cand.push({p,k});}));
+ let best=null;for(const c of cand){const sup=new Set(cand.filter(d=>Math.abs(d.p/c.p-1)<.035).map(d=>d.k));const ps=cand.filter(d=>Math.abs(d.p/c.p-1)<.035).map(d=>d.p);const sc=sup.size;if(!best||sc>best.cons)best={ppm:median(ps),cons:sc};}
+ if(best&&best.cons<2&&!(prior&&Math.abs(best.ppm/prior-1)<.3))best=null;
  return best?{ppm:best.ppm,n:best.cons,dims:out.map(o=>o.txt+'@'+o.ext+'/'+o.s)}:null;}
