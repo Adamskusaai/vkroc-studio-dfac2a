@@ -1,5 +1,5 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261110l';
-import {readPlan} from './plan.js?v=20261110l';
+import {detectWalls,gapMerge} from './cv.js?v=20261110m';
+import {readPlan} from './plan.js?v=20261110m';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -373,7 +373,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110l');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261110m');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -518,7 +518,7 @@ function tut(T=TUT,key='vkTut'){document.getElementById('tutx')?.remove();const 
   const bw=Math.min(300,innerWidth-24),below=r.bottom+170<innerHeight;bx.style.width=bw+'px';bx.style.left=Math.max(12,Math.min(innerWidth-bw-12,r.left+r.width/2-bw/2))+'px';bx.style.top=(below?r.bottom+16:Math.max(12,r.top-16-bx.offsetHeight))+'px';}
  w.querySelector('.tn').onclick=()=>{if(++i>=st.length)end();else show();};w.querySelector('.ts').onclick=end;addEventListener('resize',show);show();}
 window.tut=tut;
-function tutWait(n=0,T=TUT,key='vkTut'){if(localStorage[key]||document.getElementById('tutx')||n>60)return;if(T===TUT&&H&&(H.underlay||H.walls.some(w=>w.auto)))return;const ok=document.getElementById(T===TUT?'ed':'vw').classList.contains('on')&&!document.getElementById('sk3').offsetParent&&!document.getElementById('ov').classList.contains('on')&&!document.body.classList.contains('pres');if(ok&&n>2)tut(T,key);else setTimeout(()=>tutWait(n+1,T,key),400);}
+function tutWait(n=0,T=TUT,key='vkTut'){if(localStorage[key]||document.getElementById('tutx')||n>60)return;if(H&&(H.underlay||H.walls.some(w=>w.auto)))return;/* prem8: never cover a recognised plan or its 3D result with onboarding (menu still opens it) */const ok=document.getElementById(T===TUT?'ed':'vw').classList.contains('on')&&!document.getElementById('sk3').offsetParent&&!document.getElementById('ov').classList.contains('on')&&!document.body.classList.contains('pres');if(ok&&n>2)tut(T,key);else setTimeout(()=>tutWait(n+1,T,key),400);}
 
 /* Marketing / Social capture — URL params only (hidden from normal UI)
    ?clean=1          hide all UI, cursor, toasts

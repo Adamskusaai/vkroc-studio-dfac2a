@@ -8,7 +8,8 @@ function imgCanvas(img,M){const S=Math.min(2.5,M/Math.max(img.width,img.height))
 function grayOf(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Float32Array(W*H);for(let i=0;i<W*H;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;return g;}
 function otsuF(g,step=1){const h=new Float64Array(256);let n=0;for(let i=0;i<g.length;i+=step){h[Math.max(0,Math.min(255,g[i]|0))]++;n++;}let s=0,sB=0,wB=0,b=0,t=128;for(let i=0;i<256;i++)s+=i*h[i];for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=n-wB;if(!wF)break;sB+=i*h[i];const v=wB*wF*(sB/wB-(s-sB)/wF)**2;if(v>b){b=v;t=i;}}return t;}
 // ---------- paper detection + perspective ----------
-function findPaper(c){const s=Math.min(1,360/Math.max(c.width,c.height)),w=Math.max(8,Math.round(c.width*s)),h=Math.max(8,Math.round(c.height*s)),sc=mk(w,h);sc.getContext('2d').drawImage(c,0,0,w,h);
+function findPaper(c){const s=Math.min(1,360/Math.max(c.width,c.height)),w=Math.max(8,Math.round(c.width*s)),h=Math.max(8,Math.round(c.height*s)),sc=mk(w,h);{// stepwise halving = antialiased downscale (one big drawImage step aliases text into fake edges)
+  let cur=c;while(cur.width>2.2*w){const t=mk(Math.round(cur.width/2),Math.round(cur.height/2));const x=t.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(cur,0,0,t.width,t.height);cur=t;}const x=sc.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(cur,0,0,w,h);}
  const g=grayOf(sc);// blur 3x3 twice to drop drawing lines
  const t=otsuF(g);const m=new Uint8Array(w*h);for(let i=0;i<w*h;i++)m[i]=g[i]>t?1:0;
  // close lines inside the paper: dilate bright by 2
@@ -17,15 +18,30 @@ function findPaper(c){const s=Math.min(1,360/Math.max(c.width,c.height)),w=Math.
  // prem8: illumination-safe paper region = flood fill from the bright centre across small relative steps (soft shadows and
  // gradients pass, the paper edge does not), then holes filled. Falls back to the Otsu component above.
  {const b=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let s2=0,n2=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<w&&Y<h){s2+=g[Y*w+X];n2++;}}b[y*w+x]=s2/n2;}
-  let seed=-1,sv=-1;for(let y=Math.round(h*.3);y<h*.7;y++)for(let x=Math.round(w*.3);x<w*.7;x++){const v=b[y*w+x];if(v>sv){sv=v;seed=y*w+x;}}
-  const F=new Uint8Array(w*h),q=[seed];F[seed]=1;
-  while(q.length){const j=q.pop(),x=j%w,y=(j/w)|0,v=b[j];for(const[k,ok]of[[j-1,x>0],[j+1,x<w-1],[j-w,y>0],[j+w,y<h-1]]){if(!ok||F[k])continue;const u=b[k];if(Math.abs(u-v)/Math.max(u,v,20)<.045&&u>.35*sv){F[k]=1;q.push(k);}}}
-  // fill holes (rooms enclosed by walls, text): everything not reachable from the border through non-paper
-  const O=new Uint8Array(w*h),q2=[];for(let x=0;x<w;x++){for(const j of[x,(h-1)*w+x])if(!F[j]&&!O[j]){O[j]=1;q2.push(j);}}for(let y=0;y<h;y++){for(const j of[y*w,y*w+w-1])if(!F[j]&&!O[j]){O[j]=1;q2.push(j);}}
-  while(q2.length){const j=q2.pop(),x=j%w,y=(j/w)|0;for(const[k,ok]of[[j-1,x>0],[j+1,x<w-1],[j-w,y>0],[j+w,y<h-1]]){if(ok&&!F[k]&&!O[k]){O[k]=1;q2.push(k);}}}
-  let n=0;for(let i=0;i<w*h;i++)if(!O[i])n++;
-  let tb2=0;for(let x=0;x<w;x++){if(!O[x])tb2++;if(!O[(h-1)*w+x])tb2++;}for(let y=0;y<h;y++){if(!O[y*w])tb2++;if(!O[y*w+w-1])tb2++;}
-  if(n>.2*w*h&&n<.93*w*h&&tb2<.12*(2*w+2*h)){for(let i=0;i<w*h;i++)lab[i]=O[i]?0:-7;best=-7;bestN=n;findPaper.src='fill';}else findPaper.src='otsu';}
+  // several seeds (centre may sit inside a closed room) x several step tolerances (low-contrast shadowed edges leak at loose ones)
+  const seeds=[];const bri=(x0,x1,y0,y1)=>{let sd=-1,sv=-1;for(let y=Math.round(h*y0);y<h*y1;y++)for(let x=Math.round(w*x0);x<w*x1;x++){const v=b[y*w+x];if(v>sv){sv=v;sd=y*w+x;}}return[sd,sv];};
+  seeds.push(bri(.3,.7,.3,.7),bri(.12,.25,.3,.7),bri(.75,.88,.3,.7),bri(.3,.7,.12,.25),bri(.3,.7,.75,.88));
+  // edge barrier: strong local contrast over a 5x5 window stops the fill even when a blurred paper edge falls in small steps
+  const E=new Uint8Array(w*h);{const r=2,mx=new Float32Array(w*h),mn=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let M=0,m=1e9;for(let k=Math.max(0,x-r);k<=Math.min(w-1,x+r);k++){const v=b[y*w+k];if(v>M)M=v;if(v<m)m=v;}mx[y*w+x]=M;mn[y*w+x]=m;}
+   for(let y=0;y<h;y++)for(let x=0;x<w;x++){let M=0,m=1e9;for(let k=Math.max(0,y-r);k<=Math.min(h-1,y+r);k++){const i=k*w+x;if(mx[i]>M)M=mx[i];if(mn[i]<m)m=mn[i];}E[y*w+x]=(M-m)/Math.max(M,20)>.35?1:0;}}
+  let bestF=null;findPaper.fd=[];
+  for(const tol of[.045,.03,.02,.013]){for(const[seed,sv]of seeds){if(seed<0||E[seed])continue;if(bestF&&bestF.tol>tol)break;
+   const F=new Uint8Array(w*h),q=[seed];F[seed]=1;
+   while(q.length){const j=q.pop(),x=j%w,y=(j/w)|0,v=b[j];for(const[k,ok]of[[j-1,x>0],[j+1,x<w-1],[j-w,y>0],[j+w,y<h-1]]){if(!ok||F[k])continue;const u=b[k];if(!E[k]&&Math.abs(u-v)/Math.max(u,v,20)<tol&&u>.35*sv){F[k]=1;q.push(k);}}}
+   const O=new Uint8Array(w*h),q2=[];for(let x=0;x<w;x++){for(const j of[x,(h-1)*w+x])if(!F[j]&&!O[j]){O[j]=1;q2.push(j);}}for(let y=0;y<h;y++){for(const j of[y*w,y*w+w-1])if(!F[j]&&!O[j]){O[j]=1;q2.push(j);}}
+   while(q2.length){const j=q2.pop(),x=j%w,y=(j/w)|0;for(const[k,ok]of[[j-1,x>0],[j+1,x<w-1],[j-w,y>0],[j+w,y<h-1]]){if(ok&&!F[k]&&!O[k]){O[k]=1;q2.push(k);}}}
+   let n=0;for(let i=0;i<w*h;i++)if(!O[i])n++;
+   let tb2=0;for(let x=0;x<w;x++){if(!O[x])tb2++;if(!O[(h-1)*w+x])tb2++;}for(let y=0;y<h;y++){if(!O[y*w])tb2++;if(!O[y*w+w-1])tb2++;}
+   // convexity: a real sheet fills its hull; leaks into the table are ragged
+   if(findPaper.fd.length<6)findPaper.fd.push([tol,+(n/(w*h)).toFixed(2),+(tb2/(2*w+2*h)).toFixed(2)]);
+   let okOut=true;if(n>.2*w*h&&n<.93*w*h&&tb2<.12*(2*w+2*h)){// what lies outside must be a darker surface (table), not white margin around a house outline
+    const hi=[],ho=[];for(let i=0;i<w*h;i+=3)(O[i]?ho:hi).push(b[i]);hi.sort((a,b)=>a-b);ho.sort((a,b)=>a-b);const mi=hi[hi.length>>1],mo=ho[ho.length>>1];okOut=mo<.85*mi;
+    if(findPaper.fd.length<8)findPaper.fd.push(['io',tol,Math.round(mi),Math.round(mo)]);}
+   if(okOut&&n>.2*w*h&&n<.93*w*h&&tb2<.12*(2*w+2*h)&&(!bestF||n>bestF.n))bestF={O,n,tol};}
+   if(bestF)break;}
+  if(bestF){const qd=[0,0,0,0];for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(!bestF.O[y*w+x])qd[(y>h/2?2:0)+(x>w/2?1:0)]++;findPaper.fd.push(['qd',...qd.map(v=>+(v/(w*h/4)).toFixed(2))]);let ne=0;for(let i=0;i<w*h;i++)ne+=E[i];findPaper.fd.push(['E',+(ne/(w*h)).toFixed(3)]);}
+  if(bestF){const inn=new Uint8Array(w*h);for(let i=0;i<w*h;i++)inn[i]=bestF.O[i]?0:1;const dl=dilate(inn,w,h,5);for(let i=0;i<w*h;i++)bestF.O[i]=dl[i]?0:1;}// undo the 5x5 barrier erosion
+  if(bestF){for(let i=0;i<w*h;i++)lab[i]=bestF.O[i]?0:-7;best=-7;bestN=bestF.n;findPaper.src='fill'+bestF.tol;}else findPaper.src='otsu';}
  if(bestN<.2*w*h)return null;
  // touches all 4 borders broadly -> no separate paper
  let tb=0;for(let x=0;x<w;x++){if(lab[x]===best)tb++;if(lab[(h-1)*w+x]===best)tb++;}for(let y=0;y<h;y++){if(lab[y*w]===best)tb++;if(lab[y*w+w-1]===best)tb++;}
@@ -54,7 +70,20 @@ function homog(src,dst){// solve H mapping src->dst (8x8)
  const A=[],b=[];for(let i=0;i<4;i++){const[x,y]=src[i],[u,v]=dst[i];A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v);}
  for(let i=0;i<8;i++){let p=i;for(let r=i+1;r<8;r++)if(Math.abs(A[r][i])>Math.abs(A[p][i]))p=r;[A[i],A[p]]=[A[p],A[i]];[b[i],b[p]]=[b[p],b[i]];for(let r=0;r<8;r++){if(r===i)continue;const f=A[r][i]/A[i][i];for(let k=i;k<8;k++)A[r][k]-=f*A[i][k];b[r]-=f*b[i];}}
  const h=b.map((v,i)=>v/A[i][i]);return[...h,1];}
-function warpPaper(c,q){const d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);let W=Math.round((d(q[0],q[1])+d(q[3],q[2]))/2),H=Math.round((d(q[0],q[3])+d(q[1],q[2]))/2);const s=Math.min(1,MAXD/Math.max(W,H));W=Math.round(W*s);H=Math.round(H*s);
+// prem8: true width/height of a photographed rectangle (Zhang & He, whiteboard rectification): focal length from the two
+// vanishing points, principal point = image centre; affine fallback. q = TL,TR,BR,BL in canvas pixels.
+function paperAspect(q,cw,ch){const u0=cw/2,v0=ch/2,P=p=>[p[0],p[1],1],cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],dt=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+ const m1=P(q[0]),m2=P(q[1]),m3=P(q[3]),m4=P(q[2]);const k2=dt(cr(m1,m4),m3)/dt(cr(m2,m4),m3),k3=dt(cr(m1,m4),m2)/dt(cr(m3,m4),m2);
+ const n2=m2.map((v,i)=>k2*v-m1[i]),n3=m3.map((v,i)=>k3*v-m1[i]);
+ const aff=()=>Math.sqrt((n2[0]**2+n2[1]**2)/(n3[0]**2+n3[1]**2));
+ if(Math.abs(n2[2]*n3[2])<1e-9)return{r:aff(),f:0};
+ const f2=-((n2[0]*n3[0]-(n2[0]*n3[2]+n2[2]*n3[0])*u0+n2[2]*n3[2]*u0*u0)+(n2[1]*n3[1]-(n2[1]*n3[2]+n2[2]*n3[1])*v0+n2[2]*n3[2]*v0*v0))/(n2[2]*n3[2]);
+ const D=Math.max(cw,ch);if(!(f2>(.4*D)**2&&f2<(6*D)**2))return{r:aff(),f:0};
+ const qf=n=>{const x=n[0]-u0*n[2],y=n[1]-v0*n[2];return(x*x+y*y)/f2+n[2]*n[2];};const r=Math.sqrt(qf(n2)/qf(n3));
+ return isFinite(r)&&r>.2&&r<5?{r,f:Math.sqrt(f2)}:{r:aff(),f:0};}
+function warpPaper(c,q){const d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);let W=Math.round((d(q[0],q[1])+d(q[3],q[2]))/2),H=Math.round((d(q[0],q[3])+d(q[1],q[2]))/2);
+ {const A=paperAspect(q,c.width,c.height);warpPaper.asp=[+(W/H).toFixed(3),+A.r.toFixed(3),Math.round(A.f)];// Zhang's ratio is logged only (synthetic warps are not pinhole cameras); a sheet within 4% of ISO A (1.414) snaps to it
+  let r=W/H;const iso=r>=1?Math.SQRT2:1/Math.SQRT2;if(Math.abs(r/iso-1)<.04){const ar=Math.sqrt(W*H);W=Math.round(ar*Math.sqrt(iso));H=Math.round(ar/Math.sqrt(iso));warpPaper.asp.push('iso');}}const s=Math.min(1,MAXD/Math.max(W,H));W=Math.round(W*s);H=Math.round(H*s);
  const Hm=homog([[0,0],[W,0],[W,H],[0,H]],q),src=c.getContext('2d').getImageData(0,0,c.width,c.height),sd=src.data,SW=c.width,SH=c.height,o=mk(W,H),ox=o.getContext('2d'),od=ox.createImageData(W,H),dd=od.data;
  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const z=Hm[6]*x+Hm[7]*y+1,u=(Hm[0]*x+Hm[1]*y+Hm[2])/z,v=(Hm[3]*x+Hm[4]*y+Hm[5])/z;const x0=Math.floor(u),y0=Math.floor(v),fx=u-x0,fy=v-y0,j=(y*W+x)*4;
   if(x0<0||y0<0||x0>=SW-1||y0>=SH-1){dd[j]=dd[j+1]=dd[j+2]=255;dd[j+3]=255;continue;}const i00=(y0*SW+x0)*4,i10=i00+4,i01=i00+SW*4,i11=i01+4;
@@ -64,8 +93,21 @@ function warpPaper(c,q){const d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);let W=Mat
  const m=Math.round(Math.min(W,H)*.015),t=mk(W-2*m,H-2*m);t.getContext('2d').drawImage(o,-m,-m);return t;}
 // ---------- cleaning ----------
 // remove coloured pen / highlighter (chroma) and normalise illumination -> Float32 "whiteness" 0..1
+function cleanGrayOld(c){/* pre-photo-stage cleaning, kept for clean digital plans (chosen by quality) */const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Float32Array(W*H);
+ for(let i=0;i<W*H;i++){const r=d[i*4],gg=d[i*4+1],b=d[i*4+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),y=r*.3+gg*.59+b*.11;g[i]=(mx-mn>28&&(mx-mn)>.16*mx)?-1:y;}
+ // background (paper) level: block max then smooth
+ const B=Math.max(8,Math.round(Math.max(W,H)/40)),bw=Math.ceil(W/B),bh=Math.ceil(H/B),bm=new Float32Array(bw*bh);
+ for(let by=0;by<bh;by++)for(let bx=0;bx<bw;bx++){const vals=[];for(let y=by*B;y<Math.min(H,by*B+B);y+=2)for(let x=bx*B;x<Math.min(W,bx*B+B);x+=2){const v=g[y*W+x];if(v>=0)vals.push(v);}vals.sort((a,b)=>a-b);bm[by*bw+bx]=vals.length?vals[Math.floor(vals.length*.9)]:255;}
+ // max-filter 3x3 blocks (walls bigger than a block) then mean 3x3
+ const bm2=new Float32Array(bw*bh),bm3=new Float32Array(bw*bh);
+ for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let m=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<bw&&Y<bh)m=Math.max(m,bm[Y*bw+X]);}bm2[y*bw+x]=m;}
+ for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let s=0,n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<bw&&Y<bh){s+=bm2[Y*bw+X];n++;}}bm3[y*bw+x]=s/n;}
+ const out=new Float32Array(W*H);
+ for(let y=0;y<H;y++){const fy=Math.min(bh-1.001,Math.max(0,(y+.5)/B-.5)),y0=Math.floor(fy),ty=fy-y0;for(let x=0;x<W;x++){const fx=Math.min(bw-1.001,Math.max(0,(x+.5)/B-.5)),x0=Math.floor(fx),tx=fx-x0,i=y0*bw+x0,
+   bg=(bm3[i]*(1-tx)+bm3[i+1<bw*bh?i+1:i]*tx)*(1-ty)+(bm3[Math.min(i+bw,bw*bh-1)]*(1-tx)+bm3[Math.min(i+bw+1,bw*bh-1)]*tx)*ty;const v=g[y*W+x];out[y*W+x]=v<0?1:Math.min(1,v/Math.max(30,bg));}}
+ return out;}
 function cleanGray(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Float32Array(W*H);
- const gm=new Float32Array(W*H);for(let i=0;i<W*H;i++){const r=d[i*4],gg=d[i*4+1],b=d[i*4+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),y=r*.3+gg*.59+b*.11;g[i]=(mx-mn>28&&(mx-mn)>.16*mx)?-1:y;gm[i]=mx;}
+ const gm=new Float32Array(W*H);for(let i=0;i<W*H;i++){const r=d[i*4],gg=d[i*4+1],b=d[i*4+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),y=r*.3+gg*.59+b*.11;g[i]=(mx-mn>28&&(mx-mn)>.16*mx&&y>95)?-1:y;/* prem8: dark coloured strokes (maroon/navy walls) stay ink; only light fills are stripped */gm[i]=mx;}
  // prem8 photo stage: paper level = grey closing (removes dark strokes up to K px) on a 4x-reduced max image, so soft shadows,
  // gradients and glare stay in the background while lines/walls do not; then divide (background normalisation)
  const F=4,bw=Math.ceil(W/F),bh=Math.ceil(H/F),sm=new Float32Array(bw*bh);
@@ -83,7 +125,7 @@ function cleanGray(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageDa
  for(let y=0;y<H;y++){const fy=Math.min(bh-1.001,Math.max(0,(y+.5)/F-.5)),y0=Math.floor(fy),ty=fy-y0;for(let x=0;x<W;x++){const fx=Math.min(bw-1.001,Math.max(0,(x+.5)/F-.5)),x0=Math.floor(fx),tx=fx-x0,i=y0*bw+x0,
    bg=(bgS[i]*(1-tx)+bgS[Math.min(i+1,bw*bh-1)]*tx)*(1-ty)+(bgS[Math.min(i+bw,bw*bh-1)]*(1-tx)+bgS[Math.min(i+bw+1,bw*bh-1)]*tx)*ty;const v=g[y*W+x];out[y*W+x]=v<0||bg<bgLo?1:Math.min(1,v/Math.max(30,bg));}}
  return out;}
-function inkMask(n,W,H,thr){const m=new Uint8Array(W*H);for(let i=0;i<W*H;i++)m[i]=n[i]<thr?1:0;
+function inkMask(n,W,H,thr){const m=new Uint8Array(W*H);for(let i=0;i<W*H;i++)m[i]=n[i]<thr?1:0;if(inkMask.off)return m;
  // prem8 hysteresis: faint (blurred / pencil / JPEG) parts of a stroke join when they touch a confident stroke
  // grow at most 3 px from a confident stroke; skipped on noisy (dark / grainy) pages where faint pixels are everywhere
  const wk=Math.min(.86,thr+.2);let nw=0,ns=0;for(let i=0;i<W*H;i++){if(m[i])ns++;else if(n[i]<wk)nw++;}
@@ -184,10 +226,11 @@ function findOpenings(S,ink,W,H,ppm,bb){const out=[];const used=new Set();
 function median(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);return s[s.length>>1];}
 function estimateScale(S,ops,bb){const bw=Math.max(bb[2]-bb[0],bb[3]-bb[1]);const ok=p=>p>0&&bw/p>=4&&bw/p<=40;
  const outer=S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t);
- const tE=median(outer),pT=tE/.33;// exterior wall typ. 0.30–0.45 m
+ const tE=median(outer),pT=tE/.37;// prem8: SK brick houses 0.44–0.50, timber/synthetic ~0.30 -> middle value, and doors weigh more below
+// exterior wall typ. 0.30–0.45 m
  const doors=ops.filter(o=>o.type==='door'&&!o.ext).map(o=>o.g),pD=doors.length?median(doors)/.85:0;
- let ppm,src;if(ok(pD)&&ok(pT)&&doors.length>=2){ppm=Math.sqrt(pD*pT);src='doors+walls';}else if(ok(pD)&&doors.length>=2){ppm=pD;src='doors';}else if(ok(pT)){ppm=pT;src='walls';}else{ppm=bw/12;src='size';}
- return{ppm,src};}
+ let ppm,src;if(ok(pD)&&ok(pT)&&doors.length>=2){ppm=Math.pow(pD,.7)*Math.pow(pT,.3);src='doors+walls';}else if(ok(pD)&&doors.length>=2){ppm=pD;src='doors';}else if(ok(pT)){ppm=pT;src='walls';}else{ppm=bw/12;src='size';}
+ estimateScale.last=[pD,pT,doors.length,outer.length];return{ppm,src};}
 // outline walls: two thin parallel lines with nothing between (white or grey) -> fill the band.
 // Stacks of 3+ lines (windows) and hatch are left alone.
 function pairFill(ink,W,H,kmax,lwm){const o=new Uint8Array(ink);
@@ -225,10 +268,14 @@ function quality(S,ops,bb,ppm,W,H){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/
  const Q=nR*.6+Math.min(1,encl/bbA)*3+cov.n*.4-.3*tiny-.04*Math.max(0,S.length-3*nR-8);
  return{Q,nR,encl:encl/bbA};}
 // ---------- main ----------
-export function readPlan(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);
- if(!o.rect){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.paper=1;}}
- let n=cleanGray(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
- if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=cleanGray(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
+// prem8: digital (no paper found) uploads are read with both cleanings; the reading with the more plausible rooms wins
+export function readPlan(img,o={}){if(o._cm)return readPlan1(img,o);const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&A.dbg.paper)return A;
+ let B=null;try{B=readPlan1(img,{...o,_cm:'old'});}catch(e){B=null;}if(!B)return A;if(!A)return B;
+ const qa=(A.dbg.Q||0)+(A.dbg.scale==='dims'?.6:0),qb=(B.dbg.Q||0)+(B.dbg.scale==='dims'?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
+function readPlan1(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);const CG=o._cm==='old'?cleanGrayOld:cleanGray;inkMask.off=o._cm==='old';
+ if(!o.rect){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
+ let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
+ if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=CG(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
  ink=compsFilter(ink,W,H,k=>k.n>=6);
  // wall bodies may be grey (poché) rather than black: add mid-grey tone to the body mask
  let tone=new Uint8Array(W*H);for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x,v=n[i];if(v<.86&&v>.2&&!ink[i]){let g=0;for(const j of[i-1,i+1,i-W,i+W]){if(!ink[j])g=Math.max(g,Math.abs(v-n[j]));}if(g<.045)tone[i]=1;}}dbg.tone0=tone.reduce((a,b)=>a+b,0);tone=openK(tone,W,H,3);const body=new Uint8Array(W*H);let nTone=0;for(let i=0;i<W*H;i++){body[i]=ink[i]||tone[i]?1:0;nTone+=tone[i];}dbg.tone=+(nTone/(W*H)).toFixed(3);
@@ -250,18 +297,33 @@ export function readPlan(img,o={}){const dbg={};let c=imgCanvas(img,MAXD);
  add('ink',base.wm,base.wk,base.kOpen,base.kInt);
  if(nTone>W*H*.0008){const B=wallMask(body,W,H);add('tone',B.wm,B.wk,B.kOpen,B.kInt);}
  {const km=Math.max(6,Math.round(.022*Math.max(W,H))),pfS=compsFilter(nTone>W*H*.0008?body:ink,W,H,k=>{const a=k.x1-k.x0+1,b=k.y1-k.y0+1;return Math.max(a,b)>=.025*Math.max(W,H)||Math.min(a,b)<.3*Math.max(a,b);}),pf0=pairFill(pfS,W,H,km,lw*2+2),pf=close1(close1(pf0,W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-pfS[i];dbg.pairD=+(d*7/(W*H)).toFixed(4);if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('pair',B.wm,B.wk,B.kOpen,B.kInt);}}
+ // prem8 sketch stage: thin, wobbly, broken hand strokes (pen/pencil photo) -> looser threshold, short axis closings bridge
+ // breaks and wobble, then the double-line walls are filled like 'pair'. Only when strokes are thin and no reading closes rooms.
+ if(lw<=3&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
+  const km=Math.max(6,Math.round(.022*mx)),pf=close1(close1(pairFill(c2,W,H,km,lw*2+5),W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-c2[i];
+  if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('sk'+Math.round(skT*100),B.wm,B.wk,B.kOpen,B.kInt);}}
  const solidOK=V.length&&V[0].S.length>=4&&(base.wk>2.2*lw+2)&&sideCoverage(V[0].S,V[0].bb).n>=2;dbg.solidOK=!!solidOK;
  for(const src of solidOK?[]:nTone>W*H*.0008?[ink,body]:[ink]){const inkBig=compsFilter(src,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.025*Math.max(W,H));
   for(const kc of[5,9,13]){const kk=Math.max(kc,lw*3+1);const hm=openK(closeK(inkBig,W,H,kk),W,H,Math.max(base.kOpen,Math.round(kc*.6)));add((src===ink?'h':'th')+kc,hm,Math.max(base.wk,kk),base.kOpen,base.kInt);}}
  if(!V.length)return null;
  const pen=v=>v.name==='pair'?.35:0;let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q-pen(v)>best.q.Q-pen(best)+.05)best=v;}
- dbg.pick=best.name;dbg.nR=best.q.nR;let S=best.S;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
+ dbg.pick=best.name;dbg.nR=best.q.nR;dbg.Q=best.q.Q;let S=pruneLoose(best.S);dbg.pruned=best.S.length-S.length;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
  dbg.nS=S.length;
  let bb=best.bb;
  let ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
- let sc=estimateScale(S,ops,bb);
- try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];const D=dimScale(ink,W,H,bb,tE,sc.ppm);dbg.dimLog=dimScale.log.slice(0,12);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};}}catch(e){dbg.dimErr=String(e);}
+ let sc=estimateScale(S,ops,bb);dbg.est=estimateScale.last.map(v=>+v.toFixed(1));
+ try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];
+  // prem8 photo stage: dimension text may be upside down (plan shot at 180°) or too small/blurred for the 1x ink mask ->
+  // retry on the 180°-rotated mask and on a 2x bilinear upscale of the cleaned page (own threshold), lengths scaled back
+  const r180=(m,w,h)=>{const o=new Uint8Array(w*h);for(let i=0;i<w*h;i++)o[i]=m[w*h-1-i];return o;};
+  const tryD=(m,w,h,f,flip)=>{const b2=bb.map(v=>v*f),bq=flip?[w-b2[2],h-b2[3],w-b2[0],h-b2[1]]:b2;const R=dimScale(flip?r180(m,w,h):m,w,h,bq,tE*f,sc.ppm*f);return R?{...R,ppm:R.ppm/f,via:f+(flip?'r':'')}:null;};
+  let D=tryD(ink,W,H,1,0);
+  if(!D||D.n<2){const D2=tryD(ink,W,H,1,1);if(D2&&(!D||D2.n>D.n))D=D2;}
+  if((!D||D.n<2)&&W*H<4.5e6){const W2=W*2,H2=H*2,u=new Uint8Array(W2*H2);for(let y=0;y<H2;y++){const fy=Math.min(H-1.001,Math.max(0,(y-.5)/2)),y0=fy|0,ay=fy-y0;for(let x=0;x<W2;x++){const fx=Math.min(W-1.001,Math.max(0,(x-.5)/2)),x0=fx|0,ax=fx-x0,i=y0*W+x0;const v=(n[i]*(1-ax)+n[i+1]*ax)*(1-ay)+(n[i+W]*(1-ax)+n[i+W+1]*ax)*ay;u[y*W2+x]=v<.55?1:0;}}
+   if(o.debug){const hh=Math.round(H2*.3),dc=mk(W2,hh),x=dc.getContext('2d'),id=x.createImageData(W2,hh);for(let i=0;i<W2*hh;i++){const v=u[i]?0:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);dbg.uimg=dc.toDataURL();}
+   for(const fl of[0,1]){if(D&&D.n>=2)break;const D3=tryD(u,W2,H2,2,fl);if(D3&&(!D||D3.n>D.n))D=D3;}}
+  if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};}}catch(e){dbg.dimErr=String(e);}
  if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
  ops=findOpenings(S,ink,W,H,sc.ppm,bb);
  {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
@@ -290,6 +352,11 @@ function focus(S){const n=S.length,par=S.map((_,i)=>i),f=i=>par[i]===i?i:(par[i]
  // also keep colinear wall pieces across door gaps (separate clusters on the same line within 3 m-ish)
  const keep=S.filter((s,i)=>f(i)===best);const kb=bbox(keep);
  return S.filter((s,i)=>f(i)===best||(s.hz?(s.c>=kb[1]-s.t&&s.c<=kb[3]+s.t&&s.a>=kb[0]-s.t&&s.b<=kb[2]+s.t):(s.c>=kb[0]-s.t&&s.c<=kb[2]+s.t&&s.a>=kb[1]-s.t&&s.b<=kb[3]+s.t)));}
+// prem8: a segment touching nothing and lying outside the bbox of all the others is a dimension line / text stroke, not a wall
+function pruneLoose(S){let ch=1;while(ch&&S.length>4){ch=0;for(const s of S){const R=S.filter(q=>q!==s),m=s.t+8;
+  const box=q=>q.hz?[q.a-q.t/2,q.c-q.t/2,q.b+q.t/2,q.c+q.t/2]:[q.c-q.t/2,q.a-q.t/2,q.c+q.t/2,q.b+q.t/2];const A=box(s);
+  const touch=R.some(q=>{const B=box(q);return A[0]<B[2]+m&&B[0]<A[2]+m&&A[1]<B[3]+m&&B[1]<A[3]+m;});if(touch)continue;
+  const bb=bbox(R),out=s.hz?(s.c<bb[1]-s.t||s.c>bb[3]+s.t):(s.c<bb[0]-s.t||s.c>bb[2]+s.t);if(out){S=R;ch=1;break;}}}return S;}
 // ---------- dimension OCR (printed digits, template matching; no deps) ----------
 const GW=12,GH=18;let TPL=null;
 function templates(){if(TPL)return TPL;TPL=[];const fams=['Arial','Arial Narrow','Helvetica','DejaVu Sans','Liberation Sans','Liberation Sans Narrow','Verdana','Roboto','Roboto Condensed','Times New Roman','Liberation Serif','Courier New','ISOCPEUR','sans-serif','serif','monospace'];
