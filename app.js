@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261111zh';
-import {readPlan} from './plan.js?v=20261111zh';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111zh';
+import {detectWalls,gapMerge} from './cv.js?v=20261111zi';
+import {readPlan} from './plan.js?v=20261111zi';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111zi';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -385,9 +385,9 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261111zh';
+const DEMO_V='20261111zi';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
-async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261111zh')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
+async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261111zi')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
 if(/[?&]demo=2/.test(location.search))setTimeout(()=>demo2(),400);
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
@@ -431,7 +431,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111zh');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111zi');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -737,6 +737,14 @@ function rulesFix(op){op=op||{};const log=[];H.walls.forEach(w=>{const wh=w.heig
   if(ex.length>3){const r0=reach0(),undo=[];ex.sort((x,y)=>y.sc-x.sc);ex.slice(2).forEach(({w,o,rid})=>{if((dc[rid]||0)<2)return;dc[rid]--;undo.push([o,JSON.stringify(o)]);o.type='window';o.sill=o.width>=2?0:.9;o.height=o.width>=2?2.1:1.4;delete o.out;delete o.kind;delete o.hinge;log.push('too-many-exterior-doors');});if(undo.length&&reach0()>r0)undo.forEach(([o,j])=>{for(const k of Object.keys(o))delete o[k];Object.assign(o,JSON.parse(j));});}}}
  // prem9 LOGIC RULE (door into a wall): a door that cannot be slid ≤1.2 m off a wall right behind it opens onto nothing usable - it is removed, unless that would leave a room unreachable or the house without an entrance
  if(blocked.length&&!op.noDoors){const reach=()=>rulesCheck().filter(x=>x.id==='room-unreachable'||x.id==='no-entrance').length+H.levels.reduce((k,l)=>k+validateAll(l.name).filter(v=>v.rule==='room-without-door').length,0);const r0=reach();blocked.forEach(([w,o])=>{const k=w.openings.indexOf(o);if(k<0)return;w.openings.splice(k,1);if(reach()>r0)w.openings.splice(k,0,o);else log.push('door-into-wall:removed');});}
+ // prem9 LOGIC RULE (every room reachable): a room no door leads to gets one 0.8 m door in the wall it shares with a reachable room (the reader missed it)
+ if(!op.noDoors&&!window.__noReachFix)for(let it=0;it<4;it++){window.__reachSeen=null;const un=rulesCheck().filter(x=>x.id==='room-unreachable');const seen=window.__reachSeen;if(!un.length||!seen)break;let added=0;
+  (H.levels||[]).forEach(l=>{const L=l.name,RS=rooms(L),R=RC[L];if(!R||!R.g)return;RS.forEach(r=>{if(added||seen.has(L+':'+r.id))return;let best=null;
+   H.walls.filter(w=>w.level===L).forEach(w=>{const G=geo(w);if(G.L<1)return;const n=[-G.u[1],G.u[0]],e=(w.thickness||.15)/2+.25,os=w.openings||[];
+    for(let off=.15;off+.8<=G.L-.15;off+=.1){if(os.some(q=>off<q.offset+q.width+.1&&off+.8>q.offset-.1))continue;let ok=true,other=0;for(const f of[.1,.4,.7]){const c=[G.x0+G.u[0]*(off+f),G.z0+G.u[1]*(off+f)],A=roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),B=roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);const o2=A===r.id?B:B===r.id?A:-9;if(o2===-9||!seen.has(L+':'+o2)||(other&&o2!==other)){ok=false;break;}other=o2;}
+     if(ok){const sc=Math.abs(off+.4-G.L/2);if(!best||sc<best.sc)best={w,off,sc};}}});
+   if(best){(best.w.openings=best.w.openings||[]).push({type:'door',offset:r2(best.off),width:.8,sill:0,height:2.05,auto:1});added++;log.push('room-unreachable:door-added');}});});
+  if(!added)break;}
  upperDoors().forEach(()=>log.push('upper-door-to-nowhere'));
  if(op.noFix)return log;
  // fixture-missing auto-fix: re-lay out just that room with the normal layout engine (other rooms untouched)
@@ -778,7 +786,7 @@ function rulesCheck(){const out=[],P=(id,where,extra)=>{const R0=RULES.find(r=>r
   if(ks[0]&&ks[1]){graph[ks[0]].add(ks[1]);graph[ks[1]].add(ks[0]);}});
  // reachability from entrance rooms
  if(ext.size){const seen=new Set(ext),q=[...ext];while(q.length){const k=q.pop();(graph[k]||[]).forEach(j=>{if(!seen.has(j)){seen.add(j);q.push(j);}});}
-  Object.keys(nm).forEach(k=>{if(!seen.has(k))P('room-unreachable',{level:k.split(':')[0],room:nm[k]});});}
+  window.__reachSeen=seen;Object.keys(nm).forEach(k=>{if(!seen.has(k))P('room-unreachable',{level:k.split(':')[0],room:nm[k]});});}
  doorViol().forEach(v=>P('upper-door-to-nowhere',{wall:v.p[0],at:v.p[1]}));
  // scale: a guessed scale is always flagged; if several rooms are too small/narrow for their type, the needed enlargement is proposed (never applied silently)
  if(H.underlay&&H.underlay.guess&&!H.underlay.cal){const sf=scaleCheck();if(sf&&sf.f>=1.1)P('scale-implausible',{level:L0},{f:sf.f,n:sf.n});else P('scale-guess',{level:L0});}
