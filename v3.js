@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111i';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111j';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -49,6 +49,7 @@ const PAVT=tex((x,n)=>{x.fillStyle='#8f8a82';x.fillRect(0,0,n,n);const bw=n/10,b
 const DECKT=tex((x,n)=>{const bh=n/8;for(let i=0;i<8;i++){const l=40+rnd()*10;x.fillStyle=`hsl(${25+rnd()*8},${38+rnd()*10}%,${l}%)`;x.fillRect(0,i*bh,n,bh);for(let k=0;k<18;k++){const gy=i*bh+2+rnd()*(bh-4);x.strokeStyle=`rgba(70,40,20,${.08+rnd()*.12})`;x.lineWidth=.8+rnd();x.beginPath();x.moveTo(0,gy);for(let xx=0;xx<=n;xx+=32)x.lineTo(xx,gy+Math.sin(xx*.02+k)*1.4);x.stroke();}
   x.fillStyle='rgba(25,15,8,.85)';x.fillRect(0,i*bh,n,3);const j=rnd()*n;x.fillRect(j,i*bh,2,bh);}},512,1);
 const std=(o)=>new THREE.MeshStandardMaterial(o);
+const FLATM=std({map:tex((x,n)=>{x.fillStyle='#55585c';x.fillRect(0,0,n,n);for(let i=0;i<5000;i++){const g=60+rnd()*70;x.fillStyle=`rgba(${g|0},${g|0},${(g+4)|0},.5)`;x.fillRect(rnd()*n,rnd()*n,1.5,1.5);}},256,6),roughness:.95}); // flat roof: grey gravel/membrane
 const CAPM=new THREE.MeshBasicMaterial({color:0x3a3d42,toneMapped:false}); // prem8: dark wall tops read clearly from above
 const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood,roughness:.55}),ceil:std({color:0xfaf6ef,roughness:1,emissive:0xd4c4a8,emissiveIntensity:.25}),
  glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),
@@ -496,8 +497,11 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
  if(roof!=='none'){const eave=.40; // ~0.4 m overhang past wall outer face
   const houseW=fp[2]-fp[0], houseD=fp[3]-fp[1];
   const W=houseW+2*eave, D=houseD+2*eave, cx=(fp[0]+fp[2])/2, cz=(fp[1]+fp[3])/2;
-  if(roof==='flat'){add(new THREE.BoxGeometry(W,.22,D),M.roof,cx,th+.16,cz,0,1).userData.roof=1;add(new THREE.BoxGeometry(W+.08,.06,D+.08),M.roof,cx,th+.3,cz,0,1).userData.roof=1;
-   add(new THREE.BoxGeometry(W+.1,.06,.08),M.frame,cx,th+.02,fp[1]-eave,0,1).userData.roof=1;add(new THREE.BoxGeometry(W+.1,.06,.08),M.frame,cx,th+.02,fp[3]+eave,0,1).userData.roof=1;}
+  if(roof==='flat'){ // prem8 h3: modern flat roof = flush attic parapet in render + dark coping, no overhang (typical SK new-build)
+   const eo=Math.max(.15,...H.walls.filter(w=>w._ext).map(w=>(w.thickness||.3)/2)),fq=[fp[0]-eo,fp[1]-eo,fp[2]+eo,fp[3]+eo],qW=fq[2]-fq[0],qD=fq[3]-fq[1],at=.3,ah=.5,cy=th+ah/2-.05,R=(w,d,x,z)=>{const m=add(new THREE.BoxGeometry(w,ah+.1,d),M.fac,x,cy,z,0,1);m.userData.roof=1;},C=(w,d,x,z)=>{add(new THREE.BoxGeometry(w,.05,d),M.frame,x,th+ah+.025,z,0,1).userData.roof=1;};
+   add(new THREE.BoxGeometry(qW-.02,.2,qD-.02),FLATM,cx,th+.1,cz,0,1).userData.roof=1;
+   R(qW,at,cx,fq[1]+at/2);R(qW,at,cx,fq[3]-at/2);R(at,qD-2*at,fq[0]+at/2,cz);R(at,qD-2*at,fq[2]-at/2,cz);
+   C(qW+.06,at+.06,cx,fq[1]+at/2);C(qW+.06,at+.06,cx,fq[3]-at/2);C(at+.06,qD-2*at,fq[0]+at/2,cz);C(at+.06,qD-2*at,fq[2]-at/2,cz);}
   else{
    // Solid extruded gable. Eaves 0.4 m on all sides; mid-grey tiles; white end caps OUTSIDE extrude.
    const lng=W>=D;
