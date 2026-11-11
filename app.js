@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261111t';
-import {readPlan} from './plan.js?v=20261111t';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111t';
+import {detectWalls,gapMerge} from './cv.js?v=20261111u';
+import {readPlan} from './plan.js?v=20261111u';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111u';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -157,8 +157,10 @@ function rooms(L=lvl){const ws=H.walls.filter(w=>w.level===L),k=JSON.stringify(w
  const W=Math.ceil((x1-x0+.5)/c)+1,Hh=Math.ceil((z1-z0+.5)/c)+1;if(W*Hh>4e6)return R.r;const g=new Int32Array(W*Hh);Object.assign(R,{g,W,Hh,x0,z0,c});
  ws.forEach(w=>{const G=geo(w),t=Math.max(w.thickness/2,.06),n=Math.ceil(G.L/(c/2))+1;for(let i=0;i<=n;i++){const s=G.L*i/n;for(let q=-t;q<=t+1e-9;q+=c/2){const x=G.x0+G.u[0]*s-G.u[1]*q,z=G.z0+G.u[1]*s+G.u[0]*q,ix=Math.round((x-x0)/c),iz=Math.round((z-z0)/c);if(ix>=0&&iz>=0&&ix<W&&iz<Hh)g[iz*W+ix]=-1;}}});
  const fl=(s,id)=>{const st=[s];g[s]=id;let n=0,sx=0,sz=0,edge=false,b=[1e9,1e9,-1e9,-1e9];while(st.length){const i=st.pop(),x=i%W,z=(i/W)|0;n++;sx+=x;sz+=z;if(x<b[0])b[0]=x;if(z<b[1])b[1]=z;if(x>b[2])b[2]=x;if(z>b[3])b[3]=z;if(!x||!z||x===W-1||z===Hh-1)edge=true;for(const j of[x>0?i-1:-1,x<W-1?i+1:-1,z>0?i-W:-1,z<Hh-1?i+W:-1])if(j>=0&&!g[j]){g[j]=id;st.push(j);}}return{n,sx,sz,edge,b};};
- let id=1;for(let i=0;i<g.length;i++)if(!g[i]){const r=fl(i,++id);if(!r.edge&&r.n*c*c>=1.5){let px=x0+r.sx/r.n*c,pz=z0+r.sz/r.n*c;const ci=Math.round((pz-z0)/c)*W+Math.round((px-x0)/c);if(g[ci]!==id){const q=cellIn(R,id);px=q[0];pz=q[1];}R.r.push({id,a:r.n*c*c,p:[px,pz],bb:[x0+r.b[0]*c,z0+r.b[1]*c,x0+r.b[2]*c,z0+r.b[3]*c]});}}
+ let id=1;for(let i=0;i<g.length;i++)if(!g[i]){const r=fl(i,++id);if(!r.edge&&(r.n*c*c>=1.5||(r.n*c*c>=.6&&Math.min(r.b[2]-r.b[0],r.b[3]-r.b[1])*c>=.45&&smallHasDoor(ws,[x0+r.b[0]*c,z0+r.b[1]*c,x0+r.b[2]*c,z0+r.b[3]*c],L)))){let px=x0+r.sx/r.n*c,pz=z0+r.sz/r.n*c;const ci=Math.round((pz-z0)/c)*W+Math.round((px-x0)/c);if(g[ci]!==id){const q=cellIn(R,id);px=q[0];pz=q[1];}R.r.push({id,a:r.n*c*c,p:[px,pz],bb:[x0+r.b[0]*c,z0+r.b[1]*c,x0+r.b[2]*c,z0+r.b[3]*c]});}}
  return nameR(R,L);}
+// LOGIC RULE (tiny rooms): an enclosed pocket of 0.6–1.5 m² (≥0.45 m wide inside) that has its own door (a narrow WC, a pantry) is a room, not a hole/outside — only when a room name/label (WC, komora…) sits inside it, so wall-tracing artefacts stay ignored
+function smallHasDoor(ws,bb,L){const inb=e=>e.level===L&&e.p[0]>bb[0]&&e.p[0]<bb[2]&&e.p[1]>bb[1]&&e.p[1]<bb[3];if(!(H.rn||[]).some(inb)&&!(H.rlab||[]).some(e=>inb(e)&&/WC|Komora|Šatn|Špajz|Sklad/i.test(e.n||'')))return false;return ws.some(w=>{const G=geo(w);return(w.openings||[]).some(o=>{if(o.type!=='door')return false;const s=o.offset+o.width/2,x=G.x0+G.u[0]*s,z=G.z0+G.u[1]*s;return x>bb[0]-.35&&x<bb[2]+.35&&z>bb[1]-.35&&z<bb[3]+.35;});});}
 function cellIn(R,id){let best=null,bd=-1;const{g,W,Hh,x0,z0,c}=R;for(let z=1;z<Hh-1;z+=2)for(let x=1;x<W-1;x+=2){const i=z*W+x;if(g[i]!==id)continue;let d=0;while(d<40&&g[i-d]===id&&g[i+d]===id&&g[i-d*W]===id&&g[i+d*W]===id)d++;if(d>bd){bd=d;best=[x0+x*c,z0+z*c];}}return best||[x0,z0];}
 function roomAt(R,p){if(!R||!R.g)return 0;const ix=Math.round((p[0]-R.x0)/R.c),iz=Math.round((p[1]-R.z0)/R.c);if(ix<0||iz<0||ix>=R.W||iz>=R.Hh)return 0;return R.g[iz*R.W+ix];}
 const RN=['Obývačka','Obývačka s kuchyňou','Kuchyňa','Jedáleň','Spálňa','Detská izba','Izba','Pracovňa','Kúpeľňa','WC','Chodba','Predsieň','Šatník','Komora','Technická miestnosť','Garáž','Terasa'];
@@ -383,7 +385,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261111t';
+const DEMO_V='20261111u';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
 async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json')).json();openP('p'+Date.now(),j);toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
 if(/[?&]demo=2/.test(location.search))setTimeout(()=>demo2(),400);
@@ -429,7 +431,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111t');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111u');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -677,8 +679,8 @@ function inPoly(p,P){let c=false;for(let i=0,j=P.length-1;i<P.length;j=i++){cons
 function doorLead(w,o,i){const g=geo(w),n=[-g.u[1]*w._ext,g.u[0]*w._ext],t=(w.thickness||.3)/2,s=o.offset+o.width/2,c=[g.x0+g.u[0]*s,g.z0+g.u[1]*s],p=[c[0]+n[0]*(t+.6),c[1]+n[1]*(t+.6)];
  const lo=H.levels[i-1];rooms(lo.name);const CL=RC[lo.name];if(CL&&CL.r&&CL.r.some(q=>q.id===roomAt(CL,p)))return'deck';
  if((H.balc||[]).some(b=>b.level===w.level&&p[0]>b.r[0]&&p[0]<b.r[2]&&p[1]>b.r[1]&&p[1]<b.r[3]))return'balcony';if(o.rail)return'french';return null;}
-function upperDoors(){if(!H.levels||H.levels.length<2)return[];extSides();const log=[];H.balc=(H.balc||[]).filter(b=>!b.auto);
- H.levels.forEach((l,i)=>{if(!i)return;H.walls.filter(w=>w.level===l.name&&w._ext).forEach(w=>(w.openings||[]).forEach(o=>{if(o.type!=='door')return;if(o.rail&&o.railAuto)delete o.rail;if(doorLead(w,o,i))return;
+function upperDoors(){if(!H.levels||H.levels.length<2)return[];extSides();const log=[];H.balc=(H.balc||[]).filter(b=>!b.auto);H.decks=[];
+ H.levels.forEach((l,i)=>{if(!i)return;H.walls.filter(w=>w.level===l.name&&w._ext).forEach(w=>(w.openings||[]).forEach(o=>{if(o.type!=='door')return;if(o.rail&&o.railAuto)delete o.rail;const ld=doorLead(w,o,i);if(ld==='deck'){const g=geo(w),n=[-g.u[1]*w._ext,g.u[0]*w._ext],q=o.offset+o.width/2;H.decks.push({level:H.levels[i-1].name,p:[g.x0+g.u[0]*q+n[0]*((w.thickness||.3)/2+.6),g.z0+g.u[1]*q+n[1]*((w.thickness||.3)/2+.6)]});}if(ld)return;
   const g=geo(w),n=[-g.u[1]*w._ext,g.u[0]*w._ext],t=(w.thickness||.3)/2,a=o.offset-.5,b=o.offset+o.width+.5,D=1.3;
   const P=[a,b].flatMap(s=>[0,D].map(d=>[g.x0+g.u[0]*s+n[0]*(t+d),g.z0+g.u[1]*s+n[1]*(t+d)]));const R=[Math.min(...P.map(q=>q[0])),Math.min(...P.map(q=>q[1])),Math.max(...P.map(q=>q[0])),Math.max(...P.map(q=>q[1]))];
   const Ri=[R[0]+.06,R[1]+.06,R[2]-.06,R[3]-.06];const lo=H.levels[i-1].name;

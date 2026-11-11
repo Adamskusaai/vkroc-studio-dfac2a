@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111t';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111u';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -567,10 +567,13 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
  // otherwise single-storey wings stayed open-topped. Slides away with the roof (userData.roof).
  if(roof!=='none')H.levels.forEach((l,i)=>{const up=H.levels[i+1];if(!up)return;const uc=CELLS[up.name]||[],lc=CELLS[l.name]||[],lw=H.walls.filter(w=>w.level===l.name);if(!lw.length)return;
   const lh=(l.elevation||0)+Math.max(...lw.map(w=>w.height||l.height||2.8));
+  // LOGIC RULE: a lower roof that an upper door opens onto is a walkable deck: wood decking on top + 1 m glass railing on its parapets
+  const DK=(H.decks||[]).filter(d=>d.level===l.name),dc=[];
   lc.forEach(r=>{const qx=(r[0]+r[2])/2,qz=(r[1]+r[3])/2;if(uc.some(u=>qx>u[0]&&qx<u[2]&&qz>u[1]&&qz<u[3]))return;
-   add(new THREE.BoxGeometry(r[2]-r[0]+.32,.2,r[3]-r[1]+.32),FLATM,qx,lh+.1,qz,0,1).userData.roof=1;});
+   add(new THREE.BoxGeometry(r[2]-r[0]+.32,.2,r[3]-r[1]+.32),FLATM,qx,lh+.1,qz,0,1).userData.roof=1;
+   if(DK.length){dc.push(r);add(new THREE.BoxGeometry(r[2]-r[0],.04,r[3]-r[1]),M.deck,qx,lh+.22,qz,0,1);}});
   lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;if(uc.some(u=>mx>u[0]-.2&&mx<u[2]+.2&&mz>u[1]-.2&&mz<u[3]+.2))return;const T=w.thickness||.3,ang=-Math.atan2(g.u[1],g.u[0]);
-   const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;});});
+   const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;if(dc.length&&dc.some(r=>mx>r[0]-.6&&mx<r[2]+.6&&mz>r[1]-.6&&mz<r[3]+.6)){add(new THREE.BoxGeometry(g.L,.62,.02),M.glass,mx,lh+.4+.31,mz,ang,1);add(new THREE.BoxGeometry(g.L+.04,.05,.06),M.frame,mx,lh+1.05,mz,ang,1);}});});
  if(roof!=='none'&&IRR){const ah=.5,tc=CELLS[top.name]||[];
   tc.forEach(r=>{add(new THREE.BoxGeometry(r[2]-r[0]+.3,.2,r[3]-r[1]+.3),FLATM,(r[0]+r[2])/2,th+.1,(r[1]+r[3])/2,0,1).userData.roof=1;});
   tw.forEach(w=>{if(!w._ext)return;const g=geo(w),T=w.thickness||.3,L=g.L+T,ang=-Math.atan2(g.u[1],g.u[0]),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;
