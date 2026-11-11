@@ -140,13 +140,13 @@ export const fillRatio=(G,items)=>items.filter(i=>!AREA_SKIP.has(i.t)).reduce((a
 function seating(G,S){const tvs=[];for(const[x,z,r]of wallCands(G,'tv')){const it=mkItem(G,'tv',x,z,r);if(!hard(G,it,S.items))continue;const D=rayWall(G,it.p,FV[r],7);if(D<2.75)continue;it.D=D;it.sc=(D>=3.3?1.5:0)+(D>=4?.5:0)+.25*Math.min(dDoor(G,it.p),4)+.8*hsh(S.fv,x,z,r)-(Math.abs(D-3.6)>2.5?.5:0);tvs.push(it);}
  tvs.sort((a,b)=>b.sc-a.sc);const big=G.room.a>=24;
  for(const tv of tvs.slice(0,60)){const f=FV[tv.r],tan=[f[1],-f[0]];if(!place(G,S,'tv',[[tv.p[0],tv.p[1],tv.r]],{},1))continue;const sr=(tv.r+2)%4,[sw,sd]=G.dims('sofa');const Dw=rayWall(G,tv.p,f,7)-.05;
-  const ds=[];const flush=Dw+(tv.q[2]-tv.q[0]>tv.q[3]-tv.q[1]?(tv.q[3]-tv.q[1]):(tv.q[2]-tv.q[0]))/2-sd/2-.06;if(flush>=2.2&&flush<=3.5&&!big)ds.push(flush);for(const d of big?[2.8,3.1,2.5,3.4,2.3]:[2.6,2.9,2.3,3.2,3.5,2.2])ds.push(d);if(flush>=2.2&&flush<=3.5&&big)ds.push(flush);const dMax=Dw+.21-sd/2-.04;for(let i=ds.length-1;i>=0;i--)if(ds[i]>dMax+1e-6)ds.splice(i,1);if(!ds.length){S.items.splice(S.items.indexOf(S.last.tv),1);S.last.tv=null;continue;}
+  const ds=[];const flush=Dw+(tv.q[2]-tv.q[0]>tv.q[3]-tv.q[1]?(tv.q[3]-tv.q[1]):(tv.q[2]-tv.q[0]))/2-sd/2-.06;if(flush>=2.2&&flush<=3.5&&!big)ds.push(flush);for(const d of big?[2.6,2.9,2.4,3.2,2.3]:[2.6,2.9,2.3,3.2,3.5,2.2])ds.push(d);if(flush>=2.2&&flush<=3.5&&big)ds.push(flush);const dMax=Dw+.21-sd/2-.04;for(let i=ds.length-1;i>=0;i--)if(ds[i]>dMax+1e-6)ds.splice(i,1);if(!ds.length){S.items.splice(S.items.indexOf(S.last.tv),1);S.last.tv=null;continue;}
   let so=null;for(const d of ds){for(const l of[0,.3,-.3]){const x=tv.p[0]+f[0]*d+tan[0]*l,z=tv.p[1]+f[1]*d+tan[1]*l;so=place(G,S,'sofa',[[x,z,sr]],{},1);if(so)break;}if(so)break;}
   if(!so){S.items.splice(S.items.indexOf(S.last.tv),1);S.last.tv=null;continue;}
   const[cw,cd]=G.dims('ctable');const dd=sd/2+.46+cd/2;const ct=place(G,S,'ctable',[[so.p[0]-f[0]*dd,so.p[1]-f[1]*dd,tv.r%2]],{},1);const c0=ct?ct.p:[so.p[0]-f[0]*dd,so.p[1]-f[1]*dd];
   const[aw]=G.dims('armch');for(const sg of[1,-1]){const off=cw/2+.4+aw/2,x=c0[0]+tan[0]*sg*off,z=c0[1]+tan[1]*sg*off,dir=[-tan[0]*sg,-tan[1]*sg],r=FV.findIndex(v=>v[0]*dir[0]+v[1]*dir[1]>.9);place(G,S,'armch',[[x,z,r]],{},1);}
   for(const sg of[1,-1]){const x=so.p[0]+tan[0]*sg*(sw/2+.25)+f[0]*(sd/2-.2),z=so.p[1]+tan[1]*sg*(sw/2+.25)+f[1]*(sd/2-.2);if(place(G,S,'lamp',[[x,z,0]],{},1))break;}
-  const dist=Math.hypot(so.p[0]-tv.p[0],so.p[1]-tv.p[1]),rl=Math.min(2.4,Math.max(1.4,dist-sd/2-.3)),rw=Math.min(3,sw+.5),mid=[(so.p[0]+tv.p[0])/2-f[0]*.0,(so.p[1]+tv.p[1])/2];const rc=[so.p[0]-f[0]*(sd/2+rl/2-.25),so.p[1]-f[1]*(sd/2+rl/2-.25)];void mid;
+  const dist=Math.hypot(so.p[0]-tv.p[0],so.p[1]-tv.p[1]),rl=Math.min(3,Math.max(1.4,dist-sd/2-.15)),rw=Math.min(3,sw+.5),mid=[(so.p[0]+tv.p[0])/2-f[0]*.0,(so.p[1]+tv.p[1])/2];const rc=[so.p[0]-f[0]*(sd/2+rl/2-.25),so.p[1]-f[1]*(sd/2+rl/2-.25)];void mid;
   for(const[k1,k2]of[[1,1],[.85,.85],[.7,.8],[.6,.7]]){const a=rw*k1,b=Math.max(1.2,rl*k2);const c=[so.p[0]-f[0]*(sd/2+b/2-.25),so.p[1]-f[1]*(sd/2+b/2-.25)];if(place(G,S,'rug',[[c[0],c[1],0]],{sz:tv.r%2?[b,a]:[a,b]},1))break;}void rc;return true;}
  return false;}
 // try candidates best-first; accept the first that passes every hard rule and keeps the walkways
@@ -240,7 +240,7 @@ export function backGap(G,it){const f=FV[it.r],q=it.q,tan=it.r%2?[0,1]:[1,0];con
   const gap=((bx-w.p0[0])*nw[0]+(bz-w.p0[1])*nw[1])*sg-w.t/2;if(gap>=-.03&&gap<best){best=gap;bw=w;}}return{gap:best,w:bw};}
 // item span projected on the wall it hangs on overlaps a window/door opening on that wall
 function onOpening(G,it,types){const bg=backGap(G,it);if(!bg.w)return false;const w=bg.w,q=it.q,a=(q[0]-w.p0[0])*w.u[0]+(q[1]-w.p0[1])*w.u[1],b=(q[2]-w.p0[0])*w.u[0]+(q[3]-w.p0[1])*w.u[1],lo=Math.min(a,b),hi=Math.max(a,b);
- return G.ops.some(o=>types.includes(o.type)&&Math.abs(o.p0[0]-w.p0[0])<1e-6&&Math.abs(o.p0[1]-w.p0[1])<1e-6&&Math.abs(o.u[0]-w.u[0])<1e-6&&lo<o.s1-.02&&hi>o.s0+.02);}
+ return G.ops.some(o=>(types.includes(o.type)||o.type==='window_x'&&types.includes('window'))&&Math.abs(o.p0[0]-w.p0[0])<1e-6&&Math.abs(o.p0[1]-w.p0[1])<1e-6&&Math.abs(o.u[0]-w.u[0])<1e-6&&lo<o.s1-.02&&hi>o.s0+.02);}
 // ---------- validator: re-checks every rule for the furniture now in the room ----------
 // can this item stand in the EMPTY room at all (standard or compact size)? if not, the room shape / openings were misread
 function fitsAlone(G,t){const S0={items:[],last:{},score:0};const zs=[null].concat(SHRINK[t]||[],COMPACT[t]?[COMPACT[t]]:[]);const d0=G.dims;
