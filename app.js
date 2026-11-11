@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261111w';
-import {readPlan} from './plan.js?v=20261111w';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111w';
+import {detectWalls,gapMerge} from './cv.js?v=20261111x';
+import {readPlan} from './plan.js?v=20261111x';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111x';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -385,7 +385,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261111w';
+const DEMO_V='20261111x';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
 async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
 if(/[?&]demo=2/.test(location.search))setTimeout(()=>demo2(),400);
@@ -431,7 +431,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111w');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111x');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -705,7 +705,7 @@ const RULES=[
  ['no-entrance','hard','the ground floor needs at least one exterior door'],
  ['stair-landing','hard','stairs must start and land in a walkable room, never in a WC/bathroom/closet'],
  ['stair-landing-bedroom','soft','stairs normally land in a hall, not inside a bedroom'],
- ['fixture-missing','hard','furnished rooms need their key fixture: WC→toilet, bathroom→bath/shower, kitchen→counter, bedroom→bed'],
+ ['fixture-missing','hard','furnished rooms need their key fixture: WC→toilet, bathroom→bath/shower, kitchen→counter, bedroom→bed (auto-fix: re-lay out the room; if it cannot fit, swap room types with a room where both fit)'],
  ['fixture-secondary','soft','bathroom→sink, kitchen→fridge'],
  ['kitchen-short','soft','a kitchen counter should be at least 1.8 m long (hard below 1.2 m)'],
 ];window.__RULES=RULES;
@@ -725,7 +725,15 @@ function rulesFix(){const log=[];H.walls.forEach(w=>{const wh=w.height||((H.leve
  (H.levels||[]).forEach(l=>{const L=l.name;if(!(H.furn||[]).some(f=>f.level===L))return;const RS=rooms(L),R=RC[L];if(!R||!R.g)return;const T=assignTypes(R,L);let OPS=null,WS=null;const hasWC=RS.some(q=>/^WC/.test(roomType(q,T,R,L)));
   RS.forEach(r=>{const n=roomType(r,T,R,L),K=KEY(n);if(!K)return;const inR=f=>f.level===L&&roomAt(R,f.p)===r.id;if(H.furn.some(f=>inR(f)&&K.includes(f.t)))return;
    OPS=OPS||layoutOps(R,L);WS=WS||layoutWalls(L);const G=makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim);const it=layoutRoom(G,n,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});
-   if(!it.some(f=>K.includes(f.t)))return;H.furn=H.furn.filter(f=>!inR(f));it.forEach(f=>H.furn.push({...f,level:L,rid:r.id}));log.push('fixture-missing:'+L+':'+n);});});
+   const opt={fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC},lay=(q,t)=>layoutRoom(makeRoom(R,q,OPS.filter(o=>o.room===q.id),WS,ldim),t,{...opt,fv:(H.fv||0)*13+q.id*7}),okK=(its,t)=>{const k=KEY(t);return!k||its.some(f=>k.includes(f.t));};
+   if(!it.some(f=>K.includes(f.t))){
+    // LOGIC RULE (type must fit the room): if the room cannot hold its key fixture, swap its type with another auto-named room on the floor
+    // when BOTH rooms then hold their key fixtures (e.g. a 4 m² "Kuchyňa" and a 9 m² "Technická" trade names). Biggest plausible partner first.
+    if(!r.auto)return;const C=RS.filter(q=>q!==r&&q.auto&&!/^(Chodba|Predsieň|Obývačka)/.test(roomType(q,T,R,L))).sort((a,b)=>b.a-a.a);
+    const wet=t=>/^(WC|Kúpeľ)/.test(t),sto=t=>/^(Technick|Komora|Špajz|Šatník)/.test(t);for(const q of C){const tq=roomType(q,T,R,L);if(wet(n)?!(wet(tq)||sto(tq)):wet(tq)?!sto(n):false)continue;/* wet rooms trade only with wet/storage rooms */const a=lay(r,tq),b=lay(q,n);if(okK(a,tq)&&okK(b,n)){const inQ=f=>f.level===L&&roomAt(R,f.p)===q.id;H.furn=H.furn.filter(f=>!inR(f)&&!inQ(f));a.forEach(f=>H.furn.push({...f,level:L,rid:r.id}));b.forEach(f=>H.furn.push({...f,level:L,rid:q.id}));
+     H.rn=(H.rn||[]).filter(e=>!(e.level===L&&(roomAt(R,e.p)===r.id||roomAt(R,e.p)===q.id)));H.rn.push({level:L,p:[...r.p],n:tq.replace(/ \d+$/,''),auto:1},{level:L,p:[...q.p],n:n.replace(/ \d+$/,''),auto:1});log.push('type-swap:'+L+':'+n+'<->'+tq);nameR(R,L);return;}}
+    return;}
+   H.furn=H.furn.filter(f=>!inR(f));it.forEach(f=>H.furn.push({...f,level:L,rid:r.id}));log.push('fixture-missing:'+L+':'+n);});});
  return log;}
 function rulesCheck(){const out=[],P=(id,where,extra)=>{const R0=RULES.find(r=>r[0]===id);out.push({id,sev:R0?R0[1]:'soft',where,...(extra||{})});};
  if(!H.levels||!H.walls.length)return out;extSides();const nm={},graph={},ext=new Set();const L0=H.levels[0].name;
