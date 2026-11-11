@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261111b';
-import {readPlan} from './plan.js?v=20261111b';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111b';
+import {detectWalls,gapMerge} from './cv.js?v=20261111c';
+import {readPlan} from './plan.js?v=20261111c';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111c';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -352,6 +352,7 @@ async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)to
  if(R&&!H.underlay.rect&&!man){H.underlay={src:R.mode==='plan'?R.canvas.toDataURL('image/jpeg',.85):H.underlay.src,w:R.w,rect:1,guess:R.guess,site:R.mode==='site'?1:0};}else if(R&&R.guess&&!H.underlay.cal){H.underlay.w=R.w;H.underlay.guess=true;}
  H.walls=H.walls.concat(gapMerge(ws,R&&R.mode==='plan').map((w,i)=>({id:'a'+Date.now()+i,auto:1,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:w.op||[]})));
  if(R&&R.mode==='plan'&&R.dbg&&R.dbg.wordsP&&R.dbg.wordsP.length)dropFurnBoxes(R.dbg.wordsP,lv.name);
+ if(R&&R.mode==='plan')inkFilter(R,lv.name);
  if(R&&R.mode==='plan')cleanOutline(lv.name);
  if(R&&R.mode==='plan')closeGaps(lv.name);
  save();const u=H.underlay;bgW=u.w;$('imw').value=bgW;if(!bg.src.endsWith(u.src.slice(-40))){bg=new Image();bg.onload=()=>{fit();};bg.src=u.src;}else fit();banner();
@@ -382,7 +383,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261111b';
+const DEMO_V='20261111c';
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
  const keep=(D.furn||[]).filter(f=>f.p[0]>15.3||f.p[0]<-.3||f.p[1]<-.3||f.p[1]>10.8);H.furn=[];furnish({demo:1});const R=RC[lvl];const nm=id=>{const e=H.rn.find(e=>roomAt(R,e.p)===id);return e?e.n:'';};
@@ -425,7 +426,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111b');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111c');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -543,6 +544,24 @@ function wetDoors(R,L,RS,T,log){const wet=new Set(RS.filter(r=>(/^(Kúpeľňa|WC
 // (outline walls and thick walls are never touched; gaps in box lines are often misread as doors, so doors do not veto). Logged in H.boxFix.
 // prem8 w: false interior walls. (1) lines hugging the outline (doubled outer-wall faces, furniture backs within 45 cm of the facade) fold into the outer wall;
 // (2) small doorless pockets (< 2.5 m², narrow side < 80 cm) are furniture outlines: their thin non-outline sides are removed.
+// prem8 x: thin interior lines with no wall ink under them (chains of furniture edges bridged across empty floor) or drawn much thinner than the
+// outer walls without a parallel twin line (single furniture edge) are not walls. Reference = the outline walls' own ink on the same drawing.
+function inkFilter(R,L){try{const cv0=R&&R.canvas;if(!cv0||!R.w)return;const Wp=cv0.width,Hp=cv0.height,k=Wp/R.w;if(k<25)return;const d=cv0.getContext('2d').getImageData(0,0,Wp,Hp).data;
+ let TH=128;{const h=new Float64Array(256);let N=0;for(let i=0;i<d.length;i+=4*7){h[Math.round(.3*d[i]+.59*d[i+1]+.11*d[i+2])]++;N++;}let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];let sB=0,wB=0,best=-1;for(let t=0;t<256;t++){wB+=h[t];if(!wB)continue;const wF=N-wB;if(!wF)break;sB+=t*h[t];const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;TH=t;}}}
+ const lum=(x,y)=>{x=Math.round(x);y=Math.round(y);if(x<0||y<0||x>=Wp||y>=Hp)return 255;const i=(y*Wp+x)*4;return .3*d[i]+.59*d[i+1]+.11*d[i+2];};
+ const ax=q=>Math.abs(q.start[1]-q.end[1])<.01?'h':Math.abs(q.start[0]-q.end[0])<.01?'v':null;
+ const A=H.walls.filter(q=>q.level===L&&q.auto);if(A.length<4)return;const X=A.flatMap(q=>[q.start[0],q.end[0]]),Z=A.flatMap(q=>[q.start[1],q.end[1]]),ob=[Math.min(...X),Math.min(...Z),Math.max(...X),Math.max(...Z)];
+ const onOut=q=>{const o=ax(q);if(!o)return false;const c=o==='h'?q.start[1]:q.start[0];return o==='h'?(Math.abs(c-ob[1])<.3||Math.abs(c-ob[3])<.3):(Math.abs(c-ob[0])<.3||Math.abs(c-ob[2])<.3);};
+ const prof=q=>{const o=ax(q),hz=o==='h',c=hz?q.start[1]:q.start[0],r=hz?[Math.min(q.start[0],q.end[0]),Math.max(q.start[0],q.end[0])]:[Math.min(q.start[1],q.end[1]),Math.max(q.start[1],q.end[1])];const len=r[1]-r[0];
+  const out=[];const N=Math.max(5,Math.min(15,Math.round(len/.3)));for(let i=0;i<N;i++){const s=r[0]+.15+(len-.3)*(i+.5)/N;if(len<.5)break;const runs=[];let st=null;const R2=Math.round(.35*k);
+   for(let j=-R2;j<=R2;j++){const v=c*k+j;const dk=(hz?lum(s*k,v):lum(v,s*k))<TH;if(dk&&st===null)st=j;if(!dk&&st!==null){runs.push([st,j-1]);st=null;}}if(st!==null)runs.push([st,R2]);
+   const t=Math.max(2,Math.round(.06*k)+1),cen=runs.filter(u=>u[0]<=t&&u[1]>=-t);out.push({w:cen.reduce((m,u)=>Math.max(m,u[1]-u[0]+1),0),twin:runs.length-cen.length>0&&runs.some(u=>!(u[0]<=t&&u[1]>=-t)&&Math.abs((u[0]+u[1])/2)<=.3*k)});}
+  return out;};
+ const med=a=>{const b=a.slice().sort((x,y)=>x-y);return b.length?b[b.length>>1]:0;};
+ const OW=[];A.filter(onOut).forEach(q=>prof(q).forEach(p=>OW.push(p.w)));const Wo=med(OW);if(Wo<2||OW.filter(v=>v>0).length<.7*OW.length)return;{let wh=0,N=0;for(let i=0;i<d.length;i+=4*11){N++;if(.3*d[i]+.59*d[i+1]+.11*d[i+2]>235)wh++;}if(wh<.8*N)return;}/* clean line drawings only: photos/scans misalign ink */
+ let n=0;const log=[];for(const q of A){if(onOut(q)||q.thickness>.16||!ax(q))continue;const P=prof(q);if(P.length<4)continue;const has=P.filter(p=>p.w>0).length/P.length,wc=med(P.filter(p=>p.w>0).map(p=>p.w)),tw=P.filter(p=>p.twin).length/P.length;
+  if(has<=.25&&tw<.15){const keep=H.walls,n0=rooms(L).length;H.walls=H.walls.filter(o=>o!==q);if(rooms(L).length<n0){H.walls=keep;continue;}/* it bounded a room: keep */n++;log.push([ax(q),+(ax(q)==='h'?q.start[1]:q.start[0]).toFixed(2),+has.toFixed(2),wc,+tw.toFixed(2)]);}}
+ if(n)H.inkFix={n,Wo,TH,log};}catch(e){console.warn('inkFilter',e);}}
 function cleanOutline(L){const ax=q=>Math.abs(q.start[1]-q.end[1])<.01?'h':Math.abs(q.start[0]-q.end[0])<.01?'v':null;let drop=0,thick=0,pk=0;
  const all=()=>H.walls.filter(q=>q.level===L&&q.auto);const A=all();if(A.length<4)return;const X=A.flatMap(q=>[q.start[0],q.end[0]]),Z=A.flatMap(q=>[q.start[1],q.end[1]]),ob=[Math.min(...X),Math.min(...Z),Math.max(...X),Math.max(...Z)];
  const rng=(q,h)=>h?[Math.min(q.start[0],q.end[0]),Math.max(q.start[0],q.end[0])]:[Math.min(q.start[1],q.end[1]),Math.max(q.start[1],q.end[1])];
@@ -555,14 +574,14 @@ function cleanOutline(L){const ax=q=>Math.abs(q.start[1]-q.end[1])<.01?'h':Math.
  for(let pass=0;pass<6;pass++){rooms(L);const R=RC[L];if(!R||!R.g)break;const{g,W,Hh,x0,z0,c}=R;const D=roomDoors(R,L);const S=new Map();
   for(let i=0;i<g.length;i++){const v=g[i];if(v<=1)continue;let s=S.get(v);if(!s){s={k:0,b:[1e9,1e9,-1e9,-1e9]};S.set(v,s);}s.k++;const x=i%W,z=(i/W)|0;if(x<s.b[0])s.b[0]=x;if(z<s.b[1])s.b[1]=z;if(x>s.b[2])s.b[2]=x;if(z>s.b[3])s.b[3]=z;}
   let did=0;for(const[id,s]of S){const a=s.k*c*c;if(a>2.5||a<.15)continue;if(!s.b[0]||!s.b[1]||s.b[2]>=W-1||s.b[3]>=Hh-1)continue;const b=[x0+(s.b[0]-1)*c,z0+(s.b[1]-1)*c,x0+(s.b[2]+1)*c,z0+(s.b[3]+1)*c],bw=b[2]-b[0],bh=b[3]-b[1];
-   if(Math.min(bw,bh)>.8||a<.7*bw*bh)continue;if(D.some(d=>d.a===id||d.b===id))continue;
+   if(Math.min(bw,bh)>.8||a<.7*bw*bh||Math.max(bw,bh)>3.5*Math.min(bw,bh))continue;/* long thin strips are wall cavities, not furniture */if(D.some(d=>d.a===id||d.b===id))continue;
    const nw=[];let hit=0;for(const q of H.walls){const o=ax(q);if(q.level!==L||!q.auto||q.thickness>.14||!o||(q.openings||[]).length){nw.push(q);continue;}const hz=o==='h',cc=hz?q.start[1]:q.start[0];
     const onOut=hz?(Math.abs(cc-ob[1])<.3||Math.abs(cc-ob[3])<.3):(Math.abs(cc-ob[0])<.3||Math.abs(cc-ob[2])<.3);const sides=hz?[b[1],b[3]]:[b[0],b[2]],span=hz?[b[0],b[2]]:[b[1],b[3]];
     if(onOut||!sides.some(v=>Math.abs(cc-v)<.15)){nw.push(q);continue;}const r=rng(q,hz);const c0=Math.max(r[0],span[0]-.1),c1=Math.min(r[1],span[1]+.1);if(c1-c0<.2){nw.push(q);continue;}
     hit++;const pt=v=>hz?[v,cc]:[cc,v];const fw=(hz?q.end[0]-q.start[0]:q.end[1]-q.start[1])>=0;for(const[p0,p1]of[[r[0],c0],[c1,r[1]]])if(p1-p0>=.3)nw.push({...q,id:q.id+'k'+Math.round(p0*100),start:pt(fw?p0:p1),end:pt(fw?p1:p0),openings:[]});}
-   if(hit){H.walls=nw;pk++;did=1;break;}}
+   if(hit){H.walls=nw;pk++;did=1;(cleanOutline.pb=cleanOutline.pb||[]).push(b.map(v=>+v.toFixed(2)));break;}}
   if(!did)break;}
- if(drop||thick||pk)H.olFix={drop,thick,pockets:pk};}
+ if(drop||thick||pk)H.olFix={drop,thick,pockets:pk,pb:cleanOutline.pb};cleanOutline.pb=[];}
 function dropFurnBoxes(words,L){let n=0,cut=0;dropFurnBoxes.ws=[];const seen=new Set();
  const all=H.walls.filter(q=>q.level===L);if(!all.length)return;const X=all.flatMap(q=>[q.start[0],q.end[0]]),Z=all.flatMap(q=>[q.start[1],q.end[1]]),ob=[Math.min(...X),Math.min(...Z),Math.max(...X),Math.max(...Z)];
  for(let pass=0;pass<8;pass++){rooms(L);const R=RC[L];if(!R||!R.g)return;const{g,W,Hh,x0,z0,c}=R;let did=0;
