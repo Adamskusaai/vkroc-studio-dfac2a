@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111r';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111s';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -505,7 +505,7 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
   CR.forEach(r=>{const cx=(r[0]+r[2])/2,cz=(r[1]+r[3])/2;
    const kind=kindOf[r[4]]||'other';const mat=floorMat(kind);const fg=new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]);boxUV(fg,cx,cz);
 const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userData.floor=1;
-   const up=H.levels[i+1];if(!up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;
+   const up=H.levels[i+1];if(up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;}/* ukážka 2 fix: lower floors get a white ceiling too */if(!up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;
     // warm ceiling disc light (emissive) + soft point
     if(Math.min(r[2]-r[0],r[3]-r[1])>1.6){const disc=add(new THREE.CylinderGeometry(.26,.26,.012,16),std({color:0xe8dcc8,emissive:0xb89a70,emissiveIntensity:0.02,roughness:.98}),cx,l.elevation+topH-.03,cz,0,1);disc.scale.set(1,1,1);disc.castShadow=false;disc.userData.ceil=1;disc.userData.noCol=true;
      const pl=new THREE.PointLight(0xffd4a0,0.16,Math.max(r[2]-r[0],r[3]-r[1])*1.15,2);pl.position.set(cx,l.elevation+topH-.22,cz);pl.userData.ceil=1;root.add(pl);}}});});
@@ -554,6 +554,14 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   const g=geo(w),t=w.thickness||.3,sm=o.offset+o.width/2,mx=g.x0+g.u[0]*sm,mz=g.z0+g.u[1]*sm;let nx=-g.u[1],nz=g.u[0];if((mx+nx-hx)**2+(mz+nz-hz)**2<(mx-nx-hx)**2+(mz-nz-hz)**2){nx=-nx;nz=-nz;}
   const y=Math.min(e+(o.height||2.1)+.3,th-.18),dp=1.2,cw=o.width+1.2,m=add(new THREE.BoxGeometry(cw,.1,dp),M.frame,mx+nx*(t/2+dp/2),y,mz+nz*(t/2+dp/2),-Math.atan2(g.u[1],g.u[0]),1);m.castShadow=true;m.userData.noCol=true;
   const sf=add(new THREE.BoxGeometry(cw-.04,.004,dp-.04),M.skirt,mx+nx*(t/2+dp/2),y-.052,mz+nz*(t/2+dp/2),-Math.atan2(g.u[1],g.u[0]),1);sf.userData.noCol=true;});});}
+ // ukážka 2 fix: on multi-storey houses the parts of a lower floor not covered by the floor above get their own flat roof (gravel slab + dark coping),
+ // otherwise single-storey wings stayed open-topped. Slides away with the roof (userData.roof).
+ if(roof!=='none')H.levels.forEach((l,i)=>{const up=H.levels[i+1];if(!up)return;const uc=CELLS[up.name]||[],lc=CELLS[l.name]||[],lw=H.walls.filter(w=>w.level===l.name);if(!lw.length)return;
+  const lh=(l.elevation||0)+Math.max(...lw.map(w=>w.height||l.height||2.8));
+  lc.forEach(r=>{const qx=(r[0]+r[2])/2,qz=(r[1]+r[3])/2;if(uc.some(u=>qx>u[0]&&qx<u[2]&&qz>u[1]&&qz<u[3]))return;
+   add(new THREE.BoxGeometry(r[2]-r[0]+.32,.2,r[3]-r[1]+.32),FLATM,qx,lh+.1,qz,0,1).userData.roof=1;});
+  lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;if(uc.some(u=>mx>u[0]-.2&&mx<u[2]+.2&&mz>u[1]-.2&&mz<u[3]+.2))return;const T=w.thickness||.3,ang=-Math.atan2(g.u[1],g.u[0]);
+   const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;});});
  if(roof!=='none'&&IRR){const ah=.5,tc=CELLS[top.name]||[];
   tc.forEach(r=>{add(new THREE.BoxGeometry(r[2]-r[0]+.3,.2,r[3]-r[1]+.3),FLATM,(r[0]+r[2])/2,th+.1,(r[1]+r[3])/2,0,1).userData.roof=1;});
   tw.forEach(w=>{if(!w._ext)return;const g=geo(w),T=w.thickness||.3,L=g.L+T,ang=-Math.atan2(g.u[1],g.u[0]),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;
