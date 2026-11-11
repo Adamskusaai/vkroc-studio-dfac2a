@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111n';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111o';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -56,7 +56,7 @@ const WTILE=tex((x,n)=>{x.fillStyle='#cfccc6';x.fillRect(0,0,n,n);const tw=n/2,t
 const FLATM=std({map:tex((x,n)=>{x.fillStyle='#c4c6c9';x.fillRect(0,0,n,n);for(let i=0;i<5000;i++){const g=150+rnd()*90;x.fillStyle=`rgba(${g|0},${g|0},${(g+4)|0},.5)`;x.fillRect(rnd()*n,rnd()*n,1.5,1.5);}},256,6),roughness:.95}); // flat roof: grey gravel/membrane
 const CAPM=new THREE.MeshBasicMaterial({color:0x3a3d42,toneMapped:false}); // prem8: dark wall tops read clearly from above
 const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood,roughness:.55}),ceil:std({color:0xfaf6ef,roughness:1,emissive:0xd4c4a8,emissiveIntensity:.25}),
- glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),wtile:std({map:WTILE,color:0xffffff,roughness:.25,metalness:0}),skirt:std({color:0xf4f2ee,roughness:.5}),base:std({color:0xb9b5ad,roughness:.9}),slat:std({map:SLATT,color:0xffffff,roughness:.6,metalness:.2}),mesh:std({map:MESHT,color:0xffffff,roughness:.6,alphaTest:.5,side:THREE.DoubleSide}),asph:std({map:ASPT,color:0xffffff,roughness:.95}),sill:std({color:0x9a9ea3,roughness:.35,metalness:.6}),board:std({color:0xf3f1ec,roughness:.5}),
+ glass:new THREE.MeshPhysicalMaterial({color:0xb4c6d4,transparent:true,opacity:.36,roughness:.03,metalness:0,ior:1.5,specularIntensity:1,envMapIntensity:1.9}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),wtile:std({map:WTILE,color:0xffffff,roughness:.25,metalness:0}),skirt:std({color:0xf4f2ee,roughness:.5}),base:std({color:0xb9b5ad,roughness:.9}),slat:std({map:SLATT,color:0xffffff,roughness:.6,metalness:.2}),mesh:std({map:MESHT,color:0xffffff,roughness:.6,alphaTest:.5,side:THREE.DoubleSide}),asph:std({map:ASPT,color:0xffffff,roughness:.95}),sill:std({color:0x9a9ea3,roughness:.35,metalness:.6}),board:std({color:0xf3f1ec,roughness:.5}),
  door:std({color:0xe4e0d8,roughness:.5}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x9aa3ab,roughness:.72,metalness:.05}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
  fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:PAVT,color:0xffffff,roughness:.92}),deck:std({map:DECKT,color:0xffffff,roughness:.7}),plinth:std({color:0x2f3135,roughness:.92}),
  tile:std({map:tile,roughness:.35}),beton:std({map:beton,roughness:.85}),fab:fabric};
@@ -77,7 +77,12 @@ const FCM={wood:{m:std({map:FCT.wood,roughness:.62,color:0xffffff}),T:1.2},stone
 for(const k in FCM)FCM[k].m.map.repeat.set(1/FCM[k].T,1/FCM[k].T);
 // composition per facade style: entrance zone, terrace zone, plinth
 const FSTY={mix:{ent:'wood',ter:'dark',pl:'stone'},drevo:{ent:'wood',ter:'wood',pl:null},kamen:{ent:'stone',ter:'wood',pl:'stone'},kontrast:{ent:'dark',ter:'wood',pl:'stone'},omietka:{ent:null,ter:null,pl:null}};
-let FGE=null,FZW=[];const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
+let FGE=null,FZW=[],CELLS={};
+// prem8 h9: real CC0 PBR maps (Poly Haven, 1k albedo + 512 normal/roughness) swapped in when loaded; procedural canvases stay as fallback.
+// Metre UVs everywhere these are used, so repeat = 1 / tile size in metres.
+{const TL=new THREE.TextureLoader(),pbr=(mats,id,T,dsz)=>{const ld=(k,sz,f)=>TL.load(`assets/cc0/tex/${id}_${k}_${sz}.jpg`,t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(1/T,1/T);t.anisotropy=TCH?2:8;f(t);mats.forEach(m=>m.needsUpdate=true);Object.keys(facDS).forEach(k=>delete facDS[k]);DIRTY=Math.max(DIRTY,30);});
+  ld('diff',dsz||'1k',t=>{t.colorSpace=THREE.SRGBColorSpace;mats.forEach(m=>{m.map=t;m.color.set(0xffffff);});});ld('nor','512',t=>mats.forEach(m=>{m.normalMap=t;m.normalScale.set(.8,.8);}));ld('rough','512',t=>mats.forEach(m=>{m.roughnessMap=t;m.roughness=1;}));};
+ pbr([FCM.wood.m],'clad_wood',1.2);pbr([FCM.stone.m],'stone_slate',1.8);pbr([M.path],'pavers',2.2);pbr([M.asph],'asphalt',4,'512');}const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
 function boxUV(g,ou=0,ov=0){const P=g.attributes.position,N=g.attributes.normal,uv=g.attributes.uv;for(let i=0;i<P.count;i++){const nx=Math.abs(N.getX(i)),ny=Math.abs(N.getY(i));const x=P.getX(i),y=P.getY(i),z=P.getZ(i);if(ny>.5)uv.setXY(i,x+ou,z+ov);else if(nx>.5)uv.setXY(i,z+ou,y+ov);else uv.setXY(i,x+ou,y+ov);}uv.needsUpdate=true;}
 function metreUV(g,s0,s1,y0,y1,side){const uv=g.attributes.uv,fi=side>0?4:5;for(let v=fi*4;v<fi*4+4;v++){const u=uv.getX(v),t=uv.getY(v);uv.setXY(v,side>0?s0+u*(s1-s0):s1-u*(s1-s0),y0+t*(y1-y0));}uv.needsUpdate=true;}
 if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(.5,.5);M.wtile.map.repeat.set(1/1.2,1/1.2);M.slat.map.repeat.set(1,1);M.mesh.map.repeat.set(1,1);M.asph.map.repeat.set(1/3,1/3);M.deck.map.repeat.set(1/1.2,1/1.2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
@@ -93,6 +98,15 @@ const MBASE=THREE.Material.prototype;function dedupMats(root){const C=new Map();
  const key=m=>{if(m.onBeforeCompile!==MBASE.onBeforeCompile||m.customProgramCacheKey!==MBASE.customProgramCacheKey||m.isShaderMaterial)return null;let j;try{j=m.toJSON({textures:{},images:{},materials:{}});}catch(e){return null;}delete j.uuid;delete j.name;delete j.metadata;return m.type+JSON.stringify(j);};
  root.traverse(o=>{if(!o.isMesh||!o.material)return;const one=m=>{n++;const k=key(m);if(!k)return m;const h=C.get(k);if(h)return h;C.set(k,m);u++;return m;};o.material=Array.isArray(o.material)?o.material.map(one):one(o.material);});
  root.userData.mats={n,u};}
+// prem8 h9: desktop post-processing = GTAO ambient occlusion + 4x MSAA target + OutputPass (ACES + sRGB). Off on touch devices,
+// in the headset (R.xr.isPresenting) and with ?ao=0; window.__ao(false) toggles at runtime. Falls back to plain rendering until loaded / on error.
+let PP=null,PPon=!TCH&&!/[?&]ao=0/.test(location.search),PPload=false;const _ps=new THREE.Vector2();
+async function ppInit(){if(PPload)return;PPload=true;try{const[{EffectComposer},{RenderPass},{GTAOPass},{OutputPass}]=await Promise.all(['EffectComposer','RenderPass','GTAOPass','OutputPass'].map(n=>import(`three/addons/postprocessing/${n}.js`)));
+  R.getSize(_ps);const rt=new THREE.WebGLRenderTarget(_ps.x*R.getPixelRatio(),_ps.y*R.getPixelRatio(),{type:THREE.HalfFloatType,samples:4});const c=new EffectComposer(R,rt);c.setPixelRatio(R.getPixelRatio());c.setSize(_ps.x,_ps.y);
+  c.addPass(new RenderPass(scene,cam));const ao=new GTAOPass(scene,cam,_ps.x,_ps.y);ao.blendIntensity=.85;ao.updateGtaoMaterial({radius:.45,distanceExponent:1.4,thickness:1.2,scale:1,samples:12});ao.updatePdMaterial({lumaPhi:10,depthPhi:2,normalPhi:3,radius:6,rings:2,samples:12});c.addPass(ao);c.addPass(new OutputPass());
+  PP={c,w:_ps.x,h:_ps.y,pr:R.getPixelRatio()};DIRTY=Math.max(DIRTY,30);}catch(e){console.warn('postfx',e);PPon=false;}}
+function draw(){if(PPon&&!R.xr.isPresenting){if(!PP){ppInit();R.render(scene,cam);return;}R.getSize(_ps);const pr=R.getPixelRatio();if(_ps.x!==PP.w||_ps.y!==PP.h||pr!==PP.pr){PP.c.setPixelRatio(pr);PP.c.setSize(_ps.x,_ps.y);PP.w=_ps.x;PP.h=_ps.y;PP.pr=pr;}PP.c.render();}else R.render(scene,cam);}
+window.__ao=on=>{PPon=!!on;DIRTY=Math.max(DIRTY,30);};
 export function perfInfo(){if(!R||!scene)return null;R.info.autoReset=false;R.info.reset();R.render(scene,cam);const i=R.info;let meshes=0,vis=0,inst=0,cast=0,lights=[],mats=new Set(),geos=new Set(),tris=0;
  scene.traverseVisible(o=>{if(o.isMesh){vis++;if(o.isInstancedMesh)inst++;if(o.castShadow)cast++;(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>mats.add(m.uuid));geos.add(o.geometry.uuid);}if(o.isLight)lights.push(o.type+(o.castShadow?'*'+(o.shadow&&o.shadow.mapSize.x):''));});
  scene.traverse(o=>{if(o.isMesh)meshes++;});const r={calls:i.render.calls,tris:i.render.triangles,geoms:i.memory.geometries,tex:i.memory.textures,meshes,visMeshes:vis,instanced:inst,castShadow:cast,materials:mats.size,uniqueGeo:geos.size,lights,pr:R.getPixelRatio(),size:R.getSize(new THREE.Vector2()).toArray(),shadowAuto:R.shadowMap.autoUpdate};R.info.autoReset=true;return r;}
@@ -124,7 +138,7 @@ export function init(){if(inited)return;inited=true;loadKit().then(()=>DIRTY=Mat
   if(s&&loco)loco.update(dt,s.inputSources);else if(!s){if(walk)walkTick(dt);else{if(camPath)camPathTick(dt);else if(intro)introTick(dt);orb.update();}roofTweenTick(dt);if(sunTween)sunTweenTick(dt);if(wallGrow)wallGrowTick(dt);}
   if(!s){const k=cam.matrixWorld.elements.join()+rig.position.x+rig.position.z;if(k===LK&&DIRTY<=0&&!walk&&!camPath&&!sunTween&&!wallGrow&&!wxObj&&Math.abs(roofVis-roofTgt)<.01)return;if(k!==LK)DIRTY=Math.max(DIRTY,2);LK=k;DIRTY--;
    FT.push(dt);if(FT.length>90){const av=FT.reduce((a,b)=>a+b)/FT.length;FT=[];const pr=R.getPixelRatio();if(av>.028&&pr>1){R.setPixelRatio(Math.max(1,pr-.25));}else if(av<.014&&pr<PRMAX){R.setPixelRatio(Math.min(PRMAX,pr+.25));}}}
-  R.render(scene,cam);});
+  draw();});
  new ResizeObserver(()=>{if(fixedSize)return;const r=$('v3').getBoundingClientRect();if(!r.width)return;R.setSize(r.width,r.height);cam.aspect=r.width/r.height;cam.updateProjectionMatrix();DIRTY=Math.max(DIRTY,30);}).observe($('v3'));}
 const ease=t=>1-Math.pow(1-t,3),easeInOut=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
 function introTick(dt){intro.t=Math.min(1,intro.t+dt/2.2);const k=ease(intro.t);cam.position.lerpVectors(intro.a,intro.b,k);if(intro.t>=1)intro=null;}
@@ -414,7 +428,7 @@ function roomKind(types){const has=t=>types.has(t);
 function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.name]=l);let xs=[],zs=[];doorPivs=[];
  const Rroof=(H&&H.roof)||roof; if(Rroof&&Rroof!==roof) roof=Rroof;
  const add=(geom,mat,x,y,z,ry=0,nc)=>{const m=new THREE.Mesh(geom,mat);m.position.set(x,y,z);m.rotation.y=ry;m.castShadow=m.receiveShadow=mat!==M.glass;if(nc)m.userData.noCol=true;root.add(m);return m;};
- FGE=null;const FS=FSTY[(H.mat&&H.mat.fasada)||'mix']||FSTY.mix,FZ=new Map();
+ FGE=null;CELLS={};const FS=FSTY[(H.mat&&H.mat.fasada)||'mix']||FSTY.mix,FZ=new Map();
  // accent zones on exterior walls: around the entrance door (ent) and around terrace / sliding doors (ter); slivers < 0.6 m snap to the wall end
  H.walls.forEach(w=>{if(!w._ext)return;const L=geo(w).L,Z=[];[...(w.openings||[])].sort((p,q)=>(q.kind==='entrance')-(p.kind==='entrance')).forEach(o=>{const c=o.offset+o.width/2;let k=null,r=0;
    if(o.type==='door'&&(o.kind==='entrance'||(o.out&&o.kind!=='sliding'&&o.kind!=='terrace'))){k=FS.ent;r=Math.max(1.4,o.width/2+.9);}
@@ -462,7 +476,7 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
  roomKinds={};
  H.levels.forEach((l,i)=>{const ws=H.walls.filter(w=>w.level===l.name);if(!ws.length)return;const hole=stairs.filter(st=>st.level===(H.levels[i-1]||{}).name).map(stairRect);
   const topH=Math.max(...ws.map(w=>w.height||l.height));
-  const CR=cells(ws,hole),byL={};(H.furn||[]).filter(f=>f.level===l.name).forEach(f=>{const L=CR.labelAt(f.p[0],f.p[1]);if(!L)return;(byL[L]=byL[L]||{t:new Set(),k:[]}).t.add(f.t);if(['kitch','fridge','island','stool'].includes(f.t))byL[L].k.push(f);});
+  const CR=cells(ws,hole),byL={};CELLS[l.name]=CR;(H.furn||[]).filter(f=>f.level===l.name).forEach(f=>{const L=CR.labelAt(f.p[0],f.p[1]);if(!L)return;(byL[L]=byL[L]||{t:new Set(),k:[]}).t.add(f.t);if(['kitch','fridge','island','stool'].includes(f.t))byL[L].k.push(f);});
   const kindOf={};Object.keys(byL).forEach(L=>kindOf[L]=roomKind(byL[L].t));roomKinds[l.name]={labelAt:CR.labelAt,kindOf};
   CR.forEach(r=>{const cx=(r[0]+r[2])/2,cz=(r[1]+r[3])/2;
    const kind=kindOf[r[4]]||'other';const mat=floorMat(kind,r[2]-r[0],r[3]-r[1]);
@@ -492,8 +506,14 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
  stairs.forEach(st=>{const l=lv[st.level],up=H.levels[H.levels.indexOf(l)+1];if(!l)return;const rise=up?up.elevation-l.elevation:l.height,n=Math.max(2,Math.round(rise/.18)),L=st.length||3.6,W=st.width||1,d=st.dir||0;
   for(let k=0;k<n;k++){const sx=(k+.5)*L/n;add(new THREE.BoxGeometry(L/n,(k+1)*rise/n,W),M.stair,st.pos[0]+Math.cos(d)*sx-Math.sin(d)*W/2,l.elevation+(k+1)*rise/n/2,st.pos[1]+Math.sin(d)*sx+Math.cos(d)*W/2,-d);}});
  const top=H.levels[H.levels.length-1],tw=H.walls.filter(w=>w.level===top.name),th=top.elevation+Math.max(...(tw.length?tw:H.walls).map(w=>w.height||2.8));
- // plinth: dark grey band on exterior face only (never solid fill over floors)
- if(xs.length&&zs.length){const px0=Math.min(...xs),px1=Math.max(...xs),pz0=Math.min(...zs),pz1=Math.max(...zs);
+ // prem8 h8: footprint fill (room cells area / centre-line bbox). Below .8 the house is L/U-shaped or notched: plinth follows the exterior
+ // walls and the roof becomes an outline-following flat roof (a bbox gable would hang over empty yard and hide the walls).
+ const fillOf=n=>{const C=CELLS[n];if(!C||!C.length)return 1;let a=0,x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;C.forEach(r=>{a+=(r[2]-r[0])*(r[3]-r[1]);x0=Math.min(x0,r[0]);x1=Math.max(x1,r[2]);z0=Math.min(z0,r[1]);z1=Math.max(z1,r[3]);});return a/Math.max(1,(x1-x0)*(z1-z0));}; // room-cell area / room-cell bbox
+ const IRR=fillOf(H.levels[0].name)<.93||fillOf(top.name)<.93;window.__irr=[fillOf(H.levels[0].name),fillOf(top.name)];
+ if(IRR&&xs.length){const pm=FS.pl?FCM[FS.pl].m:M.plinth,h=.38;H.walls.forEach(w=>{if(!w._ext||(lv[w.level]||{elevation:0}).elevation+(w.base||0)>.2)return;const g=geo(w),T=w.thickness||.3,sg=Math.sign(w._ext),L=g.L;
+   const cuts=[[-T/2-.1,L+T/2+.1]];(w.openings||[]).filter(o=>o.type==='door').forEach(o=>{const a=o.offset-.02,b=o.offset+o.width+.02;for(let i=cuts.length-1;i>=0;i--){const[c0,c1]=cuts[i];if(b<=c0||a>=c1)continue;cuts.splice(i,1,...[[c0,a],[b,c1]].filter(q=>q[1]-q[0]>.03));}});
+   cuts.forEach(([a,b])=>{const m=(a+b)/2,off=sg*(T/2+.05),bg=new THREE.BoxGeometry(b-a,h,.1);if(FS.pl)boxUV(bg,m,0);add(bg,pm,g.x0+g.u[0]*m-g.u[1]*off,h/2-.02,g.z0+g.u[1]*m+g.u[0]*off,-Math.atan2(g.u[1],g.u[0]),1).userData.noCol=true;});});}
+ else if(xs.length&&zs.length){const px0=Math.min(...xs),px1=Math.max(...xs),pz0=Math.min(...zs),pz1=Math.max(...zs);
   const t=.28,h=.38,y=h/2-.02,cx=(px0+px1)/2,cz=(pz0+pz1)/2,pw=px1-px0+.2,pd=pz1-pz0+.2;
   // prem8: the band stops at exterior door openings (no 38 cm step in the doorway, leaves swing clear)
   const gaps=(hz,c)=>{const G=[];H.walls.forEach(w=>{const g=geo(w);const on=hz?Math.abs(g.u[1])<.01&&Math.abs(w.start[1]-c)<.05:Math.abs(g.u[0])<.01&&Math.abs(w.start[0]-c)<.05;if(!on)return;(w.openings||[]).forEach(o=>{if(o.type!=='door')return;const p0=hz?g.x0+g.u[0]*o.offset:g.z0+g.u[1]*o.offset,p1=hz?g.x0+g.u[0]*(o.offset+o.width):g.z0+g.u[1]*(o.offset+o.width);G.push([Math.min(p0,p1)-.02,Math.max(p0,p1)+.02]);});});return G.sort((a,b)=>a[0]-b[0]);};
@@ -503,7 +523,12 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
  if(xs.length&&zs.length){H.walls.forEach(w=>{const g=geo(w),h=w.height||2.8,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0);if(e>0.2)return;
   const cap=add(new THREE.BoxGeometry(g.L,.04,w.thickness+.04),CAPM,g.x0+g.u[0]*g.L/2,e+h+.02,g.z0+g.u[1]*g.L/2,-Math.atan2(g.u[1],g.u[0]),1);
   cap.userData.cap=1;cap.userData.capY=cap.position.y;cap.userData.noCol=true;cap.visible=false;cap.castShadow=false;});}
- if(roof!=='none'){const eave=.40; // ~0.4 m overhang past wall outer face
+ if(roof!=='none'&&IRR){const ah=.5,tc=CELLS[top.name]||[];
+  tc.forEach(r=>{add(new THREE.BoxGeometry(r[2]-r[0]+.3,.2,r[3]-r[1]+.3),FLATM,(r[0]+r[2])/2,th+.1,(r[1]+r[3])/2,0,1).userData.roof=1;});
+  tw.forEach(w=>{if(!w._ext)return;const g=geo(w),T=w.thickness||.3,L=g.L+T,ang=-Math.atan2(g.u[1],g.u[0]),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;
+   const p=add(new THREE.BoxGeometry(L,ah+.1,T),M.fac,mx,th+ah/2-.05,mz,ang,1);p.userData.roof=1;p.castShadow=true;
+   add(new THREE.BoxGeometry(L+.06,.05,T+.06),M.frame,mx,th+ah+.025,mz,ang,1).userData.roof=1;});}
+ else if(roof!=='none'){const eave=.40; // ~0.4 m overhang past wall outer face
   const houseW=fp[2]-fp[0], houseD=fp[3]-fp[1];
   const W=houseW+2*eave, D=houseD+2*eave, cx=(fp[0]+fp[2])/2, cz=(fp[1]+fp[3])/2;
   if(roof==='flat'){ // prem8 h3: modern flat roof = flush attic parapet in render + dark coping, no overhang (typical SK new-build)
@@ -677,7 +702,7 @@ export async function glb(){if(!world)return null;
   const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');
   return new Promise((res,rej)=>new GLTFExporter().parse(world,b=>res(new Blob([b],{type:'model/gltf-binary'})),rej,{binary:true,onlyVisible:true}));}
 
-export function snap(){if(!R)return null;R.render(scene,cam);return R.domElement.toDataURL('image/png');}
+export function snap(){if(!R)return null;draw();return R.domElement.toDataURL('image/png');}
 
 export function panoHere(W){return pano(rig.position.x,rig.position.z,rig.position.y,W,1);}
 export function pano(x,z,e,W=4096,keep){if(!R)return null;if(!keep)jump(x,z,e);const rt=new THREE.WebGLCubeRenderTarget(W/4,{type:THREE.HalfFloatType});const cc=new THREE.CubeCamera(.05,300,rt);cc.position.set(x,e+1.55,z);scene.add(cc);cc.update(R,scene);scene.remove(cc);
