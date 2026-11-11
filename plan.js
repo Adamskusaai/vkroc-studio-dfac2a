@@ -297,7 +297,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
    const touch=(q,P)=>P.some(r=>{if(r===q)return false;const m=Math.max(q.t,r.t)+4;if(q.hz===r.hz)return Math.abs(q.c-r.c)<m&&(Math.abs(q.a-r.b)<m*2||Math.abs(q.b-r.a)<m*2);return r.c>q.a-m&&r.c<q.b+m&&q.c>r.a-m&&q.c<r.b+m;});
    let add2=S2.filter(q=>touch(q,S)),rest=S2.filter(q=>!add2.includes(q)),ch=1;while(ch){ch=0;for(const q of rest){if(!add2.includes(q)&&touch(q,[...S,...add2])){add2.push(q);ch=1;}}}
    if(o.debug)(dbg.thin=dbg.thin||[]).push([mL2,S2.filter(q=>q.hz).map(q=>[q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]),add2.length]);S=S.concat(add2);}
-  S=mergeColinear(S,2);S=snap(S);S=mergeColinear(S,1);return S;};
+  S=mergeColinear(S,2);if(dbg.paper&&!(globalThis.__PF||{}).noIso)S=dropIsolated(S,W,H);S=snap(S);S=mergeColinear(S,1);return S;};
  const V=[];const add=(name,mask,wk,kOpen,kInt)=>{let S=run(mask,wk,/^t?h\d/.test(name),kInt||wk);if(o.debug)dbg["raw_"+name]=S.map(q=>[q.hz,q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]);if(S.length<3)return;S=focus(S);if(S.length<3)return;S=o._cyan?closeCorners(S):S;void(S);const bb=bbox(S);
   const ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
   V.push({name,S,mask,wk,kOpen,kInt,bb,q});dbg['q_'+name]=[S.length,+q.Q.toFixed(2),q.nR];};
@@ -464,6 +464,12 @@ function parseDim(txt){// imperial: OCR reads ' and " as commas -> 32'6" = "32,6
  return[v/100,v/1000,v];}// "1500" cm, "15000" mm, "15" m
 // prem9: drawing-sheet frame (single/double rectangle, the title block grid hanging on it) is not part of the house:
 // a component whose box spans most of the page, drawn with thin lines, closed on all four sides (a house outline always has door gaps)
+// a short bar touching no other wall at either end is a room label / text line read as a wall (blurred letters merge into a
+// solid bar in photos); real partitions meet another wall at least at one end
+function dropIsolated(S,W,H){const mx=Math.max(W,H),out=[],tm=median(S.map(q=>q.t))||0;for(const q of S){const L=q.b-q.a;if(L>=.085*mx||q.t>1.1*tm||q.t<6){out.push(q);continue;}
+ const m=Math.max(q.t,6)*1.5+4;const near=(r,e)=>{if(r===q)return false;const rm=r.t/2+m;if(r.hz===q.hz)return Math.abs(r.c-q.c)<rm&&e>r.a-rm&&e<r.b+rm;return Math.abs(r.c-e)<rm&&q.c>r.a-rm&&q.c<r.b+rm;};
+ const gap=sg=>{let d=1e9;for(const r of S){if(r===q||r.hz!==q.hz||r.b<q.a||r.a>q.b)continue;const v=(r.c-q.c)*sg;if(v>0)d=Math.min(d,v);}return d;};
+ if(S.some(r=>near(r,q.a))||S.some(r=>near(r,q.b))||Math.min(gap(1),gap(-1))<.06*mx)out.push(q);}return out;}
 function sheetFrame(ink,W,H){const lab=new Int32Array(W*H),st=[],hit=[];let id=0;
  for(let i=0;i<W*H;i++){if(!ink[i]||lab[i])continue;id++;st.push(i);lab[i]=id;let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0;while(st.length){const j=st.pop();n++;const x=j%W,y=(j/W)|0;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
    if(x>0&&ink[j-1]&&!lab[j-1]){lab[j-1]=id;st.push(j-1);}if(x<W-1&&ink[j+1]&&!lab[j+1]){lab[j+1]=id;st.push(j+1);}if(y>0&&ink[j-W]&&!lab[j-W]){lab[j-W]=id;st.push(j-W);}if(y<H-1&&ink[j+W]&&!lab[j+W]){lab[j+W]=id;st.push(j+W);}}
