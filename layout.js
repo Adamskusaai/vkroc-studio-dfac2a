@@ -87,9 +87,9 @@ function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k
  if(MOUNT.has(t)&&t!=='curtain'&&onOpening(G,it,['window','door']))return no('decor-over-opening');
  if(TALL.has(t)){const sq=rP([q[0]+.08,q[1]+.08,q[2]-.08,q[3]-.08]);let nu=0;for(let i=0;i<G.winZ.length;i++)if(polyOv(G.winZ[i],sq,EPS)){if(t==='kitch'&&(G.wins[i].sill||0)>=.85)nu=1;else return no('tall-at-window');}it.nu=nu;}
  if(!SOFT.has(t))for(const o of items){if(o===it||SOFT.has(o.t))continue;/* wall TV hangs above low furniture */if((t==='tvw'&&LOWW.has(o.t))||(o.t==='tvw'&&LOWW.has(t)))continue;if(ov(o.q,q,EPS))return no('overlap:'+o.t);
-  if(!SEAT.has(t)&&t!=='tvw'&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(it.partner===o))return no('in-clearance:'+o.t);
+  if(!SEAT.has(t)&&t!=='tvw'&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(it.partner===o)&&!(t==='kitch'&&o.t==='kitch'))return no('in-clearance:'+o.t);/* L-kitchen: two counter legs meet at the corner */
   if(SEAT.has(t)&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(o.t==='table'||o.t==='desk'||o.t==='otable'))return no('seat-in-clearance:'+o.t);}
- if(it.clr)for(const z of it.clr){if(!inRoomR(G,z,.85)||wallHit(G,z))return no('clearance-blocked');for(const o of items){if(o===it||SOFT.has(o.t)||o.t==='tvw'||(SEAT.has(o.t)&&(t==='table'||t==='desk'||t==='otable'))||o.partner===it||it.partner===o)continue;if(ov(o.q,z,EPS))return no('clearance-blocked:'+o.t);}}
+ if(it.clr)for(const z of it.clr){if(!inRoomR(G,z,.85)||wallHit(G,z))return no('clearance-blocked');for(const o of items){if(o===it||SOFT.has(o.t)||o.t==='tvw'||(t==='kitch'&&o.t==='kitch')||(SEAT.has(o.t)&&(t==='table'||t==='desk'||t==='otable'))||o.partner===it||it.partner===o)continue;if(ov(o.q,z,EPS))return no('clearance-blocked:'+o.t);}}
  if(!FREE.has(t)&&!SEAT.has(t)&&t!=='nstand'&&t!=='plant'&&t!=='lamp'&&wallFrac(G,backR(q,it.r,.02,.14))<.6)return no('not-against-wall');
  if(WALLSTAND.has(t)&&t!=='curtain'&&backGap(G,it).gap>.03)return no('not-flush-to-wall');
  if(t==='art'){const F=frontR(q,it.r,.5);if(items.some(o=>o!==it&&TALL.has(o.t)&&o.t!=='art'&&ov(o.q,F)))return no('art-hidden');if(items.some(o=>o!==it&&o.t==='art'&&Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1])<1.5))return no('art-crowded');}
@@ -152,6 +152,15 @@ function seating(G,S){const tvs=[];for(const[x,z,r]of wallCands(G,'tv')){const i
 // try candidates best-first; accept the first that passes every hard rule and keeps the walkways
 // compact variants of real products, tried when the standard size does not fit (small baths)
 const COMPACT={shower:[.8,.8],sink:[.5,.38],bath:[1.5,.7],wc:[.37,.6]};
+// prem9 LOGIC RULE (L-shaped kitchen): a straight counter run shorter than 1.8 m wraps the corner - a second counter (1.2/1.0/0.8 m) along the
+// perpendicular wall at one end of the run, wall-tight, same depth, placed with the normal rules (doors, swing zones, windows)
+function kitchL(G,S){const k=S.last.kitch;if(!k||k.L||(globalThis.__PF||{}).noKL)return null;const kw=Math.max(k.q[2]-k.q[0],k.q[3]-k.q[1]),kd=Math.min(k.q[2]-k.q[0],k.q[3]-k.q[1]);if(kw>=1.8)return null;
+ const f=FV[k.r],tan=k.r%2?[0,1]:[1,0],d0=G.dims;
+ for(const L2 of[1.2,1,.8])for(const sg of[1,-1]){const rr=FV.findIndex(v=>v[0]===-tan[0]*sg&&v[1]===-tan[1]*sg);if(rr<0)continue;
+  const x=k.p[0]+f[0]*(kd/2+L2/2)+tan[0]*sg*(kw/2-kd/2),z=k.p[1]+f[1]*(kd/2+L2/2)+tan[1]*sg*(kw/2-kd/2);
+  G.dims=t=>t==="kitch"?[L2,kd]:d0(t);let it=null;try{it=place(G,S,"kitch",[[x,z,rr]],{},1);}finally{G.dims=d0;}
+  if(it){if(wallFrac(G,backR(it.q,it.r,.02,.14))<.6){S.items.splice(S.items.indexOf(it),1);S.last.kitch=k;continue;}it.sz=[L2,kd];it.L=1;k.L=1;S.last.kitch=k;return it;}}
+ S.last.kitch=k;return null;}
 function place(G,S,t,C,extra={},lim=30){const e0=EPS;EPS=.002;try{return place0(G,S,t,C,extra,lim);}finally{EPS=e0;}}
 function place0(G,S,t,C,extra={},lim=30){const L=[];for(const[x,z,r]of C){const it=mkItem(G,t,x,z,r,extra);if(it.q[0]<G.X(0)||it.q[1]<G.Z(0)||it.q[2]>G.X(G.w-1)||it.q[3]>G.Z(G.h-1))continue;if(!hard(G,it,S.items,globalThis.__LDBG?(globalThis.__LDBG[t]=globalThis.__LDBG[t]||[]):null))continue;
   if(it.sides){const k=bedSides(G,it,S.items);if(!k.length)continue;it.clr=it.clr.concat(t==='bed'?k:[k[0]]);if(!hard(G,it,S.items))continue;}it.sc=scoreOf(G,it,S);if(S.spread&&S.items.length){let dn=9;for(const o of S.items)dn=Math.min(dn,Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1]));it.sc+=.9*Math.min(dn,3);}L.push(it);}
@@ -183,7 +192,7 @@ function entry0(G,S,e,opt){const req=e.endsWith('!');e=e.replace('!','');const c
      for(const sg of[1,-1]){const kz=[kw-fw,kd];G.dims=t=>t==='kitch'?kz:dk(t);const nk=place(G,S,'kitch',[[k.p[0]-tan[0]*sg*fw/2,k.p[1]-tan[1]*sg*fw/2,k.r]],{},1);if(nk){nk.sz=kz;nk.nu=k.nu;got=place(G,S,'fridge',[rel(G,nk,'fridge',sg)]);if(got)break;S.items.splice(S.items.indexOf(nk),1);}G.dims=dk;}
      G.dims=dk;if(!got){S.items.splice(i0,0,k);S.last.kitch=k;}}}
    if(got&&fz)got.sz=fz;}finally{G.dims=d0;}}
-  ok(got);return;}
+  kitchL(G,S);ok(got);return;}
  const tvFor=s=>{const f=FV[s.r],opp=(s.r+2)%4;const C=wallCands(G,'tv',[opp]).filter(([x,z])=>{const v=[x-s.p[0],z-s.p[1]],al=v[0]*f[0]+v[1]*f[1],lat=Math.abs(v[0]*f[1]-v[1]*f[0]);return al>=1.8&&al<=6&&lat<1.2;});return place(G,S,'tv',C)||place(G,S,'tv',wallCands(G,'tv',[opp]).filter(([x,z])=>{const v=[x-s.p[0],z-s.p[1]],al=v[0]*f[0]+v[1]*f[1],lat=Math.abs(v[0]*f[1]-v[1]*f[0]);return al>=1.5&&al<=6&&lat<2.2;}));};
  if(e==='sofa'){/* sofa + TV wall as a pair: try the best sofa spots until the TV fits opposite */const tried=new Set();let got=null;for(let k=0;k<30&&!got;k++){const C=wallCands(G,'sofa').filter(c=>!tried.has(c.join()));const it=place(G,S,'sofa',C);if(!it)break;tried.add([it.p[0],it.p[1],it.r].join());if(tvFor(it)){got=it;break;}S.items.splice(S.items.indexOf(it),1);S.last.sofa=null;S.score-=it.sc*.05;}
   if(!got)got=place(G,S,'sofa',wallCands(G,'sofa'));ok(got);return;}
