@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111e';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111f';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -51,6 +51,16 @@ const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood
  fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:pave,color:0xcfc8bb,roughness:.92}),plinth:std({color:0x2f3135,roughness:.92}),
  tile:std({map:tile,roughness:.35}),beton:std({map:beton,roughness:.85}),fab:fabric};
 if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(2,2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
+// prem8 y: Quest budget. In a headset session: no per-room ceiling fill point lights (emissive discs stay), at most 4 night point lights,
+// 1024 sun shadow map rendered only when the sun/scene changes (setHour drag already throttles), desktop untouched.
+let XRL=false;function xrLean(on){XRL=!!on;if(!scene)return;let n=0;scene.traverse(o=>{if(!o.isPointLight)return;if(o.userData.ceil){o.visible=!on;return;}if(o.parent===nightG){n++;o.visible=!on||n<=4;}});
+ const sm=on?1024:(TCH?1024:2048);if(sun&&sun.shadow.mapSize.x!==sm){sun.shadow.mapSize.set(sm,sm);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}}
+ R.shadowMap.autoUpdate=!on;R.shadowMap.needsUpdate=true;DIRTY=Math.max(DIRTY,10);}
+window.__xrLean=xrLean;
+export function perfInfo(){if(!R||!scene)return null;R.info.autoReset=false;R.info.reset();R.render(scene,cam);const i=R.info;let meshes=0,vis=0,inst=0,cast=0,lights=[],mats=new Set(),geos=new Set(),tris=0;
+ scene.traverseVisible(o=>{if(o.isMesh){vis++;if(o.isInstancedMesh)inst++;if(o.castShadow)cast++;(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>mats.add(m.uuid));geos.add(o.geometry.uuid);}if(o.isLight)lights.push(o.type+(o.castShadow?'*'+(o.shadow&&o.shadow.mapSize.x):''));});
+ scene.traverse(o=>{if(o.isMesh)meshes++;});const r={calls:i.render.calls,tris:i.render.triangles,geoms:i.memory.geometries,tex:i.memory.textures,meshes,visMeshes:vis,instanced:inst,castShadow:cast,materials:mats.size,uniqueGeo:geos.size,lights,pr:R.getPixelRatio(),size:R.getSize(new THREE.Vector2()).toArray(),shadowAuto:R.shadowMap.autoUpdate};R.info.autoReset=true;return r;}
+window.__perf=perfInfo;
 export function init(){if(inited)return;inited=true;loadKit().then(()=>DIRTY=Math.max(DIRTY,60)).catch(()=>{});
  R=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance',preserveDrawingBuffer:true});R.setPixelRatio(PRMAX=Math.min(devicePixelRatio,TCH?1.5:2));R.xr.enabled=true;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.22;R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;$('v3').appendChild(R.domElement);
  scene=new THREE.Scene();scene.background=new THREE.Color(0xc5d4e0);scene.fog=new THREE.FogExp2(0xc5d4e0,.012);
@@ -66,7 +76,7 @@ export function init(){if(inited)return;inited=true;loadKit().then(()=>DIRTY=Mat
  const g=new THREE.Mesh(new THREE.CircleGeometry(250,64).rotateX(-Math.PI/2),M.ground);grass.repeat.set(1,1);g.material.map=grass.clone();g.material.map.repeat.set(120,120);g.material.map.needsUpdate=true;g.position.y=-.03;g.receiveShadow=true;scene.add(g);
  // three's VRButton is never shown: without WebXR it would add an unlabelled 'WEBXR NOT AVAILABLE' link over our controls; with WebXR our own 'VR' mode button clicks it
  if(navigator.xr){const vb=VRButton.createButton(R);vb.id='VRButton';vb.style.display='none';vb.setAttribute('aria-hidden','true');document.body.appendChild(vb);}
- R.xr.addEventListener('sessionstart',()=>{setWalk(false,true);loco&&loco.init&&loco.init();});R.xr.addEventListener('sessionend',()=>place(walk));
+ R.xr.addEventListener('sessionstart',()=>{setWalk(false,true);loco&&loco.init&&loco.init();xrLean(true);});R.xr.addEventListener('sessionend',()=>{xrLean(false);place(walk);});
  const el=R.domElement;let lk=null;el.addEventListener('pointerdown',e=>{intro=null;if(walk&&!R.xr.isPresenting)lk=[e.clientX,e.clientY];});addEventListener('pointerup',()=>lk=null);
  el.addEventListener('pointermove',e=>{if(!lk)return;yaw+=(e.clientX-lk[0])*.005;pitch=Math.max(-1.2,Math.min(1.2,pitch+(e.clientY-lk[1])*.004));lk=[e.clientX,e.clientY];});
  el.addEventListener('wheel',()=>intro=null,{passive:true});
@@ -690,7 +700,7 @@ let skyCv=null,skyT=null,skyK='';function skyGrad(c){const k=c.join();if(skyT&&k
 const grey=(c,k,to)=>lerpHex(c,to,k);
 let hourDrag=false,lastShadow=0,pendH=null,hT=0;
 // live drag: lighting every call (cheap uniforms), shadow map re-rendered at most ~10 Hz; full update on release
-export function setHour(h,drag){ATM.h=h;hourDrag=!!drag;if(!scene)return;if(drag){R.shadowMap.autoUpdate=false;const t=performance.now();if(t-lastShadow>100){R.shadowMap.needsUpdate=true;lastShadow=t;}applyAtmo(true);}else{R.shadowMap.autoUpdate=true;applyAtmo();}}
+export function setHour(h,drag){ATM.h=h;hourDrag=!!drag;if(!scene)return;if(drag){R.shadowMap.autoUpdate=false;const t=performance.now();if(t-lastShadow>100){R.shadowMap.needsUpdate=true;lastShadow=t;}applyAtmo(true);}else{R.shadowMap.autoUpdate=!XRL;R.shadowMap.needsUpdate=true;applyAtmo();}}
 function applyAtmo(live){const h=ATM.h!=null?+ATM.h:14.5,w=ATM.w||'sun',cl=w!=='sun',wet=w==='rain';ATM.t=h>=18.3||h<6?'night':(h>=16.6||h<7.2)?'eve':'day';
  sunH=h;sunTween=null;const A=atmoAt(h),el=sunEl(h),up=el>0?Math.min(1,el/(10*Math.PI/180)):0;// up: 0 below horizon -> 1 at 10°
  const wk=(w==='cloudy'?.35:wet?.18:w==='snow'?.4:1);SUNK=up*wk;
@@ -708,7 +718,7 @@ function applyAtmo(live){const h=ATM.h!=null?+ATM.h:14.5,w=ATM.w||'sun',cl=w!=='
  if(!live)for(const k of['lawn','ground','path']){const m=M[k];if(!m)continue;if(!m.userData.d)m.userData.d={r:m.roughness,c:m.color.getHex()};m.roughness=wet?Math.min(m.userData.d.r,.35):m.userData.d.r;m.color.setHex(m.userData.d.c);if(wet)m.color.multiplyScalar(.62);}
  if(sun){const cs=SUNK>.03;if(sun.castShadow!==cs){sun.castShadow=cs;}}if(lastFp)fitSun(lastFp);
  LAMP=A.lamp;if(LAMP>.01){if(!nightG||nightG.userData.k!==lampKey())nightLights();setLamps(LAMP);}else if(nightG)nightG.visible=false;
- if(!live)makeWx();DIRTY=Math.max(DIRTY,live?6:90);}
+ if(!live)makeWx();DIRTY=Math.max(DIRTY,live?6:90);if(XRL)xrLean(true);}
 let LAMP=0;const lampKey=()=>(H&&H.furn?H.furn.length:0)+'|'+(H&&H.walls?H.walls.length:0)+'|'+(TCH?1:0);
 function setLamps(k){if(!nightG)return;nightG.visible=true;nightG.traverse(o=>{if(o.isPointLight)o.intensity=o.userData.base*k;else if(o.isMesh&&o.material&&o.material.userData.lamp){o.material.opacity=Math.min(1,k*1.4);}});}
 // night: warm bulbs at floor lamps / pendants / bedside tables (max 6 lights, no shadows -> Quest stays >72 fps)
@@ -724,7 +734,7 @@ function nightLights(){if(nightG){scene.remove(nightG);nightG.traverse(o=>o.geom
   for(const o of (w.openings||[])){if(o.type!=='door'||!(o.kind==='entrance'||o.kind==='terrace'||o.out))continue;if(nf>=(TCH?2:3))break;const s=o.offset+o.width/2;const c=[w.start[0]+u[0]*s,w.start[1]+u[1]*s];let n=[-u[1],u[0]];if((c[0]-cx)*n[0]+(c[1]-cz)*n[1]<0)n=[-n[0],-n[1]];
    const off=(w.thickness||.3)/2+.05,px=c[0]+n[0]*off+u[0]*(o.width/2+.25),pz=c[1]+n[1]*off+u[1]*(o.width/2+.25);const m=new THREE.Mesh(lg,lm);m.position.set(px,lv0+2.15,pz);m.rotation.y=Math.atan2(n[0],n[1]);nightG.add(m);
    const P=new THREE.PointLight(0xffc888,6,6,1.8);P.userData.base=6;P.position.set(px+n[0]*.3,lv0+2.1,pz+n[1]*.3);nightG.add(P);nf++;}}
- scene.add(nightG);if(LAMP>.01)setLamps(LAMP);else nightG.visible=false;}
+ scene.add(nightG);if(LAMP>.01)setLamps(LAMP);else nightG.visible=false;if(XRL)xrLean(true);}
 function makeWx(){if(wxObj){scene.remove(wxObj);wxObj.geometry.dispose();wxObj.material.dispose();wxObj=null;}const w=ATM.w;if(w!=='rain'&&w!=='snow')return;
  const fp=lastFp||[-10,-10,10,10],c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],r=Math.max(fp[2]-fp[0],fp[3]-fp[1])/2+8,N=w==='rain'?(TCH?1200:2600):(TCH?900:1800);
  const P=new Float32Array(N*(w==='rain'?6:3));const box={c,r,h:14};
