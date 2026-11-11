@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111f';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111g';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -57,6 +57,12 @@ let XRL=false;function xrLean(on){XRL=!!on;if(!scene)return;let n=0;scene.traver
  const sm=on?1024:(TCH?1024:2048);if(sun&&sun.shadow.mapSize.x!==sm){sun.shadow.mapSize.set(sm,sm);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}}
  R.shadowMap.autoUpdate=!on;R.shadowMap.needsUpdate=true;DIRTY=Math.max(DIRTY,10);}
 window.__xrLean=xrLean;
+// prem8 z: identical materials (same type + params + textures + userData) are shared -> fewer GPU state changes / programs on Quest.
+// Code that changes one object's material (roof fade) clones it first, so sharing is safe; custom-shader materials are left alone.
+const MBASE=THREE.Material.prototype;function dedupMats(root){const C=new Map();let n=0,u=0;
+ const key=m=>{if(m.onBeforeCompile!==MBASE.onBeforeCompile||m.customProgramCacheKey!==MBASE.customProgramCacheKey||m.isShaderMaterial)return null;let j;try{j=m.toJSON({textures:{},images:{},materials:{}});}catch(e){return null;}delete j.uuid;delete j.name;delete j.metadata;return m.type+JSON.stringify(j);};
+ root.traverse(o=>{if(!o.isMesh||!o.material)return;const one=m=>{n++;const k=key(m);if(!k)return m;const h=C.get(k);if(h)return h;C.set(k,m);u++;return m;};o.material=Array.isArray(o.material)?o.material.map(one):one(o.material);});
+ root.userData.mats={n,u};}
 export function perfInfo(){if(!R||!scene)return null;R.info.autoReset=false;R.info.reset();R.render(scene,cam);const i=R.info;let meshes=0,vis=0,inst=0,cast=0,lights=[],mats=new Set(),geos=new Set(),tris=0;
  scene.traverseVisible(o=>{if(o.isMesh){vis++;if(o.isInstancedMesh)inst++;if(o.castShadow)cast++;(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>mats.add(m.uuid));geos.add(o.geometry.uuid);}if(o.isLight)lights.push(o.type+(o.castShadow?'*'+(o.shadow&&o.shadow.mapSize.x):''));});
  scene.traverse(o=>{if(o.isMesh)meshes++;});const r={calls:i.render.calls,tris:i.render.triangles,geoms:i.memory.geometries,tex:i.memory.textures,meshes,visMeshes:vis,instanced:inst,castShadow:cast,materials:mats.size,uniqueGeo:geos.size,lights,pr:R.getPixelRatio(),size:R.getSize(new THREE.Vector2()).toArray(),shadowAuto:R.shadowMap.autoUpdate};R.info.autoReset=true;return r;}
@@ -573,7 +579,7 @@ export function setWalk(v,xr){DIRTY=Math.max(DIRTY,90);walk=v;orb.enabled=!v;$('
  place(v||xr);return walk;}
 export function setRoof(r,smooth){DIRTY=Math.max(DIRTY,90);const prev=roof;roof=r;if(smooth&&world){if(r==='none'||DOLL){roofTgt=0;}else{roofTgt=1;world.traverse(o=>{if(o.userData.roof)o.visible=true;});} }else{roofTgt=(r==='none'||DOLL)?0:1;roofVis=roofTgt;}}
 export const isWalk=()=>walk;
-export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
+export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  walk=walk&&!anim;setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;return true;}
