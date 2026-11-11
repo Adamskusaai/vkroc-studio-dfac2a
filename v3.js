@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111k';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111l';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -549,15 +549,29 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
  {const gw=Math.max(40,xMaxP-xMinP+24),gd=Math.max(40,zMaxP-zMinP+24);const gnd=add(new THREE.CylinderGeometry(gw*.55,gw*.55,.04,48),M.ground,(xMinP+xMaxP)/2,-.04,(zMinP+zMaxP)/2,0,1);gnd.receiveShadow=true;gnd.castShadow=false;gnd.userData.noCol=true;}
  if(P&&P.pts&&P.pts.length>2){const sh=new THREE.Shape(P.pts.map(p=>new THREE.Vector2(p[0],-p[1])));const lg=new THREE.ShapeGeometry(sh).rotateX(-Math.PI/2);const lm=new THREE.Mesh(lg,M.lawn);if(M.lawn.map)M.lawn.map.repeat.set(.35,.35);lm.position.y=-.01;lm.receiveShadow=true;lm.userData.noCol=true;root.add(lm);
   const zMin=Math.min(...P.pts.map(p=>p[1])),zMax=Math.max(...P.pts.map(p=>p[1])),xMin=Math.min(...P.pts.map(p=>p[0])),xMax=Math.max(...P.pts.map(p=>p[0]));
-  const hx=(xs.length?(Math.min(...xs)+Math.max(...xs))/2: (xMin+xMax)/2), hz=zs.length?Math.min(...zs):zMin+2;
+  const hx=(xs.length?(Math.min(...xs)+Math.max(...xs))/2: (xMin+xMax)/2), hz=zs.length?Math.min(...zs):zMin+2;let DRX=hx+4.2;
   // driveway with jointed paving
   // driveway on EAST side (away from west entrance) so walk-to-door stays clear
   const dLen=Math.max(4.5,hz-zMin+1.2),drive=add(new THREE.BoxGeometry(3.2,.025,dLen),M.path,hx+4.2,.008,(zMin+hz)/2-.1,0,1);drive.receiveShadow=true;drive.userData.noCol=true;
   // prem8: outward frames of the entrance / terrace doors (door centre, outward normal, along-wall)
   const hcx=(Math.min(...xs)+Math.max(...xs))/2,hcz=(Math.min(...zs)+Math.max(...zs))/2;const dOut=k=>{let r=null;(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(r||op.type!=='door'||op.kind!==k)return;const g=geo(w),m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}r={cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3};});});return r;};
   const ENT=dOut('entrance'),TER=dOut('terrace');
+
   // distance from a door to the plot edge along its outward normal
   const toEdge=D=>{const tx=D.nx>0?(xMax-D.cx)/D.nx:D.nx<0?(xMin-D.cx)/D.nx:1e9,tz=D.nz>0?(zMax-D.cz)/D.nz:D.nz<0?(zMin-D.cz)/D.nz:1e9;return Math.max(1.5,Math.min(tx,tz));};
+  // prem8 h5: carport (slim dark steel posts, flat dark roof) over the driveway. Candidates: current driveway, then beside the house (E/W).
+  // A candidate is rejected if it leaves the plot, touches the house, covers a path, or comes within 1.2 m of any door/window; the driveway follows the pick.
+  {const X0=Math.min(...xs),X1=Math.max(...xs),Z0=Math.min(...zs),Z1=Math.max(...zs),OP=[];
+   (H.walls||[]).forEach(w=>(w.openings||[]).forEach(op=>{const g=geo(w);for(const f of[0,.5,1]){const m=op.offset+op.width*f;OP.push([g.x0+g.u[0]*m,g.z0+g.u[1]*m]);}}));
+   const PR=[[X0+1.7-.75,X0+1.7+.75,zMin,hz]];if(ENT){const Lp=toEdge(ENT);const ex=ENT.cx+ENT.nx*Lp,ez=ENT.cz+ENT.nz*Lp;PR.push([Math.min(ENT.cx,ex)-.75-Math.abs(ENT.nz)*0,Math.max(ENT.cx,ex)+.75,Math.min(ENT.cz,ez)-.75,Math.max(ENT.cz,ez)+.75]);}
+   const hw=1.5,ok=(cx,z0,z1)=>{const x0=cx-hw,x1=cx+hw;if(x0<xMin+.2||x1>xMax-.2||z0<zMin+.2||z1>zMax-.2)return false;if(x1>X0-.3&&x0<X1+.3&&z1>Z0-.3&&z0<Z1+.3)return false;
+    if(OP.some(([x,z])=>x>x0-1.2&&x<x1+1.2&&z>z0-1.2&&z<z1+1.2))return false;if(PR.some(r=>x1>r[0]&&x0<r[1]&&z1>r[2]&&z0<r[3]))return false;return true;};
+   const C=[[hx+4.2,zMin+.4,Math.min(zMin+.4+5.5,hz-.4)],[X1+.4+hw,zMin+.4,zMin+5.4],[X0-.4-hw,zMin+.4,zMin+5.4]].filter(c=>c[2]-c[1]>=4.4);const pick=C.find(c=>ok(...c));window.__cp={C,pick:pick||null};
+   if(pick&&P.carport!==false){const[dX,cz0,cz1]=pick,L=cz1-cz0,cy=(cz0+cz1)/2,cm=std({color:0x2d3034,roughness:.6,metalness:.3});DRX=dX;
+    const dl=Math.max(cz1+.3,hz)-(zMin-.6);drive.geometry.dispose();drive.geometry=new THREE.BoxGeometry(2*hw,.025,dl);drive.position.set(dX,.008,zMin-.6+dl/2);
+    [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{add(new THREE.BoxGeometry(.1,2.3,.1),cm,dX+sx*(hw-.15),1.15,cy+sz*(L/2-.2),0,1);});
+    const rf=add(new THREE.BoxGeometry(2*hw+.2,.16,L+.3),cm,dX,2.38,cy,0,1);rf.castShadow=true;rf.userData.noCol=true;
+    add(new THREE.BoxGeometry(2*hw-.1,.04,L),M.frame,dX,2.29,cy,0,1).userData.noCol=true;}}
   if(ENT&&Math.abs(ENT.nx)>.9){// path to a door on an east/west facade
    const Lp=toEdge(ENT)-.1;add(new THREE.BoxGeometry(Lp,.02,1.5),M.path,ENT.cx+ENT.nx*(ENT.t/2+Lp/2),.01,ENT.cz,0,1).userData.noCol=true;}
   else if(ENT){const Lp=toEdge(ENT)-.1;add(new THREE.BoxGeometry(1.5,.02,Lp),M.path,ENT.cx,.01,ENT.cz+ENT.nz*(ENT.t/2+Lp/2),0,1).userData.noCol=true;}
@@ -593,22 +607,31 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
   // surrounding context: distant tree line + neighbour silhouettes (hides empty green field)
   {const sil=std({color:0x8a9488,roughness:1});
    [[-18,8,1.2],[-16,-6,1.0],[28,4,1.3],[26,-8,0.9],[8,-22,1.1],[-6,24,1.0],[22,22,1.2]].forEach(([x,z,s])=>tree(x,z,s));
-   // low neighbour massing (simple boxes)
-   [[-14,6,8,3.5,7],[-12,-10,6,3.2,9],[-26,18,9,3.8,8],[34,20,7,3.0,10]].forEach(([x,z,ww,hh,dd])=>{
-    const m=add(new THREE.BoxGeometry(ww,hh,dd),sil,x,hh/2,z,0,1);m.castShadow=false;m.receiveShadow=false;
-    add(new THREE.BoxGeometry(ww+.4,.15,dd+.4),std({color:0x3a3e44,roughness:.85}),x,hh+.05,z,0,1).castShadow=false;
+   // prem8 h5: neighbour houses = rendered body + gable or flat/parapet roof + dark windows (+ wood panel on flat ones); shared materials, ~12 meshes each.
+   // Houses that would sit on the street move across it.
+   const NB={w:std({color:0xece8e0,map:plaster,roughness:.92}),r:std({color:0x4b5057,roughness:.8}),g:std({color:0x2b3238,roughness:.25,metalness:.35}),c:M.frame};
+   [[-14,6,8,3.0,7,0],[-12,-10,6,3.0,9,1],[-26,18,9,3.2,8,1],[34,20,7,3.0,10,0]].forEach(([x,z,ww,hh,dd,fl],ni)=>{
+    if(P.fence!==false&&z+dd/2>zMin-9.5&&z-dd/2<zMin+.5)z=zMin-9.5-dd/2;
+    const m=add(new THREE.BoxGeometry(ww,hh,dd),NB.w,x,hh/2,z,0,1);m.castShadow=false;
+    if(fl){add(new THREE.BoxGeometry(ww+.06,.5,dd+.06),NB.w,x,hh+.25,z,0,1).castShadow=false;add(new THREE.BoxGeometry(ww+.12,.06,dd+.12),NB.c,x,hh+.53,z,0,1).castShadow=false;
+     const wp=add(new THREE.BoxGeometry(Math.min(3,ww*.35),hh+.5,.04),FCM.wood.m,x+ww*.25,(hh+.5)/2,z+dd/2+.02,0,1);boxUV(wp.geometry,0,0);wp.castShadow=false;}
+    else{const lng=ww>=dd,along=lng?ww:dd,span=(lng?dd:ww)+.6,rh=span*.28,sh=new THREE.Shape([new THREE.Vector2(-span/2,0),new THREE.Vector2(span/2,0),new THREE.Vector2(0,rh)]);
+     const g=new THREE.ExtrudeGeometry(sh,{depth:along+.6,bevelEnabled:false});g.translate(0,0,-(along+.6)/2);const r=new THREE.Mesh(g,NB.r);r.position.set(x,hh,z);if(lng)r.rotation.y=Math.PI/2;r.castShadow=false;r.userData.noCol=true;root.add(r);}
+    // windows: every ~2.6 m on each face, 1.2 x 1.3 m, sill height 0.9
+    [[0,1],[0,-1],[1,0],[-1,0]].forEach(([fx,fz])=>{const L=fx?dd:ww,n=Math.max(1,Math.floor(L/2.6));for(let k=0;k<n;k++){if(fl&&fz===1&&k===n-1)continue;const o=-L/2+(k+.5)*L/n;
+     const px=fx?x+fx*(ww/2+.015):x+o,pz=fx?z+o:z+fz*(dd/2+.015);add(fx?new THREE.BoxGeometry(.03,1.3,1.2):new THREE.BoxGeometry(1.2,1.3,.03),NB.g,px,1.55,pz,0,1).castShadow=false;}});
    });
-   // horizon hedge band
-   const hm=std({color:0x5a6e4a,roughness:1,map:grass});
+   // horizon hedge band: low, lawn-toned, no shading tile (reads as a soft field edge from above, not a dark wall)
+   const hm=std({color:0x7d8e62,roughness:1});
    [[0,-28,50,.9],[0,30,55,.8],[-28,0,.9,45],[32,2,.9,48]].forEach(([x,z,ww,dd])=>{
-    const m=add(new THREE.BoxGeometry(ww,1.1,dd),hm,x,.5,z,0,1);m.castShadow=false;
+    const m=add(new THREE.BoxGeometry(ww,.55,dd),hm,x,.27,z,0,1);m.castShadow=false;
    });
   }
   for(let i=0;i<8;i++){const t=seed(i,7),u=seed(i,19),x=xMin+1.2+(xMax-xMin-2.4)*t,z=zMin+1.2+(zMax-zMin-2.4)*u;
    if(x>hx0&&x<hx1&&z>hz0&&z<hz1)continue;shrub(x,z,.35+.28*seed(i,3));}
   // prem8 h4: street side = stone pillars + dark slat panels on a concrete base (gaps at path gate + driveway);
   // other sides = dark welded-mesh panels (one alpha-tested quad per span). Outside the street fence: paved sidewalk, kerb, asphalt.
-  if(P.fence!==false){const gateX=(xs.length?Math.min(...xs):0)+1.7,gateW=.75,dX=hx+4.2,dW=1.75,zSouth=zMin;
+  if(P.fence!==false){const gateX=(xs.length?Math.min(...xs):0)+1.7,gateW=.75,dX=DRX,dW=1.75,zSouth=zMin;
    const gap=(x,z)=>Math.abs(z-zSouth)<.4&&(Math.abs(x-gateX)<gateW||Math.abs(x-dX)<dW);
    P.pts.forEach((a,i)=>{const b=P.pts[(i+1)%P.pts.length],L=Math.hypot(b[0]-a[0],b[1]-a[1])||1e-6,ang=-Math.atan2(b[1]-a[1],b[0]-a[0]),street=Math.abs(a[1]-zSouth)<.4&&Math.abs(b[1]-zSouth)<.4;
     const at=t=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
