@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111p';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111q';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -104,8 +104,25 @@ let PP=null,PPon=!TCH&&!/[?&]ao=0/.test(location.search),PPload=false;const _ps=
 async function ppInit(){if(PPload)return;PPload=true;try{const[{EffectComposer},{RenderPass},{GTAOPass},{OutputPass}]=await Promise.all(['EffectComposer','RenderPass','GTAOPass','OutputPass'].map(n=>import(`three/addons/postprocessing/${n}.js`)));
   R.getSize(_ps);const rt=new THREE.WebGLRenderTarget(_ps.x*R.getPixelRatio(),_ps.y*R.getPixelRatio(),{type:THREE.HalfFloatType,samples:4});const c=new EffectComposer(R,rt);c.setPixelRatio(R.getPixelRatio());c.setSize(_ps.x,_ps.y);
   c.addPass(new RenderPass(scene,cam));const ao=new GTAOPass(scene,cam,_ps.x,_ps.y);ao.blendIntensity=.85;ao.updateGtaoMaterial({radius:.45,distanceExponent:1.4,thickness:1.2,scale:1,samples:12});ao.updatePdMaterial({lumaPhi:10,depthPhi:2,normalPhi:3,radius:6,rings:2,samples:12});c.addPass(ao);c.addPass(new OutputPass());
+  // subtle grade after tone mapping (display space): +4% contrast, +6% saturation, light vignette
+  const{ShaderPass}=await import('three/addons/postprocessing/ShaderPass.js');c.addPass(new ShaderPass({uniforms:{tDiffuse:{value:null}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+   fragmentShader:'uniform sampler2D tDiffuse;varying vec2 vUv;void main(){vec4 c=texture2D(tDiffuse,vUv);vec3 v=c.rgb;float l=dot(v,vec3(.2126,.7152,.0722));v=mix(vec3(l),v,1.06);v=(v-.5)*1.04+.5;vec2 d=vUv-.5;v*=1.-.16*dot(d,d)*2.;gl_FragColor=vec4(clamp(v,0.,1.),c.a);}'}));
   PP={c,w:_ps.x,h:_ps.y,pr:R.getPixelRatio()};DIRTY=Math.max(DIRTY,30);}catch(e){console.warn('postfx',e);PPon=false;}}
-function draw(){if(PPon&&!R.xr.isPresenting){if(!PP){ppInit();R.render(scene,cam);return;}R.getSize(_ps);const pr=R.getPixelRatio();if(_ps.x!==PP.w||_ps.y!==PP.h||pr!==PP.pr){PP.c.setPixelRatio(pr);PP.c.setSize(_ps.x,_ps.y);PP.w=_ps.x;PP.h=_ps.y;PP.pr=pr;}PP.c.render();}else R.render(scene,cam);}
+// sRGB backgrounds skip tone mapping when drawn straight to the canvas, but the composer's OutputPass tone-maps everything,
+// which turned the sky grey-green. Fix: under the composer, swap in an inverse-ACES (three's fit, current exposure) linear copy of the sky.
+const _iM=new THREE.Matrix3().set(0.59719,0.35458,0.04823,0.07600,0.90834,0.01566,0.02840,0.13383,0.83777).invert(),_oM=new THREE.Matrix3().set(1.60475,-0.53108,-0.07367,-0.10208,1.10813,-0.00605,-0.00327,-0.07276,1.07602).invert();
+function invACES(r,g,b,ex){const v=new THREE.Vector3(Math.min(r,.985),Math.min(g,.985),Math.min(b,.985)).applyMatrix3(_oM);const f=y=>{y=Math.max(0,Math.min(.985,y));const A=1-.983729*y,B=.0245786-.432951*y,C=-.000090537-.238081*y;return(-B+Math.sqrt(B*B-4*A*C))/(2*A);};
+ v.set(f(v.x),f(v.y),f(v.z)).applyMatrix3(_iM).multiplyScalar(.6/ex);return[Math.max(0,v.x),Math.max(0,v.y),Math.max(0,v.z)];}
+const BGC=new Map();function bgComp(bg){if(R.toneMapping!==THREE.ACESFilmicToneMapping)return bg;const ex=R.toneMappingExposure;
+ if(bg&&bg.isColor){const c=new THREE.Color().copy(bg).convertLinearToSRGB(),k='c'+c.getHexString()+ex;if(!BGC.has(k)){const l=new THREE.Color(0,0,0);const q=invACES(...new THREE.Color().copy(bg).toArray(),ex);BGC.set(k,l.setRGB(q[0],q[1],q[2]));}return BGC.get(k);}
+ if(!bg||!bg.isTexture||!bg.image||!bg.image.getContext||bg.colorSpace!==THREE.SRGBColorSpace)return bg;const k=bg.uuid+'|'+bg.version+'|'+ex;if(BGC.has(k))return BGC.get(k);
+ const cv=bg.image,w=cv.width,h=cv.height,d=cv.getContext('2d').getImageData(0,0,w,h).data,o=new Float32Array(w*h*4),tl=c=>c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4,j=((h-1-y)*w+x)*4,q=invACES(tl(d[i]/255),tl(d[i+1]/255),tl(d[i+2]/255),ex);o[j]=q[0];o[j+1]=q[1];o[j+2]=q[2];o[j+3]=1;}
+ const t=new THREE.DataTexture(o,w,h,THREE.RGBAFormat,THREE.FloatType);t.colorSpace=THREE.LinearSRGBColorSpace;t.mapping=bg.mapping;t.magFilter=t.minFilter=THREE.LinearFilter;t.needsUpdate=true;
+ if(BGC.size>12){BGC.forEach(v=>v.dispose&&v.dispose());BGC.clear();}BGC.set(k,t);return t;}
+// prem8 h10: HDRI sun (brightest upper-hemisphere texel) is rotated onto the actual sun light azimuth, so reflections/env light match the shadows.
+let ENVPHI=null;function envSync(){if(ENVPHI==null||!sun||!scene.environmentRotation)return;const dx=sun.position.x-sun.target.position.x,dz=sun.position.z-sun.target.position.z;scene.environmentRotation.y=Math.atan2(dz,dx)-ENVPHI;}
+function draw(){envSync();if(PPon&&!R.xr.isPresenting){if(!PP){ppInit();R.render(scene,cam);return;}R.getSize(_ps);const pr=R.getPixelRatio();if(_ps.x!==PP.w||_ps.y!==PP.h||pr!==PP.pr){PP.c.setPixelRatio(pr);PP.c.setSize(_ps.x,_ps.y);PP.w=_ps.x;PP.h=_ps.y;PP.pr=pr;}const bg=scene.background;scene.background=bgComp(bg);try{PP.c.render();}finally{scene.background=bg;}}else R.render(scene,cam);}
 window.__ao=on=>{PPon=!!on;DIRTY=Math.max(DIRTY,30);};
 export function perfInfo(){if(!R||!scene)return null;R.info.autoReset=false;R.info.reset();R.render(scene,cam);const i=R.info;let meshes=0,vis=0,inst=0,cast=0,lights=[],mats=new Set(),geos=new Set(),tris=0;
  scene.traverseVisible(o=>{if(o.isMesh){vis++;if(o.isInstancedMesh)inst++;if(o.castShadow)cast++;(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>mats.add(m.uuid));geos.add(o.geometry.uuid);}if(o.isLight)lights.push(o.type+(o.castShadow?'*'+(o.shadow&&o.shadow.mapSize.x):''));});
@@ -114,7 +131,7 @@ window.__perf=perfInfo;
 export function init(){if(inited)return;inited=true;loadKit().then(()=>DIRTY=Math.max(DIRTY,60)).catch(()=>{});
  R=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance',preserveDrawingBuffer:true});R.setPixelRatio(PRMAX=Math.min(devicePixelRatio,TCH?1.5:2));R.xr.enabled=true;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.22;R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;$('v3').appendChild(R.domElement);
  scene=new THREE.Scene();scene.background=new THREE.Color(0xc5d4e0);scene.fog=new THREE.FogExp2(0xc5d4e0,.012);
- new RGBELoader().load('assets/cc0/hdri/kloppenheim_06_puresky_1k.hdr',t=>{t.mapping=THREE.EquirectangularReflectionMapping;scene.environment=t;scene.environmentIntensity=1.05;
+ new RGBELoader().load('assets/cc0/hdri/kloppenheim_06_puresky_1k.hdr',t=>{t.mapping=THREE.EquirectangularReflectionMapping;scene.environment=t;try{const D=t.image.data,W=t.image.width,Hh=t.image.height,hf=D instanceof Uint16Array,rd=i=>hf?THREE.DataUtils.fromHalfFloat(D[i]):D[i];let bl=-1,bu=.5;for(let y=0;y<Hh*.5;y+=2)for(let x=0;x<W;x+=2){const i=(y*W+x)*4,l=rd(i)+rd(i+1)+rd(i+2);if(l>bl){bl=l;bu=(x+.5)/W;}}ENVPHI=(bu-.5)*Math.PI*2;}catch(e){}scene.environmentIntensity=1.05;
   // Clean gradient sky (no photographic strip) — HDRI used for lighting/reflections only
   const c=document.createElement('canvas');c.width=2;c.height=256;const x=c.getContext('2d');
   const g=x.createLinearGradient(0,0,0,256);g.addColorStop(0,'#b7c8da');g.addColorStop(.4,'#d5e0ea');g.addColorStop(.7,'#e8eee8');g.addColorStop(1,'#f2f0e8');
@@ -523,6 +540,11 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
  if(xs.length&&zs.length){H.walls.forEach(w=>{const g=geo(w),h=w.height||2.8,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0);if(e>0.2)return;
   const cap=add(new THREE.BoxGeometry(g.L,.04,w.thickness+.04),CAPM,g.x0+g.u[0]*g.L/2,e+h+.02,g.z0+g.u[1]*g.L/2,-Math.atan2(g.u[1],g.u[0]),1);
   cap.userData.cap=1;cap.userData.capY=cap.position.y;cap.userData.noCol=true;cap.visible=false;cap.castShadow=false;});}
+ // prem8 h10: slim anthracite entrance canopy (1.2 m deep, door width + 1.2 m) 0.3 m above the entrance door, kept under the eaves
+ {const hx=(fp[0]+fp[2])/2,hz=(fp[1]+fp[3])/2;H.walls.forEach(w=>{if(!w._ext)return;const e=(lv[w.level]||{elevation:0}).elevation+(w.base||0);if(e>.2)return;(w.openings||[]).forEach(o=>{if(o.type!=='door'||o.kind!=='entrance')return;
+  const g=geo(w),t=w.thickness||.3,sm=o.offset+o.width/2,mx=g.x0+g.u[0]*sm,mz=g.z0+g.u[1]*sm;let nx=-g.u[1],nz=g.u[0];if((mx+nx-hx)**2+(mz+nz-hz)**2<(mx-nx-hx)**2+(mz-nz-hz)**2){nx=-nx;nz=-nz;}
+  const y=Math.min(e+(o.height||2.1)+.3,th-.18),dp=1.2,cw=o.width+1.2,m=add(new THREE.BoxGeometry(cw,.1,dp),M.frame,mx+nx*(t/2+dp/2),y,mz+nz*(t/2+dp/2),-Math.atan2(g.u[1],g.u[0]),1);m.castShadow=true;m.userData.noCol=true;
+  const sf=add(new THREE.BoxGeometry(cw-.04,.004,dp-.04),M.skirt,mx+nx*(t/2+dp/2),y-.052,mz+nz*(t/2+dp/2),-Math.atan2(g.u[1],g.u[0]),1);sf.userData.noCol=true;});});}
  if(roof!=='none'&&IRR){const ah=.5,tc=CELLS[top.name]||[];
   tc.forEach(r=>{add(new THREE.BoxGeometry(r[2]-r[0]+.3,.2,r[3]-r[1]+.3),FLATM,(r[0]+r[2])/2,th+.1,(r[1]+r[3])/2,0,1).userData.roof=1;});
   tw.forEach(w=>{if(!w._ext)return;const g=geo(w),T=w.thickness||.3,L=g.L+T,ang=-Math.atan2(g.u[1],g.u[0]),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;
@@ -570,6 +592,10 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
       root.add(mesh);
     };
     gable(true); gable(false);}
+   // prem8 h10: anthracite gutters along both eaves + 4 corner downspouts (pipe on the wall, short offset arm to the gutter)
+   {const gr=.06,gy=ry-.03,aH=along-2*eave,sH=span-2*eave,P=(L,r,a,y,c,ax)=>{const g=new THREE.CylinderGeometry(r,r,L,10);if(ax==='a')lng?g.rotateZ(Math.PI/2):g.rotateX(Math.PI/2);else if(ax==='c')lng?g.rotateX(Math.PI/2):g.rotateZ(Math.PI/2);
+     const m=new THREE.Mesh(g,M.frame);m.position.set(lng?cx+a:cx+c,y,lng?cz+c:cz+a);m.castShadow=true;m.userData.roof=1;m.userData.noCol=true;root.add(m);};
+    for(const sd of[-1,1]){P(along,gr,0,gy,sd*(hd+.03),'a');for(const en of[-1,1]){const aa=en*(aH/2-.22),wc=sd*(sH/2+.06),top=gy-.28;P(top-.05,.045,aa,(top+.05)/2,wc,'v');P(eave-.02,.04,aa,top,sd*(sH/2+.06+(eave-.03)/2),'c');}}}
   }}
  // plot: muted lawn (plot only), soft ground, drive, terrace accents, trees, slim fence
  const P=H.plot;const xMinP=xs.length?Math.min(...xs)-6: -4,xMaxP=xs.length?Math.max(...xs)+6:20,zMinP=zs.length?Math.min(...zs)-6:-5,zMaxP=zs.length?Math.max(...zs)+6:15;
@@ -779,9 +805,12 @@ function viewFrom(x,z){const W=(H&&H.walls)||[];let RK=null,L0=null;for(const k 
  const ray=(dx,dz)=>inRoom(dx,dz,ray0(dx,dz)),ray0=(dx,dz)=>{let best=12;W.forEach(w=>{const ax=w.start[0],az=w.start[1],bx=w.end[0]-ax,bz=w.end[1]-az,den=dx*bz-dz*bx;if(Math.abs(den)<1e-9)return;const t=((ax-x)*bz-(az-z)*bx)/den,u=((ax-x)*dz-(az-z)*dx)/den;if(t>.05&&u>=0&&u<=1&&t<best)best=t;});return best;};
  // prem8 h9: bathroom/WC — stand just inside its door, eye a bit higher, look toward the room centroid, 80° FOV (other jumps restore 58°).
  if(RK&&RK.kindOf&&RK.kindOf[L0]==='wet'){let dv=null;W.forEach(w=>{if(dv)return;const ax=w.start[0],az=w.start[1],L=Math.hypot(w.end[0]-ax,w.end[1]-az)||1e-9,ux=(w.end[0]-ax)/L,uz=(w.end[1]-az)/L;
-   (w.openings||[]).forEach(o=>{if(dv||o.type!=='door')return;const s=o.offset+o.width/2,cx=ax+ux*s,cz=az+uz*s;for(const sd of[1,-1]){const nx=-uz*sd,nz=ux*sd;if(RK.labelAt(cx+nx*.45,cz+nz*.45)===L0){dv={x:cx+nx*.4,z:cz+nz*.4,nx,nz};break;}}});});
+   (w.openings||[]).forEach(o=>{if(dv||o.type!=='door')return;const s=o.offset+o.width/2,cx=ax+ux*s,cz=az+uz*s;for(const sd of[1,-1]){const nx=-uz*sd,nz=ux*sd;if(RK.labelAt(cx+nx*.45,cz+nz*.45)===L0){const hu=o.hinge==='R'?1:-1,lin=sd===(o.out?-1:1)&&o.kind!=='sliding';dv={x:cx+nx*.4,z:cz+nz*.4,nx,nz,hx:ux*hu,hz:uz*hu,lin,ow:o.width};break;}}});});
   if(dv){let sx=0,sz=0,n=0;for(let a=-4;a<=4;a+=.2)for(let b=-4;b<=4;b+=.2)if(RK.labelAt(dv.x+a,dv.z+b)===L0){sx+=a;sz+=b;n++;}
-   if(n){let dx=sx/n,dz=sz/n;const dl=Math.hypot(dx,dz);if(dl>.2){dx/=dl;dz/=dl;const an=Math.atan2(dv.nx,-dv.nz),ac=Math.atan2(dx,-dz);let dy=ac-an;dy=Math.atan2(Math.sin(dy),Math.cos(dy));dy=Math.max(-1,Math.min(1,dy));return{x:dv.x-dv.nx*.32,z:dv.z-dv.nz*.32,yaw:an+dy*.8,h:1.7,p:.16,fov:80};}}}}
+   if(n){let dx=sx/n,dz=sz/n;const dl=Math.hypot(dx,dz);if(dl>.2){dx/=dl;dz/=dl;const an=Math.atan2(dv.nx,-dv.nz),ac=Math.atan2(dx,-dz);let dy=ac-an;dy=Math.atan2(Math.sin(dy),Math.cos(dy));dy=Math.max(-1,Math.min(1,dy));let ox=0,oz=0;
+     // door leaf swung into this room sits at the hinge edge: step to the latch side and never look toward the hinge side
+     if(dv.lin){const sh=Math.min(.22,dv.ow*.25);ox=-dv.hx*sh;oz=-dv.hz*sh;const tw=Math.sin(an+dy*.8)*dv.hx+(-Math.cos(an+dy*.8))*dv.hz;if(tw>0)dy=-dy;dy=Math.sign(dy||-1)*Math.max(Math.abs(dy),.25);const lat=Math.sin(an+dy*.8)*dv.hx-Math.cos(an+dy*.8)*dv.hz;if(lat>0)dy=-dy;}
+     return{x:dv.x-dv.nx*.32+ox,z:dv.z-dv.nz*.32+oz,yaw:an+dy*.8,h:1.7,p:.16,fov:80};}}}}
  let bd=-1,bdir=null;for(let i=0;i<16;i++){const a=i/16*Math.PI*2,dx=Math.sin(a),dz=-Math.cos(a),d=ray(dx,dz);if(d>bd+.05){bd=d;bdir=[dx,dz,a];}}
  if(!bdir)return null;const back=ray(-bdir[0],-bdir[1]),st=Math.max(0,Math.min(1.4,back-.5));return{x:x-bdir[0]*st,z:z-bdir[1]*st,yaw:bdir[2]};}
 // prem8 h9: kitchen backsplash — counter back = nearest parallel wall in plan (gap ≤ 0.3 m); tile panel 0.91–1.45 m added as a child of that wall piece.
@@ -852,7 +881,7 @@ function applyAtmo(live){const h=ATM.h!=null?+ATM.h:14.5,w=ATM.w||'sun',cl=w!=='
  scene.environmentIntensity=A.env*(cl?.75:1)*(wet?.85:1);R.toneMappingExposure=A.exp*(wet?.9:1);
  let sky=A.sky;if(cl){const gc=wet?'#7d858f':'#a4abb2',k=.55*Math.max(.25,up);sky=sky.map(c=>grey(c,k,gc));}
  const useDay=!cl&&skyDay&&h>=9.2&&h<=14.4;scene.background=useDay?skyDay:skyGrad(sky);
- const fc=new THREE.Color(sky[2]).lerp(new THREE.Color(A.fog),.5);if(!scene.fog||!scene.fog.isFogExp2)scene.fog=new THREE.FogExp2(fc,.005);scene.fog.color.copy(fc);scene.fog.density=cl?.009:up>0?.0048:.006;
+ const fc=new THREE.Color(sky[2]).lerp(new THREE.Color(A.fog),.25);if(!scene.fog||!scene.fog.isFogExp2)scene.fog=new THREE.FogExp2(fc,.005);scene.fog.color.copy(fc);if(R.toneMapping===THREE.ACESFilmicToneMapping){const q=invACES(fc.r,fc.g,fc.b,R.toneMappingExposure);scene.fog.color.setRGB(q[0],q[1],q[2]);}scene.fog.density=cl?.009:up>0?.0048:.006;// prem8 h10: fog = inverse-ACES of the horizon colour, so far ground melts into the untonemapped sky
  if(sun){sun.color.copy(A.sunC);}
  if(M.glass){if(!M.glass.userData.d)M.glass.userData.d={op:M.glass.opacity};const g=A.glass;M.glass.emissive.setRGB(1,.72,.38);M.glass.emissiveIntensity=g;M.glass.opacity=g>.05?Math.min(.85,M.glass.userData.d.op+g):M.glass.userData.d.op;}
  if(!live)for(const k of['lawn','ground','path']){const m=M[k];if(!m)continue;if(!m.userData.d)m.userData.d={r:m.roughness,c:m.color.getHex()};m.roughness=wet?Math.min(m.userData.d.r,.35):m.userData.d.r;m.color.setHex(m.userData.d.c);if(wet)m.color.multiplyScalar(.62);}

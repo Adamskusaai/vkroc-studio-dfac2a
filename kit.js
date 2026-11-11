@@ -223,8 +223,14 @@ function proc(type, F, cols) {
     ao(g, w, d);
     box(g, white, 0, 0.12, 0, w, 0.24, d, 0.03);
     box(g, std('#c5d8e4', 0.2), 0, 0.22, 0, w - 0.14, 0.04, d - 0.14, 0.01);
-    box(g, std('#b8cfdc', 0.15, 0.05), -w / 2 + 0.02, 1.0, 0, 0.035, 2.0, d - 0.05, 0);
-    box(g, std('#b8cfdc', 0.15, 0.05), 0, 1.0, -d / 2 + 0.02, w - 0.05, 2.0, 0.035, 0);
+    // prem8 h10: clear glass screens (8 mm) on a slim anthracite profile instead of opaque panels
+    const sg = cache.get('showerGlass') || new THREE.MeshPhysicalMaterial({ color: 0xe4f0f4, transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0, envMapIntensity: 1.6, depthWrite: false });
+    cache.set('showerGlass', sg); const pf = std('#2f3235', 0.4, 0.3);
+    box(g, sg, -w / 2 + 0.02, 1.0, 0, 0.008, 2.0, d - 0.05, 0).castShadow = false;
+    box(g, sg, 0, 1.0, -d / 2 + 0.02, w - 0.05, 2.0, 0.008, 0).castShadow = false;
+    box(g, pf, -w / 2 + 0.02, 2.0, 0, 0.02, 0.02, d - 0.05, 0);
+    box(g, pf, 0, 2.0, -d / 2 + 0.02, w - 0.05, 0.02, 0.02, 0);
+    box(g, pf, -w / 2 + 0.02, 1.0, d / 2 - 0.035, 0.02, 2.0, 0.02, 0);
     cyl(g, metal, w / 2 - 0.1, 1.65, -d / 2 + 0.1, 0.035, 0.035, 0.18, 6);
   } else if (type === 'sink') {
     ao(g, w, d);
