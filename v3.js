@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111q';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111r';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -34,7 +34,7 @@ const wood=tex((x,n)=>{for(let i=0;i<8;i++){const l=175+rnd()*22;x.fillStyle=`rg
 const tile=tex((x,n)=>{x.fillStyle='#e8e4dc';x.fillRect(0,0,n,n);const g=n/4;x.strokeStyle='#c9c3b8';x.lineWidth=2;for(let i=0;i<=4;i++){x.beginPath();x.moveTo(i*g,0);x.lineTo(i*g,n);x.stroke();x.beginPath();x.moveTo(0,i*g);x.lineTo(n,i*g);x.stroke();}for(let i=0;i<200;i++){x.fillStyle=`rgba(0,0,0,${rnd()*.04})`;x.fillRect(rnd()*n,rnd()*n,2,2);}},128,6);
 const beton=tex((x,n)=>{x.fillStyle='#a8a69f';x.fillRect(0,0,n,n);for(let i=0;i<1800;i++){const v=140+rnd()*50;x.fillStyle=`rgba(${v|0},${v|0},${v-5|0},${.15+rnd()*.25})`;x.fillRect(rnd()*n,rnd()*n,1+rnd()*3,1+rnd()*2);}x.fillStyle='rgba(0,0,0,.06)';x.fillRect(0,n*.48,n,2);},128,8);
 const fabric=tex((x,n)=>{x.fillStyle='#888';x.fillRect(0,0,n,n);for(let i=0;i<2500;i++){x.fillStyle=`rgba(${200+rnd()*40|0},${200+rnd()*40|0},${200+rnd()*40|0},${.08+rnd()*.12})`;x.fillRect(rnd()*n,rnd()*n,1.2,1.2);}},64,8);
-const plaster=tex((x,n)=>{x.fillStyle='#f2efe8';x.fillRect(0,0,n,n);for(let i=0;i<900;i++){x.fillStyle=`rgba(0,0,0,${rnd()*.035})`;x.fillRect(rnd()*n,rnd()*n,1+rnd()*2,1+rnd()*2);}},128,4);
+const plaster=tex((x,n)=>{x.fillStyle='#f2efe8';x.fillRect(0,0,n,n);for(let i=0;i<900;i++){x.fillStyle=`rgba(0,0,0,${rnd()*.035})`;x.fillRect(rnd()*n,rnd()*n,1+rnd()*2,1+rnd()*2);}},128,1.5);
 const grass=tex((x,n)=>{x.fillStyle='#6d7a58';x.fillRect(0,0,n,n);for(let i=0;i<4200;i++){const g=95+rnd()*55;x.fillStyle=`rgba(${(g*.62)|0},${g|0},${(g*.48)|0},${.35+rnd()*.35})`;x.fillRect(rnd()*n,rnd()*n,1+rnd()*2,2+rnd()*3);}for(let i=0;i<80;i++){x.fillStyle=`rgba(90,100,70,${.08+rnd()*.12})`;x.beginPath();x.ellipse(rnd()*n,rnd()*n,8+rnd()*18,5+rnd()*12,rnd()*3,0,6.3);x.fill();}},256);
 const earth=tex((x,n)=>{x.fillStyle='#8a8478';x.fillRect(0,0,n,n);for(let i=0;i<3000;i++){const g=110+rnd()*40;x.fillStyle=`rgba(${g|0},${(g*.92)|0},${(g*.78)|0},.4)`;x.fillRect(rnd()*n,rnd()*n,2,2);}},128,4);
 const pave=tex((x,n)=>{x.fillStyle='#c9c2b4';x.fillRect(0,0,n,n);for(let i=0;i<n;i+=32){x.fillStyle='rgba(110,105,95,.28)';x.fillRect(i,0,1,n);x.fillRect(0,i,n,1);}for(let i=0;i<800;i++){const g=180+rnd()*40;x.fillStyle=`rgba(${g|0},${(g*.96)|0},${(g*.88)|0},.25)`;x.fillRect(rnd()*n,rnd()*n,2,2);}},256,2);
@@ -82,7 +82,7 @@ let FGE=null,FZW=[],CELLS={};
 // Metre UVs everywhere these are used, so repeat = 1 / tile size in metres.
 {const TL=new THREE.TextureLoader(),pbr=(mats,id,T,dsz)=>{const ld=(k,sz,f)=>TL.load(`assets/cc0/tex/${id}_${k}_${sz}.jpg`,t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(1/T,1/T);t.anisotropy=TCH?2:8;f(t);mats.forEach(m=>m.needsUpdate=true);Object.keys(facDS).forEach(k=>delete facDS[k]);DIRTY=Math.max(DIRTY,30);});
   ld('diff',dsz||'1k',t=>{t.colorSpace=THREE.SRGBColorSpace;mats.forEach(m=>{m.map=t;m.color.set(0xffffff);});});ld('nor','512',t=>mats.forEach(m=>{m.normalMap=t;m.normalScale.set(.8,.8);}));ld('rough','512',t=>mats.forEach(m=>{m.roughnessMap=t;m.roughness=1;}));};
- pbr([FCM.wood.m],'clad_wood',1.2);pbr([FCM.stone.m],'stone_slate',1.8);pbr([M.path],'pavers',2.2);pbr([M.asph],'asphalt',4,'512');pbr([M.wtile],'wtile_long',1);}const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
+ pbr([FCM.wood.m],'clad_wood',1.2);pbr([FCM.stone.m],'stone_slate',1.8);pbr([M.path],'pavers',2.2);pbr([M.asph],'asphalt',4,'512');TL.load('assets/cc0/tex/plaster_nor_512.jpg',t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(.5,.5);[M.wall,M.fac].forEach(m=>{m.normalMap=t;m.normalScale.set(.3,.3);m.needsUpdate=true;});DIRTY=Math.max(DIRTY,30);});}const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
 function boxUV(g,ou=0,ov=0){const P=g.attributes.position,N=g.attributes.normal,uv=g.attributes.uv;for(let i=0;i<P.count;i++){const nx=Math.abs(N.getX(i)),ny=Math.abs(N.getY(i));const x=P.getX(i),y=P.getY(i),z=P.getZ(i);if(ny>.5)uv.setXY(i,x+ou,z+ov);else if(nx>.5)uv.setXY(i,z+ou,y+ov);else uv.setXY(i,x+ou,y+ov);}uv.needsUpdate=true;}
 function metreUV(g,s0,s1,y0,y1,side){const uv=g.attributes.uv,fi=side>0?4:5;for(let v=fi*4;v<fi*4+4;v++){const u=uv.getX(v),t=uv.getY(v);uv.setXY(v,side>0?s0+u*(s1-s0):s1-u*(s1-s0),y0+t*(y1-y0));}uv.needsUpdate=true;}
 if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(.5,.5);M.wtile.map.repeat.set(1/1.2,1/1.2);M.slat.map.repeat.set(1,1);M.mesh.map.repeat.set(1,1);M.asph.map.repeat.set(1/3,1/3);M.deck.map.repeat.set(1/1.2,1/1.2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
@@ -434,6 +434,10 @@ const FLT={};function floorTex(kind){if(FLT[kind])return FLT[kind];let t;
  return FLT[kind]=t;}
 // kind -> [tint, texture, metres per texture repeat]
 const ROOMFLOOR={living:[0xd2bea0,'oak',1.8],bed:[0xffffff,'herring',2.2],kids:[0xffffff,'birch',2.0],wet:[0xffffff,'wet',1.2],hall:[0xffffff,'stone',1.2],kitchen:[0xffffff,'kitchen',1.2],other:[0xd2bea0,'oak',1.8]};
+const REALFLOOR={living:['floor_oak_diff_1k',1.2,0xffffff],other:['floor_oak_diff_1k',1.2,0xffffff],kids:['floor_oak_diff_1k',1.2,0xfff4e6],bed:['floor_herring_diff_1k',3.4,0xffffff],
+ wet:['floor_tile_light_diff_1k',2.2,0xffffff],kitchen:['floor_tile_light_diff_1k',2.2,0xffffff],hall:['floor_tile_mid_diff_1k',2.2,0xffffff]};
+const FTX={};function floorTexLoad(id,cb){let e=FTX[id];if(!e){e=FTX[id]={t:null,q:[]};new THREE.TextureLoader().load(`assets/cc0/tex/${id}.jpg`,t=>{t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=TCH?2:8;e.t=t;e.q.forEach(f=>f(t));e.q=[];});}
+ if(e.t)cb(e.t);else e.q.push(cb);}
 const RUGC={living:'#5d6872',bed:'#b08a7c',kids:'#8fa3b4'};
 function roomKind(types){const has=t=>types.has(t);
  const kit=has('kitch')||has('fridge')||has('island');
@@ -461,7 +465,7 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
  FZW=[...FZ.entries()];window.__fz=[...FZ.entries()].map(([w,Z])=>[w.start,w.end,w._ext,Z]);
  const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{const Z=mat===M.wall&&w._ext&&FZ.get(w);if(!Z)return box0(w,s0,s1,y0,y1,mat,t,tOff,nc);const cuts=[s0,s1];Z.forEach(z=>{for(const v of[z[0],z[1]])if(v>s0&&v<s1)cuts.push(v);});cuts.sort((a,b)=>a-b);let last;
   for(let i=0;i+1<cuts.length;i++){const a=cuts[i],b=cuts[i+1];if(b-a<.005)continue;const md=(a+b)/2,z=Z.find(z=>md>=z[0]&&md<=z[1]);if(!z){last=box0(w,a,b,y0,y1,mat,t,tOff,nc);continue;}const m=box0(w,a,b,y0,y1,facMats(z[2],w._ext),t,tOff,nc);if(m)boxUV(m.geometry,(a+b)/2,(y0+y1)/2);last=m;}return last;};
- const box0=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;const m=add(new THREE.BoxGeometry(s1-s0,y1-y0,t),mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);const hh=y1-y0;
+ const box0=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;const bgm=new THREE.BoxGeometry(s1-s0,y1-y0,t);if(mat===M.wall||mat===WP||mat===WN||mat===M.fac)boxUV(bgm,(s0+s1)/2,(y0+y1)/2);const m=add(bgm,mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);const hh=y1-y0;
   // Only structural wall slabs get wallCut (dollhouse). Frames/doors/glass must never — they caused ghost windows in GLB/Blender.
   const isWallMat=mat===M.wall||mat===M.fac||mat===M.plinth||mat===WP||mat===WN||(Array.isArray(mat)&&(mat.includes(M.wall)||mat.includes(M.fac)));
   if(hh>0.4&&isWallMat){m.userData.wallCut={base:y0,h:hh};}
@@ -488,16 +492,19 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
  if(!xs.length)return null;const fp=[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];root.userData.fp=fp;
  const stairs=H.stairs||[];
  // prem8: floors follow room type (living oak, bedroom herringbone, kids birch, bath/wc grey tile, hall stone, kitchen tile)
- const FMAT={};const floorMat=(kind,rw,rd)=>{const R=ROOMFLOOR[kind]||ROOMFLOOR.other;const k=kind+'|'+rw.toFixed(2)+'|'+rd.toFixed(2);if(FMAT[k])return FMAT[k];
-  const base=R[1]==='oak'?wood:floorTex(R[1]);const mt=new THREE.MeshBasicMaterial({color:R[0],map:base.clone(),toneMapped:false});mt.map.colorSpace=THREE.SRGBColorSpace;mt.map.repeat.set(Math.max(.3,rw/R[2]),Math.max(.3,rd/R[2]));mt.map.needsUpdate=true;return FMAT[k]=mt;};
+ // prem8 h11: floors carry world-metre UVs (boxUV at the cell centre), so one material per room kind keeps plank/tile size identical in every room;
+ // real CC0 albedo (Poly Haven, 1k) swaps in when loaded: oak planks 1.2 m tile, herringbone 3.4 m, 55 cm grey tiles 2.2 m.
+ const FMAT={};const floorMat=kind=>{const R=ROOMFLOOR[kind]||ROOMFLOOR.other;if(FMAT[kind])return FMAT[kind];
+  const base=R[1]==='oak'?wood:floorTex(R[1]);const mt=new THREE.MeshBasicMaterial({color:R[0],map:base.clone(),toneMapped:false});mt.map.colorSpace=THREE.SRGBColorSpace;mt.map.repeat.set(1/R[2],1/R[2]);mt.map.needsUpdate=true;
+  const RF=REALFLOOR[kind];if(RF)floorTexLoad(RF[0],t=>{const q=t.clone();q.repeat.set(1/RF[1],1/RF[1]);q.needsUpdate=true;mt.map=q;mt.color.set(RF[2]);mt.needsUpdate=true;DIRTY=Math.max(DIRTY,30);});return FMAT[kind]=mt;};
  roomKinds={};
  H.levels.forEach((l,i)=>{const ws=H.walls.filter(w=>w.level===l.name);if(!ws.length)return;const hole=stairs.filter(st=>st.level===(H.levels[i-1]||{}).name).map(stairRect);
   const topH=Math.max(...ws.map(w=>w.height||l.height));
   const CR=cells(ws,hole),byL={};CELLS[l.name]=CR;(H.furn||[]).filter(f=>f.level===l.name).forEach(f=>{const L=CR.labelAt(f.p[0],f.p[1]);if(!L)return;(byL[L]=byL[L]||{t:new Set(),k:[]}).t.add(f.t);if(['kitch','fridge','island','stool'].includes(f.t))byL[L].k.push(f);});
   const kindOf={};Object.keys(byL).forEach(L=>kindOf[L]=roomKind(byL[L].t));roomKinds[l.name]={labelAt:CR.labelAt,kindOf};
   CR.forEach(r=>{const cx=(r[0]+r[2])/2,cz=(r[1]+r[3])/2;
-   const kind=kindOf[r[4]]||'other';const mat=floorMat(kind,r[2]-r[0],r[3]-r[1]);
-const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userData.floor=1;
+   const kind=kindOf[r[4]]||'other';const mat=floorMat(kind);const fg=new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]);boxUV(fg,cx,cz);
+const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userData.floor=1;
    const up=H.levels[i+1];if(!up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;
     // warm ceiling disc light (emissive) + soft point
     if(Math.min(r[2]-r[0],r[3]-r[1])>1.6){const disc=add(new THREE.CylinderGeometry(.26,.26,.012,16),std({color:0xe8dcc8,emissive:0xb89a70,emissiveIntensity:0.02,roughness:.98}),cx,l.elevation+topH-.03,cz,0,1);disc.scale.set(1,1,1);disc.castShadow=false;disc.userData.ceil=1;disc.userData.noCol=true;
@@ -506,9 +513,11 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
  H.levels.forEach(l=>{const RK=roomKinds[l.name];if(!RK)return;const grp={};(H.furn||[]).filter(f=>f.level===l.name&&['kitch','fridge','island'].includes(f.t)).forEach(f=>{const L=RK.labelAt(f.p[0],f.p[1]);if(L&&RK.kindOf[L]==='living')(grp[L]=grp[L]||[]).push(f);});
   Object.values(grp).forEach(fs=>{let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;fs.forEach(f=>{const F=FUR[f.t]||{w:1,d:1},rot=(f.r||0)%2,w=rot?F.d:F.w,d=rot?F.w:F.d;x0=Math.min(x0,f.p[0]-w/2);x1=Math.max(x1,f.p[0]+w/2);z0=Math.min(z0,f.p[1]-d/2);z1=Math.max(z1,f.p[1]+d/2);});
    x0-=.9;z0-=.9;x1+=.9;z1+=.9;const fp0=root.userData.fp;x0=Math.max(x0,fp0[0]+.16);z0=Math.max(z0,fp0[1]+.16);x1=Math.min(x1,fp0[2]-.16);z1=Math.min(z1,fp0[3]-.16);if(x1-x0<.5||z1-z0<.5)return;
-   const m=add(new THREE.BoxGeometry(x1-x0,.004,z1-z0),floorMat('kitchen',x1-x0,z1-z0),(x0+x1)/2,l.elevation+.0625,(z0+z1)/2,0,1);m.receiveShadow=false;m.castShadow=false;m.userData.floor=1;});});
+   const kg=new THREE.BoxGeometry(x1-x0,.004,z1-z0);boxUV(kg,(x0+x1)/2,(z0+z1)/2);const m=add(kg,floorMat('kitchen'),(x0+x1)/2,l.elevation+.0625,(z0+z1)/2,0,1);m.receiveShadow=false;m.castShadow=false;m.userData.floor=1;});});
  M.wood2.color.set((STY[H.style]||{}).wood||'#d4b48a');(H.furn||[]).forEach(f=>{const l=lv[f.level];if(!l)return;let F=FUR[f.t];if(!F)return;if(f.w&&f.d)F={...F,w:f.w,d:f.d};if(f.nu)F={...F,nu:1};const S=STY[H.style]||{};
   const RK=roomKinds[f.level],rk=RK?RK.kindOf[RK.labelAt(f.p[0],f.p[1])]:null;
+  // prem8 h11: no big potted plants in wet rooms or rooms under 6 m² (they blocked the bathroom view)
+  if(f.t==='plant'&&RK){const L=RK.labelAt(f.p[0],f.p[1]),A=(CELLS[f.level]||[]).filter(r=>r[4]===L).reduce((a,r)=>a+(r[2]-r[0])*(r[3]-r[1]),0);if(rk==='wet'||(A>0&&A<6))return;}
   if(f.t==='rug'&&(rk==='bed'||rk==='kids')&&F.w>2.6)F=rk==='bed'?{...F,w:2.6,d:2.4}:{...F,w:2.0,d:1.4}; // prem8: room-sized rugs keep floors visible
   const rugC=(f.t==='rug'&&rk&&RUGC[rk]&&H.style==='skandi')?RUGC[rk]:(S.rug||'#c4a484');
   const g=makeFurn(f.t,F,{wood:(S.wood||'#d4b48a'),fab:f.c||(f.t==='rug'?rugC:(S[f.t]||F.c)),bed:f.cb||S.bed||'#c4a882',rug:f.c||rugC,curtain:S.curtain||'#b8a890'});

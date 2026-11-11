@@ -12,4 +12,4 @@
 
 ## Engine
 - three.js r169 — MIT
-- Facade/street PBR textures (assets/cc0/tex/, resized): Poly Haven CC0 — long_white_tiles (wtile_long), japanese_cedar_planks (clad_wood), castle_wall_slates (stone_slate), concrete_pavers_02 (pavers, desaturated), asphalt_02 (asphalt). https://polyhaven.com/license
+- Facade/street PBR textures (assets/cc0/tex/, resized): Poly Haven CC0 — oak_wood_planks (floor_oak), herringbone_parquet (floor_herring), grey_tiles (floor_tile_light/mid, desaturated), painted_plaster_wall (plaster_nor), japanese_cedar_planks (clad_wood), castle_wall_slates (stone_slate), concrete_pavers_02 (pavers, desaturated), asphalt_02 (asphalt). https://polyhaven.com/license
