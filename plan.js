@@ -320,7 +320,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  let bb=best.bb;
  let ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
  tm('pick');let sc=estimateScale(S,ops,bb);dbg.est=estimateScale.last.map(v=>+v.toFixed(1));
- try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];
+ try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];dimScale.split=!!dbg.paper;
   // prem8 photo stage: dimension text may be upside down (plan shot at 180°) or too small/blurred for the 1x ink mask ->
   // retry on the 180°-rotated mask and on a 2x bilinear upscale of the cleaned page (own threshold), lengths scaled back
   const r180=(m,w,h)=>{const o=new Uint8Array(w*h);for(let i=0;i<w*h;i++)o[i]=m[w*h-1-i];return o;};
@@ -453,6 +453,7 @@ function ocrChar(m,W,x0,y0,x1,y1){const T=templates(),g=grid(m,W,x0,y0,x1,y1),as
 function readString(chars,m,W,rot){// chars: comps (in page coords) ordered along reading direction
  {const L=chars[chars.length-1],w=rot?L.y1-L.y0:L.x1-L.x0,h=rot?L.x1-L.x0:L.y1-L.y0;if(chars.length>2&&w>1.05*h)chars=chars.slice(0,-1);}// unit "m"
  const hs=chars.map(c=>rot?c.x1-c.x0:c.y1-c.y0),H=Math.max(...hs);let txt='',sc=0,n=0;
+ const PF=globalThis.__PF||{};if(!PF.noSplit&&dimScale.split){const ex=[];for(const c of chars){const w=rot?c.y1-c.y0:c.x1-c.x0,h=rot?c.x1-c.x0:c.y1-c.y0;const k=Math.round(w/(.62*h));if(h>=.5*H&&k>=2&&k<=5&&w>1.05*h){for(let q=0;q<k;q++){const a0=Math.round(q*w/k),a1=Math.round((q+1)*w/k);ex.push(rot?{x0:c.x0,x1:c.x1,y0:(rot>0?c.y1-a1:c.y0+a0),y1:(rot>0?c.y1-a0:c.y0+a1)}:{x0:c.x0+a0,x1:c.x0+a1,y0:c.y0,y1:c.y1});}}else ex.push(c);}chars=ex;}
  for(const c of chars){const ch=rot?c.x1-c.x0:c.y1-c.y0;if(ch<.5*H){txt+=',';continue;}
   let r;if(rot){const R=rotGrid(m,W,c,rot);r=ocrChar(R.m,R.W,0,0,R.W,R.H);}else r=ocrChar(m,W,c.x0,c.y0,c.x1,c.y1);txt+=r.ch;sc+=r.s;n++;}
  return{txt,s:n?sc/n:0};}
