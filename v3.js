@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111z';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111za';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -508,7 +508,9 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
    const up=H.levels[i+1];if(up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;}/* ukážka 2 fix: lower floors get a white ceiling too */if(!up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;
     // warm ceiling disc light (emissive) + soft point
     if(Math.min(r[2]-r[0],r[3]-r[1])>1.6){const disc=add(new THREE.CylinderGeometry(.26,.26,.012,16),std({color:0xe8dcc8,emissive:0xb89a70,emissiveIntensity:0.02,roughness:.98}),cx,l.elevation+topH-.03,cz,0,1);disc.scale.set(1,1,1);disc.castShadow=false;disc.userData.ceil=1;disc.userData.noCol=true;
-     const pl=new THREE.PointLight(0xffd4a0,0.16,Math.max(r[2]-r[0],r[3]-r[1])*1.15,2);pl.position.set(cx,l.elevation+topH-.22,cz);pl.userData.ceil=1;root.add(pl);}}});});
+     const pl=new THREE.PointLight(0xffd4a0,0.16,Math.max(r[2]-r[0],r[3]-r[1])*1.15,2);pl.position.set(cx,l.elevation+topH-.22,cz);pl.userData.ceil=1;root.add(pl);}}});
+  // prem9: the stair opening is a hole in THIS floor only - the ceiling above it stays closed (no sky strip), unless a stair from this level climbs through the same spot
+  const up2=stairs.filter(st=>st.level===l.name).map(stairRect);hole.forEach(h=>{if(up2.some(g=>g[0]<h[2]&&g[2]>h[0]&&g[1]<h[3]&&g[3]>h[1]))return;add(new THREE.BoxGeometry(h[2]-h[0],.05,h[3]-h[1]),M.ceil,(h[0]+h[2])/2,l.elevation+topH+.025,(h[1]+h[3])/2,0,1).userData.ceil=1;});});
  // prem8: kitchen tile zone inside open-plan living (bbox of kitchen pieces + 0.9 m working aisle)
  H.levels.forEach(l=>{const RK=roomKinds[l.name];if(!RK)return;const grp={};(H.furn||[]).filter(f=>f.level===l.name&&['kitch','fridge','island'].includes(f.t)).forEach(f=>{const L=RK.labelAt(f.p[0],f.p[1]);if(L&&RK.kindOf[L]==='living')(grp[L]=grp[L]||[]).push(f);});
   Object.values(grp).forEach(fs=>{let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;fs.forEach(f=>{const F=FUR[f.t]||{w:1,d:1},rot=(f.r||0)%2,w=rot?F.d:F.w,d=rot?F.w:F.d;x0=Math.min(x0,f.p[0]-w/2);x1=Math.max(x1,f.p[0]+w/2);z0=Math.min(z0,f.p[1]-d/2);z1=Math.max(z1,f.p[1]+d/2);});
