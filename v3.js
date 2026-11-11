@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111j';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111k';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -48,11 +48,14 @@ const PAVT=tex((x,n)=>{x.fillStyle='#8f8a82';x.fillRect(0,0,n,n);const bw=n/10,b
   for(let i=0;i<2500;i++){x.fillStyle=`rgba(${rnd()<.5?0:255},${rnd()<.5?0:255},${rnd()<.5?0:255},.05)`;x.fillRect(rnd()*n,rnd()*n,2,2);}},512,1);
 const DECKT=tex((x,n)=>{const bh=n/8;for(let i=0;i<8;i++){const l=40+rnd()*10;x.fillStyle=`hsl(${25+rnd()*8},${38+rnd()*10}%,${l}%)`;x.fillRect(0,i*bh,n,bh);for(let k=0;k<18;k++){const gy=i*bh+2+rnd()*(bh-4);x.strokeStyle=`rgba(70,40,20,${.08+rnd()*.12})`;x.lineWidth=.8+rnd();x.beginPath();x.moveTo(0,gy);for(let xx=0;xx<=n;xx+=32)x.lineTo(xx,gy+Math.sin(xx*.02+k)*1.4);x.stroke();}
   x.fillStyle='rgba(25,15,8,.85)';x.fillRect(0,i*bh,n,3);const j=rnd()*n;x.fillRect(j,i*bh,2,bh);}},512,1);
+const SLATT=tex((x,n)=>{const h=n/8;for(let i=0;i<8;i++){x.fillStyle='#3a3d41';x.fillRect(0,i*h,n,h);x.fillStyle='rgba(255,255,255,.07)';x.fillRect(0,i*h+2,n,2);x.fillStyle='#16181a';x.fillRect(0,i*h+h-6,n,6);}},256,1); // 8 horizontal slats per metre
+const MESHT=tex((x,n)=>{x.clearRect(0,0,n,n);x.fillStyle='#2c2f33';for(let i=0;i<4;i++)x.fillRect(i*n/4,0,3,n);for(let j=0;j<2;j++)x.fillRect(0,j*n/2,n,3);},128,1); // 25x50 cm welded mesh / 1 m tile
+const ASPT=tex((x,n)=>{x.fillStyle='#4b4d50';x.fillRect(0,0,n,n);for(let i=0;i<9000;i++){const g=50+rnd()*60;x.fillStyle=`rgba(${g|0},${g|0},${(g+3)|0},.55)`;x.fillRect(rnd()*n,rnd()*n,1.5,1.5);}},256,1); // 3 m tile
 const std=(o)=>new THREE.MeshStandardMaterial(o);
-const FLATM=std({map:tex((x,n)=>{x.fillStyle='#55585c';x.fillRect(0,0,n,n);for(let i=0;i<5000;i++){const g=60+rnd()*70;x.fillStyle=`rgba(${g|0},${g|0},${(g+4)|0},.5)`;x.fillRect(rnd()*n,rnd()*n,1.5,1.5);}},256,6),roughness:.95}); // flat roof: grey gravel/membrane
+const FLATM=std({map:tex((x,n)=>{x.fillStyle='#c4c6c9';x.fillRect(0,0,n,n);for(let i=0;i<5000;i++){const g=150+rnd()*90;x.fillStyle=`rgba(${g|0},${g|0},${(g+4)|0},.5)`;x.fillRect(rnd()*n,rnd()*n,1.5,1.5);}},256,6),roughness:.95}); // flat roof: grey gravel/membrane
 const CAPM=new THREE.MeshBasicMaterial({color:0x3a3d42,toneMapped:false}); // prem8: dark wall tops read clearly from above
 const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood,roughness:.55}),ceil:std({color:0xfaf6ef,roughness:1,emissive:0xd4c4a8,emissiveIntensity:.25}),
- glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),
+ glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),base:std({color:0xb9b5ad,roughness:.9}),slat:std({map:SLATT,color:0xffffff,roughness:.6,metalness:.2}),mesh:std({map:MESHT,color:0xffffff,roughness:.6,alphaTest:.5,side:THREE.DoubleSide}),asph:std({map:ASPT,color:0xffffff,roughness:.95}),sill:std({color:0x9a9ea3,roughness:.35,metalness:.6}),board:std({color:0xf3f1ec,roughness:.5}),
  door:std({color:0xe4e0d8,roughness:.5}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x9aa3ab,roughness:.72,metalness:.05}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
  fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:PAVT,color:0xffffff,roughness:.92}),deck:std({map:DECKT,color:0xffffff,roughness:.7}),plinth:std({color:0x2f3135,roughness:.92}),
  tile:std({map:tile,roughness:.35}),beton:std({map:beton,roughness:.85}),fab:fabric};
@@ -73,10 +76,10 @@ const FCM={wood:{m:std({map:FCT.wood,roughness:.62,color:0xffffff}),T:1.2},stone
 for(const k in FCM)FCM[k].m.map.repeat.set(1/FCM[k].T,1/FCM[k].T);
 // composition per facade style: entrance zone, terrace zone, plinth
 const FSTY={mix:{ent:'wood',ter:'dark',pl:'stone'},drevo:{ent:'wood',ter:'wood',pl:null},kamen:{ent:'stone',ter:'wood',pl:'stone'},kontrast:{ent:'dark',ter:'wood',pl:'stone'},omietka:{ent:null,ter:null,pl:null}};
-let FGE=null;const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
+let FGE=null,FZW=[];const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
 function boxUV(g,ou=0,ov=0){const P=g.attributes.position,N=g.attributes.normal,uv=g.attributes.uv;for(let i=0;i<P.count;i++){const nx=Math.abs(N.getX(i)),ny=Math.abs(N.getY(i));const x=P.getX(i),y=P.getY(i),z=P.getZ(i);if(ny>.5)uv.setXY(i,x+ou,z+ov);else if(nx>.5)uv.setXY(i,z+ou,y+ov);else uv.setXY(i,x+ou,y+ov);}uv.needsUpdate=true;}
 function metreUV(g,s0,s1,y0,y1,side){const uv=g.attributes.uv,fi=side>0?4:5;for(let v=fi*4;v<fi*4+4;v++){const u=uv.getX(v),t=uv.getY(v);uv.setXY(v,side>0?s0+u*(s1-s0):s1-u*(s1-s0),y0+t*(y1-y0));}uv.needsUpdate=true;}
-if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(.5,.5);M.deck.map.repeat.set(1/1.2,1/1.2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
+if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(.5,.5);M.slat.map.repeat.set(1,1);M.mesh.map.repeat.set(1,1);M.asph.map.repeat.set(1/3,1/3);M.deck.map.repeat.set(1/1.2,1/1.2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
 // prem8 y: Quest budget. In a headset session: no per-room ceiling fill point lights (emissive discs stay), at most 4 night point lights,
 // 1024 sun shadow map rendered only when the sun/scene changes (setHour drag already throttles), desktop untouched.
 let XRL=false;function xrLean(on){XRL=!!on;if(!scene)return;let n=0;scene.traverse(o=>{if(!o.isPointLight)return;if(o.userData.ceil){o.visible=!on;return;}if(o.parent===nightG){n++;o.visible=!on||n<=4;}});
@@ -415,12 +418,15 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
  H.walls.forEach(w=>{if(!w._ext)return;const L=geo(w).L,Z=[];[...(w.openings||[])].sort((p,q)=>(q.kind==='entrance')-(p.kind==='entrance')).forEach(o=>{const c=o.offset+o.width/2;let k=null,r=0;
    if(o.type==='door'&&(o.kind==='entrance'||(o.out&&o.kind!=='sliding'&&o.kind!=='terrace'))){k=FS.ent;r=Math.max(1.4,o.width/2+.9);}
    else if(o.kind==='terrace'||o.kind==='sliding'){k=FS.ter;r=o.width/2+1.1;}
-   if(!k)return;let a=Math.max(0,c-r),b=Math.min(L,c+r);if(a<.6)a=0;if(L-b<.6)b=L;for(const z of Z){if(a<z[1]&&b>z[0]){if(c>=z[1])a=z[1];else if(c<=z[0])b=z[0];else{a=b;}}}if(b-a>=.9)Z.push([a,b,k]);});if(Z.length)FZ.set(w,Z);});{const noTer=!![FS.ter]&&!!FS.ter&&![...FZ.values()].some(Z=>Z.some(z=>z[2]===FS.ter&&z[2]!==FS.ent));const E=H.walls.filter(w=>w._ext),X=E.flatMap(w=>[w.start[0],w.end[0]]),Zs=E.flatMap(w=>[w.start[1],w.end[1]]);if(E.length){const x0=Math.min(...X),x1=Math.max(...X),z0=Math.min(...Zs),z1=Math.max(...Zs),lx=x1-x0>=z1-z0;
+   if(!k)return;let a=Math.max(0,c-r),b=Math.min(L,c+r);if(a<.6)a=0;if(L-b<.6)b=L;for(const z of Z){if(a<z[1]&&b>z[0]){if(c>=z[1])a=z[1];else if(c<=z[0])b=z[0];else{a=b;}}}if(b-a>=.9)Z.push([a,b,k]);});if(Z.length)FZ.set(w,Z);});
+ // long eaves sides: frame the widest window (>=1.2 m) of each still-plain long exterior wall (>=6 m) with the terrace accent
+ {const EX=H.walls.filter(w=>w._ext),xa=EX.flatMap(w=>[w.start[0],w.end[0]]),za=EX.flatMap(w=>[w.start[1],w.end[1]]);var LX=xa.length&&(Math.max(...xa)-Math.min(...xa)>=Math.max(...za)-Math.min(...za));}
+ if(FS.ter)H.walls.forEach(w=>{if(!w._ext||FZ.has(w))return;const L=geo(w).L,G=geo(w);if(L<6||(LX?Math.abs(G.u[1])>.01:Math.abs(G.u[0])>.01))return;let bo=null;(w.openings||[]).forEach(o=>{if(o.type==='window'&&o.width>=1.2&&(!bo||o.width>bo.width))bo=o;});if(!bo)return;let a=Math.max(0,bo.offset-.45),b=Math.min(L,bo.offset+bo.width+.45);if(a<.6)a=0;if(L-b<.6)b=L;FZ.set(w,[[a,b,FS.ter]]);});{const noTer=!![FS.ter]&&!!FS.ter&&![...FZ.values()].some(Z=>Z.some(z=>z[2]===FS.ter&&z[2]!==FS.ent));const E=H.walls.filter(w=>w._ext),X=E.flatMap(w=>[w.start[0],w.end[0]]),Zs=E.flatMap(w=>[w.start[1],w.end[1]]);if(E.length){const x0=Math.min(...X),x1=Math.max(...X),z0=Math.min(...Zs),z1=Math.max(...Zs),lx=x1-x0>=z1-z0;
   // a short end wall that already carries an accent zone gets its gable triangle clad too (wood unless the accent is anthracite)
-  if(FS.ent||FS.ter)E.forEach(w=>{const Z=FZ.get(w);if(!Z||FGE)return;const alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,c=lx?w.start[0]:w.start[1];if(!alg)return;const neg=Math.abs(c-(lx?x0:z0))<.3,pos=Math.abs(c-(lx?x1:z1))<.3;if(neg||pos)FGE={k:Z.some(z=>z[2]==='dark')&&!Z.some(z=>z[2]==='wood')?'dark':'wood',neg};});
+  if(FS.ent||FS.ter)[...E].sort((p,q)=>((FZ.get(q)||[]).some(z=>z[2]===FS.ent))-((FZ.get(p)||[]).some(z=>z[2]===FS.ent))).forEach(w=>{const Z=FZ.get(w);if(!Z||FGE)return;const alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,c=lx?w.start[0]:w.start[1];if(!alg)return;const neg=Math.abs(c-(lx?x0:z0))<.3,pos=Math.abs(c-(lx?x1:z1))<.3;if(neg||pos)FGE={k:Z.some(z=>z[2]==='dark')&&!Z.some(z=>z[2]==='wood')?'dark':'wood',neg};});
   // fallback "one volume": clad the longest wall on a short end of the footprint (the gable end on a gable roof)
   if(noTer){let bw=null,bl=0;E.forEach(w=>{if(FZ.has(w))return;const L=geo(w).L,c=lx?w.start[0]:w.start[1],alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,lo=lx?x0:z0,hi=lx?x1:z1;if(alg&&(Math.abs(c-lo)<.3||Math.abs(c-hi)<.3)&&L>=2.5&&L>bl){bl=L;bw=w;}});if(bw){FZ.set(bw,[[0,bl,"wood"]]);const c=lx?bw.start[0]:bw.start[1];FGE={k:"wood",neg:Math.abs(c-(lx?x0:z0))<.3};}}}}
- window.__fz=[...FZ.entries()].map(([w,Z])=>[w.start,w.end,w._ext,Z]);
+ FZW=[...FZ.entries()];window.__fz=[...FZ.entries()].map(([w,Z])=>[w.start,w.end,w._ext,Z]);
  const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{const Z=mat===M.wall&&w._ext&&FZ.get(w);if(!Z)return box0(w,s0,s1,y0,y1,mat,t,tOff,nc);const cuts=[s0,s1];Z.forEach(z=>{for(const v of[z[0],z[1]])if(v>s0&&v<s1)cuts.push(v);});cuts.sort((a,b)=>a-b);let last;
   for(let i=0;i+1<cuts.length;i++){const a=cuts[i],b=cuts[i+1];if(b-a<.005)continue;const md=(a+b)/2,z=Z.find(z=>md>=z[0]&&md<=z[1]);if(!z){last=box0(w,a,b,y0,y1,mat,t,tOff,nc);continue;}const m=box0(w,a,b,y0,y1,facMats(z[2],w._ext),t,tOff,nc);if(m)boxUV(m.geometry,(a+b)/2,(y0+y1)/2);last=m;}return last;};
  const box0=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;const m=add(new THREE.BoxGeometry(s1-s0,y1-y0,t),mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);const hh=y1-y0;
@@ -430,10 +436,10 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
   if(doGrow&&isWallMat){m.userData.grow=1;m.userData.growBase=y0;m.userData.growH=hh;m.scale.y=.001;m.position.y=y0;m.visible=false;}return m;};
  H.walls.forEach(w=>{const L=geo(w).L,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0),h=w.height||2.8;xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);
   const ops=[...(w.openings||[])].sort((a,b)=>a.offset-b.offset);let s=0;
-  ops.forEach(o=>{const sl=o.sill||0,a=o.offset,b=a+o.width,f=.06;box(w,s,a,e,e+h,M.wall);box(w,a,b,e,e+sl,M.wall);box(w,a,b,e+sl+o.height,e+h,M.wall);
-   if(o.type==='window'){box(w,a,b,e+sl+f,e+sl+o.height-f,M.glass,.02,0,1);box(w,a,b,e+sl,e+sl+f,M.frame,.1);box(w,a,b,e+sl+o.height-f,e+sl+o.height,M.frame,.1);box(w,a,a+f,e+sl,e+sl+o.height,M.frame,.1);box(w,b-f,b,e+sl,e+sl+o.height,M.frame,.1);box(w,(a+b)/2-.02,(a+b)/2+.02,e+sl,e+sl+o.height,M.frame,.07,0,1);
+  ops.forEach(o=>{const sl=o.sill||0,a=o.offset,b=a+o.width,f=.085,sg=w._ext?Math.sign(w._ext):0;box(w,s,a,e,e+h,M.wall);box(w,a,b,e,e+sl,M.wall);box(w,a,b,e+sl+o.height,e+h,M.wall);
+   if(o.type==='window'){box(w,a,b,e+sl+f,e+sl+o.height-f,M.glass,.02,0,1);box(w,a,b,e+sl,e+sl+f,M.frame,.12);box(w,a,b,e+sl+o.height-f,e+sl+o.height,M.frame,.12);box(w,a,a+f,e+sl,e+sl+o.height,M.frame,.12);box(w,b-f,b,e+sl,e+sl+o.height,M.frame,.12);if(b-a>.75)box(w,(a+b)/2-.035,(a+b)/2+.035,e+sl,e+sl+o.height,M.frame,.09,0,1);
     // exterior sill
-    box(w,a-.02,b+.02,e+sl-.04,e+sl,M.frame,w.thickness+.08,0,1);}
+    if(sg){const T=w.thickness;box(w,a-.03,b+.03,e+sl-.035,e+sl,M.sill,T/2+.06,sg*(T/4+.03),1);if(sl>.3)box(w,a-.02,b+.02,e+sl-.025,e+sl,M.board,T/2+.03,-sg*(T/4+.015),1);}else box(w,a-.02,b+.02,e+sl-.04,e+sl,M.frame,w.thickness+.08,0,1);}
    else{box(w,a,a+.06,e,e+o.height,M.frame,w.thickness+.04);box(w,b-.06,b,e,e+o.height,M.frame,w.thickness+.04);box(w,a,b,e+o.height-.06,e+o.height,M.frame,w.thickness+.04);box(w,a-.02,b+.02,e,e+.04,M.frame,w.thickness+.1,0,1);
     const G=geo(w),ang=-Math.atan2(G.u[1],G.u[0]),sd=o.out?-1:1,kd=o.kind||'single',mat=kd==='entrance'?M.frame:M.door;
     const isEnt=kd==='entrance'||(o.type==='door'&&o.out&&o.kind!=='sliding');
@@ -501,6 +507,9 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
    const eo=Math.max(.15,...H.walls.filter(w=>w._ext).map(w=>(w.thickness||.3)/2)),fq=[fp[0]-eo,fp[1]-eo,fp[2]+eo,fp[3]+eo],qW=fq[2]-fq[0],qD=fq[3]-fq[1],at=.3,ah=.5,cy=th+ah/2-.05,R=(w,d,x,z)=>{const m=add(new THREE.BoxGeometry(w,ah+.1,d),M.fac,x,cy,z,0,1);m.userData.roof=1;},C=(w,d,x,z)=>{add(new THREE.BoxGeometry(w,.05,d),M.frame,x,th+ah+.025,z,0,1).userData.roof=1;};
    add(new THREE.BoxGeometry(qW-.02,.2,qD-.02),FLATM,cx,th+.1,cz,0,1).userData.roof=1;
    R(qW,at,cx,fq[1]+at/2);R(qW,at,cx,fq[3]-at/2);R(at,qD-2*at,fq[0]+at/2,cz);R(at,qD-2*at,fq[2]-at/2,cz);
+   // accent zones continue up the parapet (outer face overlay, 1 cm proud)
+   FZW.forEach(([w,Z])=>{const g=geo(w),hz=Math.abs(g.u[1])<.01,vt=Math.abs(g.u[0])<.01;if(!hz&&!vt)return;const c=hz?w.start[1]:w.start[0],lo=hz?fp[1]:fp[0],hi=hz?fp[3]:fp[2];const side=Math.abs(c-lo)<.05?-1:Math.abs(c-hi)<.05?1:0;if(!side)return;const pl=(hz?(side<0?fq[1]:fq[3]):(side<0?fq[0]:fq[2]))+side*.011;
+    Z.forEach(([za,zb,k])=>{const p0=hz?g.x0+g.u[0]*za:g.z0+g.u[1]*za,p1=hz?g.x0+g.u[0]*zb:g.z0+g.u[1]*zb,m0=Math.min(p0,p1),m1=Math.max(p0,p1),ln=m1-m0;if(ln<.3)return;const bg=hz?new THREE.BoxGeometry(ln,ah+.1,.02):new THREE.BoxGeometry(.02,ah+.1,ln);boxUV(bg,(m0+m1)/2,cy);add(bg,FCM[k].m,hz?(m0+m1)/2:pl,cy,hz?pl:(m0+m1)/2,0,1).userData.roof=1;});});
    C(qW+.06,at+.06,cx,fq[1]+at/2);C(qW+.06,at+.06,cx,fq[3]-at/2);C(at+.06,qD-2*at,fq[0]+at/2,cz);C(at+.06,qD-2*at,fq[2]-at/2,cz);}
   else{
    // Solid extruded gable. Eaves 0.4 m on all sides; mid-grey tiles; white end caps OUTSIDE extrude.
@@ -597,16 +606,22 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
   }
   for(let i=0;i<8;i++){const t=seed(i,7),u=seed(i,19),x=xMin+1.2+(xMax-xMin-2.4)*t,z=zMin+1.2+(zMax-zMin-2.4)*u;
    if(x>hx0&&x<hx1&&z>hz0&&z<hz1)continue;shrub(x,z,.35+.28*seed(i,3));}
-  // slim fence (less dominant)
-  if(P.fence!==false){const gateX=(xs.length?Math.min(...xs):0)+1.7,gateW=1.4,zSouth=Math.min(...P.pts.map(p=>p[1]));
-   P.pts.forEach((a,i)=>{const b=P.pts[(i+1)%P.pts.length],L=Math.hypot(b[0]-a[0],b[1]-a[1])||1e-6,ang=-Math.atan2(b[1]-a[1],b[0]-a[0]),n=Math.max(1,Math.round(L/3.2));
-   const onGate=t=>{const x=a[0]+(b[0]-a[0])*t,z=a[1]+(b[1]-a[1])*t;return Math.abs(z-zSouth)<0.4&&Math.abs(x-gateX)<gateW;};
-   // rails as segments skipping the gate
-   let u0=0;const pushRail=(u1)=>{if(u1-u0<0.015){u0=u1;return;}const mid=(u0+u1)/2,L2=L*(u1-u0);const mx=a[0]+(b[0]-a[0])*mid,mz=a[1]+(b[1]-a[1])*mid;
-    add(new THREE.BoxGeometry(L2,.025,.025),M.fence,mx,.4,mz,ang,1);add(new THREE.BoxGeometry(L2,.025,.025),M.fence,mx,1.0,mz,ang,1);u0=u1;};
-   for(let k=0;k<=Math.ceil(L/0.2);k++){const t=Math.min(1,k*0.2/L);if(onGate(t)){pushRail(t);u0=t;} if(t>=1)pushRail(1);}
-   for(let k=0;k<=n;k++){const t=k/n;if(onGate(t))continue;add(new THREE.BoxGeometry(.045,1.15,.045),M.fence,a[0]+(b[0]-a[0])*t,.58,a[1]+(b[1]-a[1])*t,0,1);}
-   for(let k=0;k<L/0.18;k++){const t=(k+.5)*.18/L;if(t>1||onGate(t))continue;add(new THREE.BoxGeometry(.015,.85,.015),M.fence,a[0]+(b[0]-a[0])*t,.62,a[1]+(b[1]-a[1])*t,0,1).castShadow=false;}});}}
+  // prem8 h4: street side = stone pillars + dark slat panels on a concrete base (gaps at path gate + driveway);
+  // other sides = dark welded-mesh panels (one alpha-tested quad per span). Outside the street fence: paved sidewalk, kerb, asphalt.
+  if(P.fence!==false){const gateX=(xs.length?Math.min(...xs):0)+1.7,gateW=.75,dX=hx+4.2,dW=1.75,zSouth=zMin;
+   const gap=(x,z)=>Math.abs(z-zSouth)<.4&&(Math.abs(x-gateX)<gateW||Math.abs(x-dX)<dW);
+   P.pts.forEach((a,i)=>{const b=P.pts[(i+1)%P.pts.length],L=Math.hypot(b[0]-a[0],b[1]-a[1])||1e-6,ang=-Math.atan2(b[1]-a[1],b[0]-a[0]),street=Math.abs(a[1]-zSouth)<.4&&Math.abs(b[1]-zSouth)<.4;
+    const at=t=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+    if(street){const n=Math.max(1,Math.round(L/2.6));for(let k=0;k<=n;k++){const[x,z]=at(k/n);if(gap(x,z))continue;const pg=new THREE.BoxGeometry(.38,1.6,.38);boxUV(pg,x+z,0);add(pg,FCM.stone.m,x,.8,z,ang,1);add(new THREE.BoxGeometry(.46,.06,.46),M.frame,x,1.63,z,ang,1).castShadow=false;}
+     // spans split at gaps
+     const st=Math.max(2,Math.ceil(L/.25));let u0=null;for(let k=0;k<=st;k++){const t=k/st,[x,z]=at(t),g=gap(x,z)||k===st;if(!g&&u0===null)u0=t;if(g&&u0!==null){const u1=k===st&&!gap(x,z)?1:t,Ls=L*(u1-u0)-.38;if(Ls>.2){const[mx,mz]=at((u0+u1)/2);add(new THREE.BoxGeometry(Ls,.25,.2),M.base,mx,.125,mz,ang,1);const sg=new THREE.BoxGeometry(Ls,1.15,.05);boxUV(sg,mx+mz,0);add(sg,M.slat,mx,.25+.575,mz,ang,1);}u0=null;}}}
+    else{const n=Math.max(1,Math.round(L/2.5));for(let k=0;k<=n;k++){const[x,z]=at(k/n);add(new THREE.BoxGeometry(.06,1.55,.06),M.frame,x,.775,z,0,1).castShadow=false;}
+     const[mx,mz]=at(.5),mg=new THREE.PlaneGeometry(L,1.45);const uv=mg.attributes.uv;for(let v=0;v<uv.count;v++)uv.setXY(v,uv.getX(v)*L,uv.getY(v)*1.45);const mm=new THREE.Mesh(mg,M.mesh);mm.position.set(mx,.05+.725,mz);mm.rotation.y=ang;mm.userData.noCol=true;root.add(mm);}});
+   // street: sidewalk (pavers), kerb, asphalt
+   const sx=(xMin+xMax)/2,sw=xMax-xMin+40,swk=add(new THREE.BoxGeometry(sw,.03,1.8),M.path,sx,.012,zSouth-1.0,0,1);boxUV(swk.geometry,sx,zSouth-1.0);swk.userData.noCol=true;swk.receiveShadow=true;
+   add(new THREE.BoxGeometry(sw,.12,.15),M.base,sx,.05,zSouth-1.98,0,1).userData.noCol=true;
+   const asg=new THREE.BoxGeometry(sw,.02,6.5);boxUV(asg,sx,zSouth-5.3);const as=add(asg,M.asph,sx,.0,zSouth-5.3,0,1);as.userData.noCol=true;as.receiveShadow=true;
+   const ln=add(new THREE.BoxGeometry(sw,.005,.12),std({color:0xe8e6df,roughness:.6}),sx,.013,zSouth-5.3,0,1);ln.userData.noCol=true;ln.castShadow=false;}}
  root.traverse(o=>{if(o.isMesh&&o.geometry.type==='BoxGeometry'&&root.children.length>2500)o.castShadow=false;});
  return root;}
 function fitSun(fp){lastFp=fp;const c=[(fp[0]+fp[2])/2,(fp[1]+fp[3])/2],r=Math.max(fp[2]-fp[0],fp[3]-fp[1])*.8+6,az=(sunH-11.75)/5.25*63*Math.PI/180,el=Math.max(.035,sunEl(sunH)),R2=r*1.8;// Nov arc: rises ESE (~117°), noon S at ~22°, sets WSW (~243°)
@@ -646,7 +661,7 @@ export const STY={minimal:{sofa:'#d9d6cf',armch:'#cfcac1',table:'#e9e5dd',ctable
 export const FUR={bed:{w:1.6,d:2.05,h:.5,c:'#e9e4da'},bed1:{w:.9,d:2,h:.5,c:'#e9e4da'},bunk:{w:.9,d:2,h:1.65,c:'#e9e4da'},sofa:{w:2.4,d:1.0,h:.8,c:'#6a5644'},armch:{w:.85,d:.85,h:.8,c:'#7a6550'},table:{w:1.8,d:1.0,h:.75,c:'#d4b48a'},ctable:{w:1.1,d:.7,h:.42,c:'#d4b48a'},desk:{w:1.2,d:.6,h:.75,c:'#e0c9a6'},tv:{w:1.8,d:.42,h:.5,c:'#3b3d40'},ward:{w:1.8,d:.62,h:2.2,c:'#f4f1ea'},kitch:{w:2.8,d:.62,h:.9,c:'#f7f5f0'},fridge:{w:.65,d:.7,h:1.85,c:'#dcdcdc'},bath:{w:1.7,d:.75,h:.55,c:'#ffffff'},shower:{w:.9,d:.9,h:.1,c:'#ffffff'},sink:{w:.6,d:.45,h:.85,c:'#ffffff'},wc:{w:.4,d:.65,h:.42,c:'#ffffff'},shelf:{w:.9,d:.35,h:1.8,c:'#d4b48a'},plant:{w:.45,d:.45,h:1.1,c:'#5b7d4a'},rug:{w:3.2,d:3.4,h:.02,c:'#7a4530'},runner:{w:2.4,d:.7,h:.02,c:'#6a4a3a'},lamp:{w:.35,d:.35,h:1.3,c:'#2f3235'},chair:{w:.45,d:.5,h:.9,c:'#f1ece2'},art:{w:.9,d:.04,h:.7,c:'#c4b8a4'},curtain:{w:1.4,d:.08,h:2.0,c:'#e8e2d6'},shoe:{w:1.0,d:.4,h:.7,c:'#d4b48a'},bench:{w:1.2,d:.4,h:.45,c:'#c4a07a'},nstand:{w:.45,d:.4,h:.55,c:'#c4a07a'},dresser:{w:1.2,d:.5,h:.9,c:'#e8e0d4'},sideb:{w:1.6,d:.45,h:.85,c:'#c4a07a'},side:{w:.45,d:.45,h:.5,c:'#c4a07a'},stool:{w:.38,d:.38,h:.75,c:'#6a5644'},island:{w:1.6,d:.8,h:.9,c:'#efe8de'},pendant:{w:.4,d:.4,h:.3,c:'#e8dcc8'},mirror:{w:.7,d:.04,h:.9,c:'#c5d4e0'},towel:{w:.55,d:.12,h:.7,c:'#d8c8b0'},coat:{w:.5,d:.5,h:1.8,c:'#3a4a5a'},toy:{w:.55,d:.4,h:.5,c:'#c4783a'},otable:{w:1.4,d:.8,h:.75,c:'#a08060'},lounge:{w:1.6,d:.85,h:.55,c:'#5a6a4a'},wshelf:{w:.8,d:.25,h:1.8,c:'#c4a07a'},tvw:{w:1.2,d:.06,h:.7,c:'#1a1c20'},hooks:{w:.6,d:.08,h:.3,c:'#8a6a4a'},washer:{w:.6,d:.6,h:.85,c:'#f2f2f0'}};
 const FM={};function fm(c,soft){const k=c+(soft?'~f':'');return FM[k]||(FM[k]=new THREE.MeshStandardMaterial({color:c,roughness:soft?.85:.72,map:soft?fabric:null}));}
 const FLO={dub:[0xbea07d,'wood',.55],orech:[0x8a6448,'wood',.55],dlazba:[0xe6e2da,'tile',.35],beton:[0xb0aea8,'beton',.85],tmave:[0x5a4636,'wood',.6]};
-export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;}}
+export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');FLATM.color.set(o.roof||'#3e444c').lerp(new THREE.Color(0xb8b8b4),.55);const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;}}
 let SUNK=1,roofFillL=null,hemiL=null,fillL=null,skyDay=null,ATM={t:'day',w:'sun'},wxObj=null,nightG=null;
 let sunH=16.5,lastFp=null,doorMode='open',doorPivs=[],mktGlass=false;
 export function checkClearances(){
