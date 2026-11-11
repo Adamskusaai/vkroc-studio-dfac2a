@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/","three-mesh-bvh":"https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.1/build/index.module.js"}}</script>
-<link rel="modulepreload" href="app.js?v=20261111v"><link rel="modulepreload" href="icons.js">
+<link rel="modulepreload" href="app.js?v=20261111w"><link rel="modulepreload" href="icons.js">
 <style>
 :root{--ink:#0B0B0B;--paper:#F3F1ED;--w:#fff;--or:#E2552D;--orh:#C8461F;--g:#6B6B6B;--l:#E3DFD8;--l2:#ECE9E3;--r:14px;--sh:0 1px 2px rgba(11,11,11,.06),0 8px 24px rgba(11,11,11,.06);--f:Inter,system-ui,-apple-system,Segoe UI,sans-serif;--h:Archivo,Inter,sans-serif;--ease:cubic-bezier(.2,.8,.2,1)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:500 14px/1.45 var(--f);overflow:hidden}
@@ -92,6 +92,7 @@ body.viewonly header .tab,body.viewonly .ed-only,body.viewonly #pname{display:no
  #dd{position:fixed;left:8px;right:8px;top:auto;bottom:8px;min-width:0}
 }
 .novr #VRButton{display:none!important}#VRButton{left:auto!important;right:16px!important;bottom:16px!important;transform:none!important}
+#chk{position:absolute;top:48px;right:12px;display:flex;align-items:center;gap:7px;background:var(--w);color:#0B0B0B;border:1px solid var(--l);font:600 12.5px Inter,sans-serif;padding:6px 12px;border-radius:99px;z-index:3;cursor:pointer;box-shadow:var(--sh)}#chk i.d{width:8px;height:8px;border-radius:50%;background:#3a9a5b}#chk.w i.d{background:var(--or)}#chkl{position:absolute;top:84px;right:12px;width:min(320px,90vw);max-height:50vh;overflow:auto;background:var(--w);border:1px solid var(--l);border-radius:12px;box-shadow:var(--sh);padding:10px 12px;z-index:4;font:13px/1.45 Inter,sans-serif}#chkl b{display:block;font-size:12px;color:#6B6B6B;font-weight:600;margin:4px 0 2px}#chkl p{margin:3px 0}#chkl p.h:before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--or);margin-right:7px;vertical-align:middle}#chkl p.s:before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#c9c4bb;margin-right:7px;vertical-align:middle}#chkl small{color:#6B6B6B}
 #area{position:absolute;top:12px;right:12px;background:#0B0B0B;color:#fff;font:600 12.5px Inter,sans-serif;padding:7px 12px;border-radius:99px;z-index:3;pointer-events:none}
 .ecard button{pointer-events:auto}
 @keyframes up{from{transform:translateY(100%)}}
@@ -159,12 +160,12 @@ body.pres #tbvw,body.pres .tb{display:none!important}
 </div></div>
 <div class="scr on" id="ed"><canvas id="cv"></canvas>
  <div class="empty" id="empE" hidden><div class="ecard"><div class="bub"><i data-i="wall"></i></div><h3>Začnite kresliť</h3><p>Ťahajte po ploche a nakreslite stenu – alebo vložte celý obrys domu naraz.</p><div class="row"><button class="btn go" id="eRect"><i data-i="rect"></i>Obrys domu</button><button class="btn" id="eImg"><i data-i="image"></i>Nahrať výkres</button></div></div></div>
- <div id="area" hidden></div><div id="hint"></div><div id="ban" hidden><span>Mierka je odhadnutá. Pre presné rozmery ťuknite na 2 body známej dĺžky.</span> <button id="banc">Kalibrovať</button></div></div>
+ <div id="area" hidden></div><button id="chk" hidden></button><div id="chkl" hidden></div><div id="hint"></div><div id="ban" hidden><span>Mierka je odhadnutá. Pre presné rozmery ťuknite na 2 body známej dĺžky.</span> <button id="banc">Kalibrovať</button></div></div>
 <div class="scr" id="vw"><div id="v3"></div><div id="st">Pripravené</div><div id="joy"><div></div></div>
  <div class="sk" id="sk3" hidden><div class="skc"><div class="cube"><i data-i="cube"></i></div><b style="color:var(--ink)">Staviam váš dom v 3D…</b><i></i><i></i></div></div>
  <div class="empty" id="emp3" hidden><div class="ecard"><div class="bub"><i data-i="cube"></i></div><h3>Zatiaľ tu nič nestojí</h3><p>Najprv nakreslite alebo rozpoznajte steny v pôdoryse.</p><div class="row"><button class="btn go" id="e3go"><i data-i="layers"></i>Prejsť na pôdorys</button></div></div></div>
 </div></main>
 <div id="toasts"></div>
 <div id="ov"><div id="ovb"></div></div><input type="file" id="img" accept="image/*,application/pdf,.pdf,.heic,.heif" hidden><input type="file" id="imgs" accept="image/*,application/pdf,.pdf" multiple hidden><input type="file" id="ld" accept=".json" hidden>
-<script type="module" src="app.js?v=20261111v"></script>
+<script type="module" src="app.js?v=20261111w"></script>
 <div id="jumps" hidden></div><div id="pbar"><div class="pbrand"><b class="pl">VKRO<em>Č</em></b><span id="prn"></span></div><div class="pbtn"><button id="ptour" class="go"><i data-i="next"></i><span>Auto-prehliadka</span></button><button id="pdoll"><i data-i="layers"></i><span>Bez strechy</span></button><button id="pext"><i data-i="home"></i><span>Exteriér</span></button><button id="pexit"><i data-i="x"></i><span>Ukončiť</span></button></div></div><div id="agent" hidden></div></body></html>

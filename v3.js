@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111v';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111w';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -648,7 +648,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
    (H.walls||[]).forEach(w=>(w.openings||[]).forEach(op=>{const g=geo(w);for(const f of[0,.5,1]){const m=op.offset+op.width*f;OP.push([g.x0+g.u[0]*m,g.z0+g.u[1]*m]);}}));
    const PR=[[X0+1.7-.75,X0+1.7+.75,zMin,hz]];if(ENT){const Lp=toEdge(ENT);const ex=ENT.cx+ENT.nx*Lp,ez=ENT.cz+ENT.nz*Lp;PR.push([Math.min(ENT.cx,ex)-.75-Math.abs(ENT.nz)*0,Math.max(ENT.cx,ex)+.75,Math.min(ENT.cz,ez)-.75,Math.max(ENT.cz,ez)+.75]);}
    const hw=1.5,ok=(cx,z0,z1)=>{const x0=cx-hw,x1=cx+hw;if(x0<xMin+.2||x1>xMax-.2||z0<zMin+.2||z1>zMax-.2)return false;if(x1>X0-.3&&x0<X1+.3&&z1>Z0-.3&&z0<Z1+.3)return false;
-    if(OP.some(([x,z])=>x>x0-1.2&&x<x1+1.2&&z>z0-1.2&&z<z1+1.2))return false;if(PR.some(r=>x1>r[0]&&x0<r[1]&&z1>r[2]&&z0<r[3]))return false;return true;};
+    if(OP.some(([x,z])=>x>x0-1.2&&x<x1+1.2&&z>z0-1.2&&z<z1+1.2))return false;if(PR.some(r=>x1>r[0]&&x0<r[1]&&z1>r[2]&&z0<r[3]))return false;if((H.balc||[]).some(B=>x1>B.r[0]-.3&&x0<B.r[2]+.3&&z1>B.r[1]-.3&&z0<B.r[3]+.3))return false;return true;};
    const C=[[hx+4.2,zMin+.4,Math.min(zMin+.4+5.5,hz-.4)],[X1+.4+hw,zMin+.4,zMin+5.4],[X0-.4-hw,zMin+.4,zMin+5.4]].filter(c=>c[2]-c[1]>=4.4);const pick=C.find(c=>ok(...c));window.__cp={C,pick:pick||null};
    if(pick&&P.carport!==false){const[dX,cz0,cz1]=pick,L=cz1-cz0,cy=(cz0+cz1)/2,cm=std({color:0x2d3034,roughness:.6,metalness:.3});DRX=dX;
     const dl=Math.max(cz1+.3,hz)-(zMin-.6);drive.geometry.dispose();drive.geometry=new THREE.BoxGeometry(2*hw,.025,dl);drive.position.set(dX,.008,zMin-.6+dl/2);
