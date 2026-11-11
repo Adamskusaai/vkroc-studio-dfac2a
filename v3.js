@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111s';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111t';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -554,6 +554,15 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   const g=geo(w),t=w.thickness||.3,sm=o.offset+o.width/2,mx=g.x0+g.u[0]*sm,mz=g.z0+g.u[1]*sm;let nx=-g.u[1],nz=g.u[0];if((mx+nx-hx)**2+(mz+nz-hz)**2<(mx-nx-hx)**2+(mz-nz-hz)**2){nx=-nx;nz=-nz;}
   const y=Math.min(e+(o.height||2.1)+.3,th-.18),dp=1.2,cw=o.width+1.2,m=add(new THREE.BoxGeometry(cw,.1,dp),M.frame,mx+nx*(t/2+dp/2),y,mz+nz*(t/2+dp/2),-Math.atan2(g.u[1],g.u[0]),1);m.castShadow=true;m.userData.noCol=true;
   const sf=add(new THREE.BoxGeometry(cw-.04,.004,dp-.04),M.skirt,mx+nx*(t/2+dp/2),y-.052,mz+nz*(t/2+dp/2),-Math.atan2(g.u[1],g.u[0]),1);sf.userData.noCol=true;});});}
+ // LOGIC RULE render: auto balconies for upper exterior doors (slab + glass railing on the 3 free sides) and French-window railings (app.js upperDoors)
+ {const lvE=n=>((H.levels||[]).find(l=>l.name===n)||{elevation:0}).elevation||0;
+  (H.balc||[]).forEach(B=>{const e=lvE(B.level),L=B.b-B.a,ang=-Math.atan2(B.u[1],B.u[0]),cx=B.o[0]+B.u[0]*(B.a+B.b)/2+B.n[0]*B.d/2,cz=B.o[1]+B.u[1]*(B.a+B.b)/2+B.n[1]*B.d/2;
+   add(new THREE.BoxGeometry(L,.2,B.d),M.beton,cx,e-.08,cz,ang).userData.balc=1;
+   const P=(s,d)=>[B.o[0]+B.u[0]*s+B.n[0]*d,B.o[1]+B.u[1]*s+B.n[1]*d];
+   [[P(B.a,B.d),P(B.b,B.d)],[P(B.a,.02),P(B.a,B.d)],[P(B.b,.02),P(B.b,B.d)]].forEach(([q,r])=>{const l=Math.hypot(r[0]-q[0],r[1]-q[1]),an=-Math.atan2(r[1]-q[1],r[0]-q[0]),mx=(q[0]+r[0])/2,mz=(q[1]+r[1])/2;
+    add(new THREE.BoxGeometry(l,.92,.02),M.glass,mx,e+.1+.46,mz,an);add(new THREE.BoxGeometry(l+.04,.05,.06),M.frame,mx,e+1.02,mz,an);});});
+  H.walls.forEach(w=>{if(!w._ext)return;(w.openings||[]).forEach(o=>{if(!o.rail)return;const g=geo(w),e=lvE(w.level),t=(w.thickness||.3)/2+.06,s=o.offset+o.width/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,x=g.x0+g.u[0]*s+nx*t,z=g.z0+g.u[1]*s+nz*t,an=-Math.atan2(g.u[1],g.u[0]);
+   add(new THREE.BoxGeometry(o.width+.1,.85,.02),M.glass,x,e+.15+.425,z,an);add(new THREE.BoxGeometry(o.width+.14,.045,.05),M.frame,x,e+1.0,z,an);});});}
  // ukážka 2 fix: on multi-storey houses the parts of a lower floor not covered by the floor above get their own flat roof (gravel slab + dark coping),
  // otherwise single-storey wings stayed open-topped. Slides away with the roof (userData.roof).
  if(roof!=='none')H.levels.forEach((l,i)=>{const up=H.levels[i+1];if(!up)return;const uc=CELLS[up.name]||[],lc=CELLS[l.name]||[],lw=H.walls.filter(w=>w.level===l.name);if(!lw.length)return;
@@ -625,7 +634,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   // driveway on EAST side (away from west entrance) so walk-to-door stays clear
   const dLen=Math.max(4.5,hz-zMin+1.2),drive=add(new THREE.BoxGeometry(3.2,.025,dLen),M.path,hx+4.2,.008,(zMin+hz)/2-.1,0,1);drive.receiveShadow=true;drive.userData.noCol=true;
   // prem8: outward frames of the entrance / terrace doors (door centre, outward normal, along-wall)
-  const hcx=(Math.min(...xs)+Math.max(...xs))/2,hcz=(Math.min(...zs)+Math.max(...zs))/2;const dOut=k=>{let r=null;(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(r||op.type!=='door'||op.kind!==k)return;const g=geo(w),m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}r={cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3};});});return r;};
+  const hcx=(Math.min(...xs)+Math.max(...xs))/2,hcz=(Math.min(...zs)+Math.max(...zs))/2;const dOut=k=>{let r=null;(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(r||op.type!=='door'||op.kind!==k||(H.levels&&H.levels.length>1&&w.level!==H.levels[0].name))return;const g=geo(w),m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}r={cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3};});});return r;};
   const ENT=dOut('entrance'),TER=dOut('terrace');
 
   // distance from a door to the plot edge along its outward normal

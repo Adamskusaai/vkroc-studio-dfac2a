@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261111s';
-import {readPlan} from './plan.js?v=20261111s';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111s';
+import {detectWalls,gapMerge} from './cv.js?v=20261111t';
+import {readPlan} from './plan.js?v=20261111t';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111t';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -383,7 +383,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261111s';
+const DEMO_V='20261111t';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
 async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json')).json();openP('p'+Date.now(),j);toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
 if(/[?&]demo=2/.test(location.search))setTimeout(()=>demo2(),400);
@@ -429,11 +429,11 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111s');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111t');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
-let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mfasada').value=mt.fasada||'mix';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';['mwall','mfloor','mfac','mroof'].forEach(k=>{const e=$(k);if(e.selectedIndex<0&&e.value!==undefined){const v={mwall:mt.wall,mfloor:mt.floor,mfac:mt.fac,mroof:mt.roof}[k]||e.options[0].value;const o=document.createElement('option');o.value=v;o.textContent='vlastná';e.appendChild(o);e.value=v;}});{const A=H.atmo||{};const h=A.h!=null?A.h:14.5;$('mwx').value=A.w||'sun';$('sunh').value=h;hl(h);if(m.setAtmo)m.setAtmo({t:A.t||'day',w:A.w||'sun',h});}$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
+let genN=0;async function gen(anim){const n=++genN;$('sk3').hidden=false;$('emp3').hidden=true;try{const m=await v3();if(m.ensureKit)await m.ensureKit();if(n!==genN)return;m.setRoof(roof);if(m.setSun)m.setSun(16.5,false);extSides();upperDoors();const ok=m.gen(H,anim);m.setMat(H.mat||{});const mt=H.mat||{};$('mwall').value=mt.wall||'#f4f1ec';$('mfloor').value=mt.floor||'dub';$('mfac').value=mt.fac||'#f7f5f0';$('mfasada').value=mt.fasada||'mix';$('mroof').value=mt.roof||'#5c6672';$('msty').value=H.style||'';['mwall','mfloor','mfac','mroof'].forEach(k=>{const e=$(k);if(e.selectedIndex<0&&e.value!==undefined){const v={mwall:mt.wall,mfloor:mt.floor,mfac:mt.fac,mroof:mt.roof}[k]||e.options[0].value;const o=document.createElement('option');o.value=v;o.textContent='vlastná';e.appendChild(o);e.value=v;}});{const A=H.atmo||{};const h=A.h!=null?A.h:14.5;$('mwx').value=A.w||'sun';$('sunh').value=h;hl(h);if(m.setAtmo)m.setAtmo({t:A.t||'day',w:A.w||'sun',h});}$('emp3').hidden=ok;if(ok)wUI(m.isWalk());const vb=$('VRButton');if(vb)vb.style.display=/NOT|ONLY/i.test(vb.textContent)?'none':'';}catch(e){console.warn(e);toast('3D sa nepodarilo načítať. Skontrolujte pripojenie.','err');}finally{if(n===genN)$('sk3').hidden=true;}}
 const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
 $('snap3').onclick=async()=>{const m=await v3();const u=m.snap&&m.snap();if(u){const b=await(await fetch(u)).blob();dl(b,(H.name||'dom')+'_3d.png');toast('3D snímka uložená (PNG).','ok');}};
 $('glb').onclick=async()=>{const m=await v3();try{const b=await m.glb();if(b){dl(b,(H.name||'dom')+'.glb');toast('3D model stiahnutý (GLB).','ok');}}catch(e){toast('Export zlyhal.','err');}};
@@ -523,7 +523,7 @@ function validateAll(L=lvl){const RS=rooms(L),R=RC[L];if(!R||!R.g)return[];const
  const D=roomDoors(R,L);RS.forEach(r=>{if(!D.some(d=>d.a===r.id||d.b===r.id))out.push({room:r.n,t:'door',rule:'room-without-door'});});
  H.walls.filter(w=>w.level===L).forEach(w=>(w.openings||[]).forEach(o=>{if(o.type==='door'&&o.kind==='double')out.push({room:'-',t:'door',rule:'two-leaves-in-one-opening'});}));
  for(let i=0;i<D.length;i++)for(let j=i+1;j<D.length;j++)if(Math.abs(D[i].u[0]*D[j].u[0]+D[i].u[1]*D[j].u[1])>.95&&Math.hypot(D[i].c[0]-D[j].c[0],D[i].c[1]-D[j].c[1])<Math.max(.35,.6*Math.min(D[i].w,D[j].w)))out.push({room:'-',t:'door',p:D[i].c,rule:'two-leaves-in-one-opening'});
- window.__viol=out;return out;}
+ doorViol().forEach(v=>out.push(v));window.__viol=out;return out;}
 window.__validate=validateAll;window.__roomCenters=()=>rooms().map(r=>({n:r.n,a:r.a,c:[(r.bb[0]+r.bb[2])/2,(r.bb[1]+r.bb[3])/2],bb:r.bb}));
 // a room the plan gives no access gets exactly one door, on the wall it shares with a hall / living / other room (logged)
 function addMissingDoors(R,L,RS,T,log){const D=roomDoors(R,L);const PR=t=>/^(Predsieň|Chodba|Hala|Zádverie)/.test(t||'')?3:/^Obývačka|^Jedáleň|^Kuchyňa/.test(t||'')?2:1;
@@ -668,6 +668,28 @@ $('sunh').oninput=e=>{const h=+e.target.value;hl(h);hPend=h;if(!v3m){v3().then(m
 $('sunh').onchange=e=>{const h=+e.target.value;hPend=null;if(hRaf){cancelAnimationFrame(hRaf);hRaf=0;}hl(h);H.atmo={...(H.atmo||{}),w:$('mwx').value,h};save();v3().then(m=>m.setHour(h,false));};
 
 function extSides(){H.levels.forEach(l=>{rooms(l.name);const C=RC[l.name];H.walls.filter(w=>w.level===l.name).forEach(w=>{const g=geo(w),n=[-g.u[1],g.u[0]],m=[g.x0+g.u[0]*g.L/2,g.z0+g.u[1]*g.L/2],o=w.thickness/2+.15,A=C&&roomAt(C,[m[0]+n[0]*o,m[1]+n[1]*o]),B=C&&roomAt(C,[m[0]-n[0]*o,m[1]-n[1]*o]);const iA=C.r.some(q=>q.id===A),iB=C.r.some(q=>q.id===B);w._ext=iA===iB?0:iA?-1:1;});});}
+// LOGIC RULE (doors must lead somewhere): an exterior door on an upper floor has to open onto something walkable:
+// the lower floor's roof (deck), a balcony, or (if none fits) it becomes a French window with a railing. Balconies are auto-added:
+// door width + 1 m wide, 1.3 m deep, glass railing; rejected if the slab would hit any wall of this or the floor below, or leave the plot.
+function segHitsRect(a,b,R){const[x0,z0,x1,z1]=R;if(Math.max(a[0],b[0])<x0||Math.min(a[0],b[0])>x1||Math.max(a[1],b[1])<z0||Math.min(a[1],b[1])>z1)return false;
+ for(let k=0;k<=20;k++){const x=a[0]+(b[0]-a[0])*k/20,z=a[1]+(b[1]-a[1])*k/20;if(x>x0&&x<x1&&z>z0&&z<z1)return true;}return false;}
+function inPoly(p,P){let c=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const a=P[i],b=P[j];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])c=!c;}return c;}
+function doorLead(w,o,i){const g=geo(w),n=[-g.u[1]*w._ext,g.u[0]*w._ext],t=(w.thickness||.3)/2,s=o.offset+o.width/2,c=[g.x0+g.u[0]*s,g.z0+g.u[1]*s],p=[c[0]+n[0]*(t+.6),c[1]+n[1]*(t+.6)];
+ const lo=H.levels[i-1];rooms(lo.name);const CL=RC[lo.name];if(CL&&CL.r&&CL.r.some(q=>q.id===roomAt(CL,p)))return'deck';
+ if((H.balc||[]).some(b=>b.level===w.level&&p[0]>b.r[0]&&p[0]<b.r[2]&&p[1]>b.r[1]&&p[1]<b.r[3]))return'balcony';if(o.rail)return'french';return null;}
+function upperDoors(){if(!H.levels||H.levels.length<2)return[];extSides();const log=[];H.balc=(H.balc||[]).filter(b=>!b.auto);
+ H.levels.forEach((l,i)=>{if(!i)return;H.walls.filter(w=>w.level===l.name&&w._ext).forEach(w=>(w.openings||[]).forEach(o=>{if(o.type!=='door')return;if(o.rail&&o.railAuto)delete o.rail;if(doorLead(w,o,i))return;
+  const g=geo(w),n=[-g.u[1]*w._ext,g.u[0]*w._ext],t=(w.thickness||.3)/2,a=o.offset-.5,b=o.offset+o.width+.5,D=1.3;
+  const P=[a,b].flatMap(s=>[0,D].map(d=>[g.x0+g.u[0]*s+n[0]*(t+d),g.z0+g.u[1]*s+n[1]*(t+d)]));const R=[Math.min(...P.map(q=>q[0])),Math.min(...P.map(q=>q[1])),Math.max(...P.map(q=>q[0])),Math.max(...P.map(q=>q[1]))];
+  const Ri=[R[0]+.06,R[1]+.06,R[2]-.06,R[3]-.06];const lo=H.levels[i-1].name;
+  const hit=H.walls.some(q=>q!==w&&(q.level===l.name||q.level===lo)&&segHitsRect(q.start,q.end,Ri));const off=H.plot&&H.plot.pts&&P.some(q=>!inPoly(q,H.plot.pts));
+  if(hit||off){o.rail=1;o.railAuto=1;log.push({level:l.name,door:o.offset,fix:'french-window',why:hit?'balcony would hit a wall':'balcony would leave the plot'});return;}
+  const m=H.balc.find(B=>B.auto&&B.wall===w.id&&B.level===l.name&&a<B.b+.8&&b>B.a-.8);
+  if(m){m.a=Math.min(m.a,a);m.b=Math.max(m.b,b);const Q=[m.a,m.b].flatMap(s=>[0,D].map(d=>[g.x0+g.u[0]*s+n[0]*(t+d),g.z0+g.u[1]*s+n[1]*(t+d)]));m.r=[Math.min(...Q.map(q=>q[0])),Math.min(...Q.map(q=>q[1])),Math.max(...Q.map(q=>q[0])),Math.max(...Q.map(q=>q[1]))];}
+  else H.balc.push({auto:1,level:l.name,wall:w.id,a,b,d:D,r:R,n,u:g.u,o:[g.x0+n[0]*t,g.z0+n[1]*t]});log.push({level:l.name,door:o.offset,fix:'balcony'});}));});
+ H.balc.forEach(B=>{if(B.auto){const w=H.walls.find(q=>q.id===B.wall);if(w){const g=geo(w),t=(w.thickness||.3)/2;B.o=[g.x0+B.n[0]*t,g.z0+B.n[1]*t];}}});return log;}
+function doorViol(){const out=[];if(!H.levels||H.levels.length<2)return out;extSides();H.levels.forEach((l,i)=>{if(!i)return;H.walls.filter(w=>w.level===l.name&&w._ext).forEach(w=>(w.openings||[]).forEach(o=>{if(o.type==='door'&&!doorLead(w,o,i))out.push({room:'-',t:'door',p:[w.id,o.offset],rule:'upper-door-to-nowhere'});}));});return out;}
+window.__upperDoors=upperDoors;window.__doorViol=doorViol;
 // ---- look panel
 $('lookb').onclick=e=>{e.stopPropagation();$('look').classList.toggle('open');};document.addEventListener('pointerdown',e=>{const L=$('look');if(L.classList.contains('open')&&!L.contains(e.target)&&e.target!==$('lookb')&&!$('lookb').contains(e.target))L.classList.remove('open');});
 $('edmb').onclick=e=>{e.stopPropagation();$('edm').classList.toggle('open');};document.addEventListener('pointerdown',e=>{const L=$('edm');if(L.classList.contains('open')&&!L.contains(e.target)&&!$('edmb').contains(e.target))L.classList.remove('open');});
