@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261111zd';
-import {readPlan} from './plan.js?v=20261111zd';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111zd';
+import {detectWalls,gapMerge} from './cv.js?v=20261111ze';
+import {readPlan} from './plan.js?v=20261111ze';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111ze';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -385,9 +385,9 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261111zd';
+const DEMO_V='20261111ze';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
-async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261111zd')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
+async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261111ze')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
 if(/[?&]demo=2/.test(location.search))setTimeout(()=>demo2(),400);
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
@@ -431,7 +431,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111zd');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111ze');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -718,13 +718,16 @@ function stairFurn(){const out=[];(H.stairs||[]).forEach(st=>{const li=H.levels.
 function rulesFix(op){op=op||{};const log=[];H.walls.forEach(w=>{const wh=w.height||((H.levels||[]).find(l=>l.name===w.level)||{}).height||2.8;(w.openings||[]).forEach(o=>{if((o.sill||0)<0){o.sill=0;log.push('opening-height');}
  if((o.sill||0)+(o.height||0)>wh-.05){o.height=Math.max(.4,r2(wh-.05-(o.sill||0)));if((o.sill||0)+o.height>wh-.05)o.sill=Math.max(0,r2(wh-.05-o.height));log.push('opening-height');}});});
  // door-into-wall auto-fix: slide the door along its wall (≤ 0.6 m) to the nearest spot where both sides are walkable and it overlaps no other opening
+ const blocked=[];
  if(!op.noDoors)(H.levels||[]).forEach((l,li)=>{const L=l.name,RS=rooms(L),R=RC[L];if(!R||!R.g)return;H.walls.filter(w=>w.level===L).forEach(w=>{const G=geo(w),n=[-G.u[1],G.u[0]],e=(w.thickness||.3)/2+.25,os=w.openings||[];
   const ids=new Set(RS.map(q=>q.id)),sd=(o,off)=>{const c=[G.x0+G.u[0]*(off+o.width/2),G.z0+G.u[1]*(off+o.width/2)];return[roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e])];};
   const bad=(o,off)=>{const v=sd(o,off);return v[0]===-1||v[1]===-1;},none=(o,off)=>{const v=sd(o,off);return !ids.has(v[0])&&!ids.has(v[1]);};
   const slide=(o,test,max,tag)=>{for(let k=1;k<=max*10;k++)for(const d of[k/10,-k/10]){const off=o.offset+d;if(off<.05||off+o.width>G.L-.05)continue;if(os.some(q=>q!==o&&off<q.offset+q.width+.05&&off+o.width>q.offset-.05))continue;if(!test(o,off)){o.offset=r2(off);log.push(tag);return true;}}return false;};
   // door-between-nothing auto-fix: slide ≤1.2 m to where a room is on at least one side; a door on a wall with no room along its whole length (stray stub) is removed
-  const orphan=[];os.forEach(o=>{if(o.type!=='door')return;if(bad(o,o.offset))slide(o,(q,off)=>bad(q,off)||(li===0&&none(q,off)&&!none(q,q.offset)),.6,'door-into-wall');else if(none(o,o.offset)&&li===0&&!slide(o,(q,off)=>bad(q,off)||none(q,off),1.2,'door-between-nothing')){let any=false;for(let t=.2;t<G.L-.2&&!any;t+=.3){const c=[G.x0+G.u[0]*t,G.z0+G.u[1]*t];any=ids.has(roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]))||ids.has(roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]));}if(!any)orphan.push(o);}});
+  const orphan=[];os.forEach(o=>{if(o.type!=='door')return;if(bad(o,o.offset)){const tq=(q,off)=>bad(q,off)||(li===0&&none(q,off)&&!none(q,q.offset));if(!slide(o,tq,.6,'door-into-wall')&&!slide(o,tq,1.2,'door-into-wall'))blocked.push([w,o]);}else if(none(o,o.offset)&&li===0&&!slide(o,(q,off)=>bad(q,off)||none(q,off),1.2,'door-between-nothing')){let any=false;for(let t=.2;t<G.L-.2&&!any;t+=.3){const c=[G.x0+G.u[0]*t,G.z0+G.u[1]*t];any=ids.has(roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]))||ids.has(roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]));}if(!any)orphan.push(o);}});
   if(orphan.length){w.openings=os.filter(o=>!orphan.includes(o));orphan.forEach(()=>log.push('door-between-nothing:removed'));}});});
+ // prem9 LOGIC RULE (door into a wall): a door that cannot be slid ≤1.2 m off a wall right behind it opens onto nothing usable - it is removed, unless that would leave a room unreachable or the house without an entrance
+ if(blocked.length&&!op.noDoors){const reach=()=>rulesCheck().filter(x=>x.id==='room-unreachable'||x.id==='no-entrance').length+H.levels.reduce((k,l)=>k+validateAll(l.name).filter(v=>v.rule==='room-without-door').length,0);const r0=reach();blocked.forEach(([w,o])=>{const k=w.openings.indexOf(o);if(k<0)return;w.openings.splice(k,1);if(reach()>r0)w.openings.splice(k,0,o);else log.push('door-into-wall:removed');});}
  upperDoors().forEach(()=>log.push('upper-door-to-nowhere'));
  if(op.noFix)return log;
  // fixture-missing auto-fix: re-lay out just that room with the normal layout engine (other rooms untouched)
