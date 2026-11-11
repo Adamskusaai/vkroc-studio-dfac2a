@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111g';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111h';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -50,6 +50,26 @@ const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood
  door:std({color:0xe4e0d8,roughness:.5}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x9aa3ab,roughness:.72,metalness:.05}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
  fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:pave,color:0xcfc8bb,roughness:.92}),plinth:std({color:0x2f3135,roughness:.92}),
  tile:std({map:tile,roughness:.35}),beton:std({map:beton,roughness:.85}),fab:fabric};
+// prem8 h: facade claddings (procedural, 512 px, mipmapped, metre-based UVs). T = metres one texture tile covers.
+const FCT={};
+FCT.wood=tex((x,n)=>{const bw=n/10;for(let i=0;i<10;i++){const h=24+rnd()*10,l=44+rnd()*8;x.fillStyle=`hsl(${h},${50+rnd()*12}%,${l}%)`;x.fillRect(i*bw,0,bw,n);
+  for(let k=0;k<26;k++){const gx=i*bw+2+rnd()*(bw-4);x.strokeStyle=`rgba(${70+rnd()*30|0},${38+rnd()*20|0},20,${.10+rnd()*.14})`;x.lineWidth=.6+rnd()*1.4;x.beginPath();x.moveTo(gx,0);for(let y=0;y<=n;y+=32)x.lineTo(gx+Math.sin(y*.02+k)*1.6,y);x.stroke();}
+  x.fillStyle='rgba(28,16,8,.82)';x.fillRect(i*bw,0,2.5,n);x.fillStyle='rgba(255,230,190,.18)';x.fillRect(i*bw+2.5,0,1.5,n);}},512,1);
+FCT.stone=tex((x,n)=>{x.fillStyle='#4a4743';x.fillRect(0,0,n,n);let y=0;while(y<n){const h=Math.min(n-y,14+rnd()*30);let xx=-rnd()*60;while(xx<n){const w=40+rnd()*110,t=rnd();const c=t<.33?[150,140,126]:t<.66?[118,114,108]:[176,164,142];const d=(rnd()-.5)*34;
+   x.fillStyle=`rgb(${c[0]+d|0},${c[1]+d|0},${c[2]+d|0})`;x.fillRect(xx+2,y+2,w-3,h-3);for(let k=0;k<6;k++){x.fillStyle=`rgba(${rnd()<.5?255:0},${rnd()<.5?255:0},${rnd()<.5?255:0},.05)`;x.fillRect(xx+2+rnd()*(w-6),y+2+rnd()*(h-6),3+rnd()*10,2+rnd()*4);}
+   x.fillStyle='rgba(255,255,255,.12)';x.fillRect(xx+2,y+2,w-3,1.5);x.fillStyle='rgba(0,0,0,.22)';x.fillRect(xx+2,y+h-2.5,w-3,1.5);xx+=w;}
+  y+=h;}
+  // wrap seam: copy the first row band to the bottom so the tile repeats vertically
+  },512,1);
+FCT.dark=tex((x,n)=>{x.fillStyle='#34373b';x.fillRect(0,0,n,n);for(let i=0;i<n*n/90;i++){const g=44+rnd()*16;x.fillStyle=`rgba(${g},${g+2},${g+5},.35)`;x.fillRect(rnd()*n,rnd()*n,2,2);}
+  const p=n/5;for(let i=0;i<5;i++){x.fillStyle='rgba(0,0,0,.55)';x.fillRect(i*p,0,3,n);x.fillStyle='rgba(255,255,255,.10)';x.fillRect(i*p+3,0,2,n);x.fillStyle='rgba(255,255,255,.04)';x.fillRect(i*p+p/2-1,0,2,n);}},512,1);
+const FCM={wood:{m:std({map:FCT.wood,roughness:.62,color:0xffffff}),T:1.2},stone:{m:std({map:FCT.stone,roughness:.93,color:0xffffff}),T:1.6},dark:{m:std({map:FCT.dark,roughness:.55,metalness:.25,color:0xffffff}),T:2.0}};
+for(const k in FCM)FCM[k].m.map.repeat.set(1/FCM[k].T,1/FCM[k].T);
+// composition per facade style: entrance zone, terrace zone, plinth
+const FSTY={mix:{ent:'wood',ter:'dark',pl:'stone'},drevo:{ent:'wood',ter:'wood',pl:null},kamen:{ent:'stone',ter:'wood',pl:'stone'},kontrast:{ent:'dark',ter:'wood',pl:'stone'},omietka:{ent:null,ter:null,pl:null}};
+let FGE=null;const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
+function boxUV(g,ou=0,ov=0){const P=g.attributes.position,N=g.attributes.normal,uv=g.attributes.uv;for(let i=0;i<P.count;i++){const nx=Math.abs(N.getX(i)),ny=Math.abs(N.getY(i));const x=P.getX(i),y=P.getY(i),z=P.getZ(i);if(ny>.5)uv.setXY(i,x+ou,z+ov);else if(nx>.5)uv.setXY(i,z+ou,y+ov);else uv.setXY(i,x+ou,y+ov);}uv.needsUpdate=true;}
+function metreUV(g,s0,s1,y0,y1,side){const uv=g.attributes.uv,fi=side>0?4:5;for(let v=fi*4;v<fi*4+4;v++){const u=uv.getX(v),t=uv.getY(v);uv.setXY(v,side>0?s0+u*(s1-s0):s1-u*(s1-s0),y0+t*(y1-y0));}uv.needsUpdate=true;}
 if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(2,2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
 // prem8 y: Quest budget. In a headset session: no per-room ceiling fill point lights (emissive discs stay), at most 4 night point lights,
 // 1024 sun shadow map rendered only when the sun/scene changes (setHour drag already throttles), desktop untouched.
@@ -384,7 +404,18 @@ function roomKind(types){const has=t=>types.has(t);
 function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.name]=l);let xs=[],zs=[];doorPivs=[];
  const Rroof=(H&&H.roof)||roof; if(Rroof&&Rroof!==roof) roof=Rroof;
  const add=(geom,mat,x,y,z,ry=0,nc)=>{const m=new THREE.Mesh(geom,mat);m.position.set(x,y,z);m.rotation.y=ry;m.castShadow=m.receiveShadow=mat!==M.glass;if(nc)m.userData.noCol=true;root.add(m);return m;};
- const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;const m=add(new THREE.BoxGeometry(s1-s0,y1-y0,t),mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);const hh=y1-y0;
+ FGE=null;const FS=FSTY[(H.mat&&H.mat.fasada)||'mix']||FSTY.mix,FZ=new Map();
+ // accent zones on exterior walls: around the entrance door (ent) and around terrace / sliding doors (ter); slivers < 0.6 m snap to the wall end
+ H.walls.forEach(w=>{if(!w._ext)return;const L=geo(w).L,Z=[];[...(w.openings||[])].sort((p,q)=>(q.kind==='entrance')-(p.kind==='entrance')).forEach(o=>{const c=o.offset+o.width/2;let k=null,r=0;
+   if(o.type==='door'&&(o.kind==='entrance'||(o.out&&o.kind!=='sliding'&&o.kind!=='terrace'))){k=FS.ent;r=Math.max(1.4,o.width/2+.9);}
+   else if(o.kind==='terrace'||o.kind==='sliding'){k=FS.ter;r=o.width/2+1.1;}
+   if(!k)return;let a=Math.max(0,c-r),b=Math.min(L,c+r);if(a<.6)a=0;if(L-b<.6)b=L;for(const z of Z){if(a<z[1]&&b>z[0]){if(c>=z[1])a=z[1];else if(c<=z[0])b=z[0];else{a=b;}}}if(b-a>=.9)Z.push([a,b,k]);});if(Z.length)FZ.set(w,Z);});if(FS.ter&&![...FZ.values()].some(Z=>Z.some(z=>z[2]===FS.ter&&z[2]!==FS.ent))){const E=H.walls.filter(w=>w._ext),X=E.flatMap(w=>[w.start[0],w.end[0]]),Zs=E.flatMap(w=>[w.start[1],w.end[1]]);if(E.length){const x0=Math.min(...X),x1=Math.max(...X),z0=Math.min(...Zs),z1=Math.max(...Zs),lx=x1-x0>=z1-z0;
+  // fallback "one volume": clad the longest wall on a short end of the footprint (the gable end on a gable roof)
+  let bw=null,bl=0;E.forEach(w=>{if(FZ.has(w))return;const L=geo(w).L,c=lx?w.start[0]:w.start[1],alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,lo=lx?x0:z0,hi=lx?x1:z1;if(alg&&(Math.abs(c-lo)<.3||Math.abs(c-hi)<.3)&&L>=2.5&&L>bl){bl=L;bw=w;}});if(bw){FZ.set(bw,[[0,bl,"wood"]]);const c=lx?bw.start[0]:bw.start[1];FGE={k:"wood",neg:Math.abs(c-(lx?x0:z0))<.3};}}}
+ window.__fz=[...FZ.entries()].map(([w,Z])=>[w.start,w.end,w._ext,Z]);
+ const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{const Z=mat===M.wall&&w._ext&&FZ.get(w);if(!Z)return box0(w,s0,s1,y0,y1,mat,t,tOff,nc);const cuts=[s0,s1];Z.forEach(z=>{for(const v of[z[0],z[1]])if(v>s0&&v<s1)cuts.push(v);});cuts.sort((a,b)=>a-b);let last;
+  for(let i=0;i+1<cuts.length;i++){const a=cuts[i],b=cuts[i+1];if(b-a<.005)continue;const md=(a+b)/2,z=Z.find(z=>md>=z[0]&&md<=z[1]);if(!z){last=box0(w,a,b,y0,y1,mat,t,tOff,nc);continue;}const m=box0(w,a,b,y0,y1,facMats(z[2],w._ext),t,tOff,nc);if(m)boxUV(m.geometry,(a+b)/2,(y0+y1)/2);last=m;}return last;};
+ const box0=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{if(s1-s0<.005||y1-y0<.005)return;if(mat===M.wall&&w._ext)mat=w._ext>0?WP:WN;const g=geo(w);t=t||w.thickness;const m=add(new THREE.BoxGeometry(s1-s0,y1-y0,t),mat,g.x0+g.u[0]*(s0+s1)/2-g.u[1]*tOff,y0+(y1-y0)/2,g.z0+g.u[1]*(s0+s1)/2+g.u[0]*tOff,-Math.atan2(g.u[1],g.u[0]),nc);const hh=y1-y0;
   // Only structural wall slabs get wallCut (dollhouse). Frames/doors/glass must never — they caused ghost windows in GLB/Blender.
   const isWallMat=mat===M.wall||mat===M.fac||mat===M.plinth||mat===WP||mat===WN||(Array.isArray(mat)&&(mat.includes(M.wall)||mat.includes(M.fac)));
   if(hh>0.4&&isWallMat){m.userData.wallCut={base:y0,h:hh};}
@@ -449,7 +480,7 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
   const t=.28,h=.38,y=h/2-.02,cx=(px0+px1)/2,cz=(pz0+pz1)/2,pw=px1-px0+.2,pd=pz1-pz0+.2;
   // prem8: the band stops at exterior door openings (no 38 cm step in the doorway, leaves swing clear)
   const gaps=(hz,c)=>{const G=[];H.walls.forEach(w=>{const g=geo(w);const on=hz?Math.abs(g.u[1])<.01&&Math.abs(w.start[1]-c)<.05:Math.abs(g.u[0])<.01&&Math.abs(w.start[0]-c)<.05;if(!on)return;(w.openings||[]).forEach(o=>{if(o.type!=='door')return;const p0=hz?g.x0+g.u[0]*o.offset:g.z0+g.u[1]*o.offset,p1=hz?g.x0+g.u[0]*(o.offset+o.width):g.z0+g.u[1]*(o.offset+o.width);G.push([Math.min(p0,p1)-.02,Math.max(p0,p1)+.02]);});});return G.sort((a,b)=>a[0]-b[0]);};
-  const band=(hz,c,a0,a1,off)=>{let s0=a0;for(const[g0,g1]of[...gaps(hz,c),[a1,a1]]){const e0=Math.min(g0,a1);if(e0-s0>.02){const m=(s0+e0)/2,L=e0-s0;hz?add(new THREE.BoxGeometry(L,h,t),M.plinth,m,y,c+off,0,1).userData.noCol=true:add(new THREE.BoxGeometry(t,h,L),M.plinth,c+off,y,m,0,1).userData.noCol=true;}s0=Math.max(s0,g1);}};
+  const band=(hz,c,a0,a1,off)=>{let s0=a0;for(const[g0,g1]of[...gaps(hz,c),[a1,a1]]){const e0=Math.min(g0,a1);if(e0-s0>.02){const m=(s0+e0)/2,L=e0-s0;{const pm=FS.pl?FCM[FS.pl].m:M.plinth,bg=hz?new THREE.BoxGeometry(L,h,t):new THREE.BoxGeometry(t,h,L);if(FS.pl)boxUV(bg,m,0);add(bg,pm,hz?m:c+off,y,hz?c+off:m,0,1).userData.noCol=true;}}s0=Math.max(s0,g1);}};
   band(1,pz0,cx-(pw+.4)/2,cx+(pw+.4)/2,-t/2);band(1,pz1,cx-(pw+.4)/2,cx+(pw+.4)/2,t/2);band(0,px0,cz-pd/2,cz+pd/2,-t/2);band(0,px1,cz-pd/2,cz+pd/2,t/2);}
  // soft wall caps for dollhouse (hidden until doll mode)
  if(xs.length&&zs.length){H.walls.forEach(w=>{const g=geo(w),h=w.height||2.8,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0);if(e>0.2)return;
@@ -483,7 +514,7 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
     const gMat=(M.fac||M.wall).clone(); gMat.color.setHex(0xf7f5f0); gMat.side=THREE.DoubleSide; gMat.needsUpdate=true;
     const gable=(atNeg)=>{
       const g=new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-gW/2,0),new THREE.Vector2(gW/2,0),new THREE.Vector2(0,rh)]));
-      const mesh=new THREE.Mesh(g, gMat);
+      const mesh=new THREE.Mesh(g, FGE&&FGE.neg===atNeg?facGable(FGE.k):gMat);
       mesh.userData.roof=1; mesh.userData.noCol=true; mesh.castShadow=true;
       const out=along/2+0.015; // just outside Extrude end face
       if(lng){ mesh.rotation.y=atNeg?Math.PI/2:-Math.PI/2; mesh.position.set(cx+(atNeg?-out:out), ry, cz); }
