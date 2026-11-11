@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111h';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111i';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -43,12 +43,17 @@ roofTex.wrapS=roofTex.wrapT=THREE.RepeatWrapping;roofTex.repeat.set(5,3);roofTex
 const roofBump=tex((x,n)=>{x.fillStyle='#808080';x.fillRect(0,0,n,n);for(let row=0;row<n;row+=16){const odd=((row/16)|0)%2;for(let col=odd?11:0;col<n;col+=22){x.fillStyle='#b0b0b0';x.fillRect(col+1,row+1,19,10);x.fillStyle='#606060';x.fillRect(col+1,row+11,19,2);x.fillStyle='#505050';x.fillRect(col+19,row+1,1,12);}x.fillStyle='#404040';x.fillRect(0,row+14,n,2);}},256,5);
 roofBump.wrapS=roofBump.wrapT=THREE.RepeatWrapping;roofBump.repeat.set(5,3);
 
+// prem8 h2: concrete pavers (20x10 cm stretcher bond, 2 m tile) and larch decking (14 cm boards, 1.2 m tile), metre UVs
+const PAVT=tex((x,n)=>{x.fillStyle='#8f8a82';x.fillRect(0,0,n,n);const bw=n/10,bh=n/20;for(let r=0;r<20;r++){const off=(r%2)*bw/2;for(let c=-1;c<11;c++){const t=rnd(),d=(rnd()-.5)*18;const C=t<.45?[192,186,174]:t<.8?[170,166,158]:[150,146,140];x.fillStyle=`rgb(${C[0]+d|0},${C[1]+d|0},${C[2]+d|0})`;x.fillRect(c*bw+off+1.5,r*bh+1.5,bw-3,bh-3);x.fillStyle='rgba(255,255,255,.10)';x.fillRect(c*bw+off+1.5,r*bh+1.5,bw-3,1);}}
+  for(let i=0;i<2500;i++){x.fillStyle=`rgba(${rnd()<.5?0:255},${rnd()<.5?0:255},${rnd()<.5?0:255},.05)`;x.fillRect(rnd()*n,rnd()*n,2,2);}},512,1);
+const DECKT=tex((x,n)=>{const bh=n/8;for(let i=0;i<8;i++){const l=40+rnd()*10;x.fillStyle=`hsl(${25+rnd()*8},${38+rnd()*10}%,${l}%)`;x.fillRect(0,i*bh,n,bh);for(let k=0;k<18;k++){const gy=i*bh+2+rnd()*(bh-4);x.strokeStyle=`rgba(70,40,20,${.08+rnd()*.12})`;x.lineWidth=.8+rnd();x.beginPath();x.moveTo(0,gy);for(let xx=0;xx<=n;xx+=32)x.lineTo(xx,gy+Math.sin(xx*.02+k)*1.4);x.stroke();}
+  x.fillStyle='rgba(25,15,8,.85)';x.fillRect(0,i*bh,n,3);const j=rnd()*n;x.fillRect(j,i*bh,2,bh);}},512,1);
 const std=(o)=>new THREE.MeshStandardMaterial(o);
 const CAPM=new THREE.MeshBasicMaterial({color:0x3a3d42,toneMapped:false}); // prem8: dark wall tops read clearly from above
 const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood,roughness:.55}),ceil:std({color:0xfaf6ef,roughness:1,emissive:0xd4c4a8,emissiveIntensity:.25}),
  glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),
  door:std({color:0xe4e0d8,roughness:.5}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x9aa3ab,roughness:.72,metalness:.05}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
- fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:pave,color:0xcfc8bb,roughness:.92}),plinth:std({color:0x2f3135,roughness:.92}),
+ fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:PAVT,color:0xffffff,roughness:.92}),deck:std({map:DECKT,color:0xffffff,roughness:.7}),plinth:std({color:0x2f3135,roughness:.92}),
  tile:std({map:tile,roughness:.35}),beton:std({map:beton,roughness:.85}),fab:fabric};
 // prem8 h: facade claddings (procedural, 512 px, mipmapped, metre-based UVs). T = metres one texture tile covers.
 const FCT={};
@@ -70,7 +75,7 @@ const FSTY={mix:{ent:'wood',ter:'dark',pl:'stone'},drevo:{ent:'wood',ter:'wood',
 let FGE=null;const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
 function boxUV(g,ou=0,ov=0){const P=g.attributes.position,N=g.attributes.normal,uv=g.attributes.uv;for(let i=0;i<P.count;i++){const nx=Math.abs(N.getX(i)),ny=Math.abs(N.getY(i));const x=P.getX(i),y=P.getY(i),z=P.getZ(i);if(ny>.5)uv.setXY(i,x+ou,z+ov);else if(nx>.5)uv.setXY(i,z+ou,y+ov);else uv.setXY(i,x+ou,y+ov);}uv.needsUpdate=true;}
 function metreUV(g,s0,s1,y0,y1,side){const uv=g.attributes.uv,fi=side>0?4:5;for(let v=fi*4;v<fi*4+4;v++){const u=uv.getX(v),t=uv.getY(v);uv.setXY(v,side>0?s0+u*(s1-s0):s1-u*(s1-s0),y0+t*(y1-y0));}uv.needsUpdate=true;}
-if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(2,2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
+if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(.5,.5);M.deck.map.repeat.set(1/1.2,1/1.2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
 // prem8 y: Quest budget. In a headset session: no per-room ceiling fill point lights (emissive discs stay), at most 4 night point lights,
 // 1024 sun shadow map rendered only when the sun/scene changes (setHour drag already throttles), desktop untouched.
 let XRL=false;function xrLean(on){XRL=!!on;if(!scene)return;let n=0;scene.traverse(o=>{if(!o.isPointLight)return;if(o.userData.ceil){o.visible=!on;return;}if(o.parent===nightG){n++;o.visible=!on||n<=4;}});
@@ -409,9 +414,11 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
  H.walls.forEach(w=>{if(!w._ext)return;const L=geo(w).L,Z=[];[...(w.openings||[])].sort((p,q)=>(q.kind==='entrance')-(p.kind==='entrance')).forEach(o=>{const c=o.offset+o.width/2;let k=null,r=0;
    if(o.type==='door'&&(o.kind==='entrance'||(o.out&&o.kind!=='sliding'&&o.kind!=='terrace'))){k=FS.ent;r=Math.max(1.4,o.width/2+.9);}
    else if(o.kind==='terrace'||o.kind==='sliding'){k=FS.ter;r=o.width/2+1.1;}
-   if(!k)return;let a=Math.max(0,c-r),b=Math.min(L,c+r);if(a<.6)a=0;if(L-b<.6)b=L;for(const z of Z){if(a<z[1]&&b>z[0]){if(c>=z[1])a=z[1];else if(c<=z[0])b=z[0];else{a=b;}}}if(b-a>=.9)Z.push([a,b,k]);});if(Z.length)FZ.set(w,Z);});if(FS.ter&&![...FZ.values()].some(Z=>Z.some(z=>z[2]===FS.ter&&z[2]!==FS.ent))){const E=H.walls.filter(w=>w._ext),X=E.flatMap(w=>[w.start[0],w.end[0]]),Zs=E.flatMap(w=>[w.start[1],w.end[1]]);if(E.length){const x0=Math.min(...X),x1=Math.max(...X),z0=Math.min(...Zs),z1=Math.max(...Zs),lx=x1-x0>=z1-z0;
+   if(!k)return;let a=Math.max(0,c-r),b=Math.min(L,c+r);if(a<.6)a=0;if(L-b<.6)b=L;for(const z of Z){if(a<z[1]&&b>z[0]){if(c>=z[1])a=z[1];else if(c<=z[0])b=z[0];else{a=b;}}}if(b-a>=.9)Z.push([a,b,k]);});if(Z.length)FZ.set(w,Z);});{const noTer=!![FS.ter]&&!!FS.ter&&![...FZ.values()].some(Z=>Z.some(z=>z[2]===FS.ter&&z[2]!==FS.ent));const E=H.walls.filter(w=>w._ext),X=E.flatMap(w=>[w.start[0],w.end[0]]),Zs=E.flatMap(w=>[w.start[1],w.end[1]]);if(E.length){const x0=Math.min(...X),x1=Math.max(...X),z0=Math.min(...Zs),z1=Math.max(...Zs),lx=x1-x0>=z1-z0;
+  // a short end wall that already carries an accent zone gets its gable triangle clad too (wood unless the accent is anthracite)
+  if(FS.ent||FS.ter)E.forEach(w=>{const Z=FZ.get(w);if(!Z||FGE)return;const alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,c=lx?w.start[0]:w.start[1];if(!alg)return;const neg=Math.abs(c-(lx?x0:z0))<.3,pos=Math.abs(c-(lx?x1:z1))<.3;if(neg||pos)FGE={k:Z.some(z=>z[2]==='dark')&&!Z.some(z=>z[2]==='wood')?'dark':'wood',neg};});
   // fallback "one volume": clad the longest wall on a short end of the footprint (the gable end on a gable roof)
-  let bw=null,bl=0;E.forEach(w=>{if(FZ.has(w))return;const L=geo(w).L,c=lx?w.start[0]:w.start[1],alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,lo=lx?x0:z0,hi=lx?x1:z1;if(alg&&(Math.abs(c-lo)<.3||Math.abs(c-hi)<.3)&&L>=2.5&&L>bl){bl=L;bw=w;}});if(bw){FZ.set(bw,[[0,bl,"wood"]]);const c=lx?bw.start[0]:bw.start[1];FGE={k:"wood",neg:Math.abs(c-(lx?x0:z0))<.3};}}}
+  if(noTer){let bw=null,bl=0;E.forEach(w=>{if(FZ.has(w))return;const L=geo(w).L,c=lx?w.start[0]:w.start[1],alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,lo=lx?x0:z0,hi=lx?x1:z1;if(alg&&(Math.abs(c-lo)<.3||Math.abs(c-hi)<.3)&&L>=2.5&&L>bl){bl=L;bw=w;}});if(bw){FZ.set(bw,[[0,bl,"wood"]]);const c=lx?bw.start[0]:bw.start[1];FGE={k:"wood",neg:Math.abs(c-(lx?x0:z0))<.3};}}}}
  window.__fz=[...FZ.entries()].map(([w,Z])=>[w.start,w.end,w._ext,Z]);
  const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{const Z=mat===M.wall&&w._ext&&FZ.get(w);if(!Z)return box0(w,s0,s1,y0,y1,mat,t,tOff,nc);const cuts=[s0,s1];Z.forEach(z=>{for(const v of[z[0],z[1]])if(v>s0&&v<s1)cuts.push(v);});cuts.sort((a,b)=>a-b);let last;
   for(let i=0;i+1<cuts.length;i++){const a=cuts[i],b=cuts[i+1];if(b-a<.005)continue;const md=(a+b)/2,z=Z.find(z=>md>=z[0]&&md<=z[1]);if(!z){last=box0(w,a,b,y0,y1,mat,t,tOff,nc);continue;}const m=box0(w,a,b,y0,y1,facMats(z[2],w._ext),t,tOff,nc);if(m)boxUV(m.geometry,(a+b)/2,(y0+y1)/2);last=m;}return last;};
@@ -548,8 +555,8 @@ const m=add(new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]),mat,cx,l.elevation+.0
   let terr;if(TER){// slab in front of the terrace door, shifted away from the entrance
    const tl=4.6,dp=2.9;let sh=tl/2-.7;if(ENT){const se=(ENT.cx-TER.cx)*TER.ux+(ENT.cz-TER.cz)*TER.uz;if(se>0)sh=-sh;}
    const cx=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*sh,cz=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*sh,ew=Math.abs(TER.nx)>.9;
-   terr=add(new THREE.BoxGeometry(ew?dp:tl,.035,ew?tl:dp),M.path,cx,.018,cz,0,1);}
-  else terr=add(new THREE.BoxGeometry(tw,.035,2.8),M.path,hx,.018,terrZ,0,1);terr.receiveShadow=true;terr.userData.noCol=true;
+   terr=add(new THREE.BoxGeometry(ew?dp:tl,.035,ew?tl:dp),M.deck,cx,.018,cz,0,1);}
+  else terr=add(new THREE.BoxGeometry(tw,.035,2.8),M.deck,hx,.018,terrZ,0,1);terr.receiveShadow=true;terr.userData.noCol=true;
   // terrace accents (lightweight)
   if(!(H.furn||[]).some(f=>f.t==='otable'))
   {const woodAcc=M.wood2||M.door;add(new THREE.BoxGeometry(1.5,.06,.75),woodAcc,hx-1.5,.28,terrZ+.15,0,1);
@@ -610,7 +617,7 @@ export function setWalk(v,xr){DIRTY=Math.max(DIRTY,90);walk=v;orb.enabled=!v;$('
  place(v||xr);return walk;}
 export function setRoof(r,smooth){DIRTY=Math.max(DIRTY,90);const prev=roof;roof=r;if(smooth&&world){if(r==='none'||DOLL){roofTgt=0;}else{roofTgt=1;world.traverse(o=>{if(o.userData.roof)o.visible=true;});} }else{roofTgt=(r==='none'||DOLL)?0:1;roofVis=roofTgt;}}
 export const isWalk=()=>walk;
-export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
+export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  walk=walk&&!anim;setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;return true;}
