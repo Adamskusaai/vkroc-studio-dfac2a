@@ -1,6 +1,6 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261111zf';
-import {readPlan} from './plan.js?v=20261111zf';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111zf';
+import {detectWalls,gapMerge} from './cv.js?v=20261111zg';
+import {readPlan} from './plan.js?v=20261111zg';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261111zg';
 import {I,paint} from './icons.js';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -385,9 +385,9 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261111zf';
+const DEMO_V='20261111zg';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
-async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261111zf')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
+async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261111zg')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
 if(/[?&]demo=2/.test(location.search))setTimeout(()=>demo2(),400);
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
@@ -431,7 +431,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111zf');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261111zg');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 function modeUI(md){[['mExt','ext'],['doll','doll'],['walk','walk']].forEach(([id,k])=>{const b=$(id);if(b)b.classList.toggle('on',md===k);});
  $('st').textContent=md==='walk'?(TCH?'Joystick vľavo dole = chôdza, ťahajte prstom = rozhliadanie.':'W A S D / šípky = chôdza, ťahajte myšou = rozhliadanie.'):md==='doll'?(TCH?'Ťahajte = otáčanie, 2 prsty = zoom. Ťuknite na miestnosť hore a vojdete dnu.':'Ťahajte = otáčanie, koliesko = zoom. Kliknite na miestnosť hore a vojdete dnu.'):(TCH?'Ťahajte = otáčanie, 2 prsty = zoom.':'Ťahajte = otáčanie, koliesko = zoom.');}
 function wUI(v){jumpsUI(v||DOLL_ON);modeUI(v?'walk':(DOLL_ON?'doll':'ext'));}
@@ -710,6 +710,7 @@ const RULES=[
  ['fixture-secondary','soft','bathroom→sink, kitchen→fridge'],
  ['kitchen-short','soft','a kitchen counter should be at least 1.8 m long (hard below 1.2 m)'],
  ['scale-guess','soft','scale was estimated (no readable dimensions): ask for one known length'],
+ ['too-many-exterior-doors','soft','a family house has 1-3 exterior doors on the ground floor (auto-fix: >3 -> keep the 2 most plausible: hall/entrance, wide living/kitchen terrace door, utility; the rest become windows)'],
  ['furniture-on-stairs','hard','no furniture on the stair run or in the stair opening above it (auto-fix: remove the item)'],
  ['scale-implausible','hard','with an estimated scale, ≥2 rooms are too small/narrow for their type: propose the enlargement (one click), never apply silently'],
 ];window.__RULES=RULES;
@@ -726,6 +727,14 @@ function rulesFix(op){op=op||{};const log=[];H.walls.forEach(w=>{const wh=w.heig
   // door-between-nothing auto-fix: slide ≤1.2 m to where a room is on at least one side; a door on a wall with no room along its whole length (stray stub) is removed
   const orphan=[];os.forEach(o=>{if(o.type!=='door')return;if(bad(o,o.offset)){const tq=(q,off)=>bad(q,off)||(li===0&&none(q,off)&&!none(q,q.offset));if(!slide(o,tq,.6,'door-into-wall')&&!slide(o,tq,1.2,'door-into-wall'))blocked.push([w,o]);}else if(none(o,o.offset)&&li===0&&!slide(o,(q,off)=>bad(q,off)||none(q,off),1.2,'door-between-nothing')){let any=false;for(let t=.2;t<G.L-.2&&!any;t+=.3){const c=[G.x0+G.u[0]*t,G.z0+G.u[1]*t];any=ids.has(roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]))||ids.has(roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]));}if(!any)orphan.push(o);else blocked.push([w,o]);}});
   if(orphan.length){w.openings=os.filter(o=>!orphan.includes(o));orphan.forEach(()=>log.push('door-between-nothing:removed'));}});});
+ // prem9 LOGIC RULE (too many exterior doors): a family house has 1-3 doors to the outside (entrance, terrace, garage/utility). When the reader turned a
+ // whole facade of windows into doors, only the 2 most plausible stay doors (hall/entrance first, then a wide living-room/kitchen terrace door, then utility rooms) - the rest become windows
+ if(!op.noDoors&&H.levels&&H.levels.length){const L0=H.levels[0].name;extSides();const RS=rooms(L0),R=RC[L0];if(R&&R.g){const T=assignTypes(R,L0),ids=new Set(RS.map(q=>q.id)),ex=[];
+  H.walls.filter(w=>w.level===L0).forEach(w=>{const G=geo(w),n=[-G.u[1],G.u[0]],e=(w.thickness||.3)/2+.25;(w.openings||[]).forEach(o=>{if(o.type!=='door')return;const c=[G.x0+G.u[0]*(o.offset+o.width/2),G.z0+G.u[1]*(o.offset+o.width/2)];const a=roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),b=roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);if(ids.has(a)===ids.has(b)||a===-1||b===-1)return;const id=ids.has(a)?a:b;const r=RS.find(q=>q.id===id);const nm=r?roomType(r,T,R,L0):'';
+   const sc=(/Predsie|Chodba|Zádver|Vstup|Hala/.test(nm)?6:/Obýv|Jedál|Kuchy/.test(nm)?(o.width>=1.4?5:3):/Garáž|Techn|Komora|Sklad|Dielňa/.test(nm)?2:0)+(o.out?2:0)+(o.kind==='entrance'?3:0)-(o.width<.7?2:0);ex.push({w,o,sc,rid:id});});});
+  const dc={};H.walls.filter(w=>w.level===L0).forEach(w=>{const G=geo(w),n=[-G.u[1],G.u[0]],e=(w.thickness||.3)/2+.25;(w.openings||[]).forEach(o=>{if(o.type!=='door')return;const c=[G.x0+G.u[0]*(o.offset+o.width/2),G.z0+G.u[1]*(o.offset+o.width/2)];for(const v of[roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e])])if(ids.has(v))dc[v]=(dc[v]||0)+1;});});
+  const reach0=()=>rulesCheck().filter(x=>x.id==='room-unreachable'||x.id==='no-entrance').length+validateAll(L0).filter(v=>v.rule==='room-without-door').length;
+  if(ex.length>3){const r0=reach0(),undo=[];ex.sort((x,y)=>y.sc-x.sc);ex.slice(2).forEach(({w,o,rid})=>{if((dc[rid]||0)<2)return;dc[rid]--;undo.push([o,JSON.stringify(o)]);o.type='window';o.sill=o.width>=2?0:.9;o.height=o.width>=2?2.1:1.4;delete o.out;delete o.kind;delete o.hinge;log.push('too-many-exterior-doors');});if(undo.length&&reach0()>r0)undo.forEach(([o,j])=>{for(const k of Object.keys(o))delete o[k];Object.assign(o,JSON.parse(j));});}}}
  // prem9 LOGIC RULE (door into a wall): a door that cannot be slid ≤1.2 m off a wall right behind it opens onto nothing usable - it is removed, unless that would leave a room unreachable or the house without an entrance
  if(blocked.length&&!op.noDoors){const reach=()=>rulesCheck().filter(x=>x.id==='room-unreachable'||x.id==='no-entrance').length+H.levels.reduce((k,l)=>k+validateAll(l.name).filter(v=>v.rule==='room-without-door').length,0);const r0=reach();blocked.forEach(([w,o])=>{const k=w.openings.indexOf(o);if(k<0)return;w.openings.splice(k,1);if(reach()>r0)w.openings.splice(k,0,o);else log.push('door-into-wall:removed');});}
  upperDoors().forEach(()=>log.push('upper-door-to-nowhere'));
