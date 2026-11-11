@@ -279,7 +279,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  if(!o.rect&&!o.noPaper){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
  focus.nearE=!!o._cyan;tm('paper');let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
  if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=CG(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
- tm('clean');ink=compsFilter(ink,W,H,k=>k.n>=6);
+ tm('clean');ink=compsFilter(ink,W,H,k=>k.n>=6);if(!(globalThis.__PF||{}).noFrame){const nf=sheetFrame(ink,W,H);if(nf)dbg.frame=nf;}
  // prem8: coloured window symbols (saturated cyan / blue bands in the wall line) close the outline as wall body and are
  // turned into window openings after the walls are found (instead of being stripped with the colour fills)
  let cyan=null;if(o._cyan){const d=c.getContext('2d').getImageData(0,0,W,H).data,cm=new Uint8Array(W*H);let nc=0;for(let i=0;i<W*H;i++){const r0=d[i*4],g0=d[i*4+1],b0=d[i*4+2],mx=Math.max(r0,g0,b0),mn=Math.min(r0,g0,b0);if(b0>130&&b0-r0>60&&mx-mn>60&&g0>=r0){cm[i]=1;nc++;}}
@@ -462,6 +462,17 @@ function parseDim(txt){// imperial: OCR reads ' and " as commas -> 32'6" = "32,6
  const t=txt.replace(/^,+|,+$/g,'');if(!/^\d+(,\d+)?$/.test(t))return[];const v=parseFloat(t.replace(',','.'));if(!isFinite(v)||v<=0)return[];
  if(t.includes(','))return[v];// metres "15,00"
  return[v/100,v/1000,v];}// "1500" cm, "15000" mm, "15" m
+// prem9: drawing-sheet frame (single/double rectangle, the title block grid hanging on it) is not part of the house:
+// a component whose box spans most of the page, drawn with thin lines, closed on all four sides (a house outline always has door gaps)
+function sheetFrame(ink,W,H){const lab=new Int32Array(W*H),st=[],hit=[];let id=0;
+ for(let i=0;i<W*H;i++){if(!ink[i]||lab[i])continue;id++;st.push(i);lab[i]=id;let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0;while(st.length){const j=st.pop();n++;const x=j%W,y=(j/W)|0;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+   if(x>0&&ink[j-1]&&!lab[j-1]){lab[j-1]=id;st.push(j-1);}if(x<W-1&&ink[j+1]&&!lab[j+1]){lab[j+1]=id;st.push(j+1);}if(y>0&&ink[j-W]&&!lab[j-W]){lab[j-W]=id;st.push(j-W);}if(y<H-1&&ink[j+W]&&!lab[j+W]){lab[j+W]=id;st.push(j+W);}}
+  if(x1-x0<.8*W||y1-y0<.8*H||n>.08*W*H)continue;const t=Math.max(3,Math.round(.012*Math.max(W,H)));
+  const cov=(hz,c0)=>{let k=0,L=0;if(hz){for(let x=x0;x<=x1;x++){L++;for(let d=0;d<t;d++){const y=c0+d*(c0===y0?1:-1);if(lab[y*W+x]===id){k++;break;}}}}else{for(let y=y0;y<=y1;y++){L++;for(let d=0;d<t;d++){const x=c0+d*(c0===x0?1:-1);if(lab[y*W+x]===id){k++;break;}}}}return k/L;};
+  const cs=[cov(1,y0),cov(1,y1),cov(0,x0),cov(0,x1)];if(Math.min(...cs)<.985)continue;
+  // thin: ink within the side bands is mostly line, not a thick wall
+  hit.push(id);}
+ if(!hit.length)return 0;let n=0;for(let i=0;i<W*H;i++)if(lab[i]&&hit.includes(lab[i])){ink[i]=0;n++;}return n;}
 export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max(6,tWall);
  const comps=[];const lab=new Int32Array(W*H),st=[];let id=0;
  for(let i=0;i<W*H;i++){if(!ink[i]||lab[i])continue;id++;st.push(i);lab[i]=id;let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0;while(st.length){const j=st.pop();n++;const x=j%W,y=(j/W)|0;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
