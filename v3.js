@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111m';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111n';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -52,10 +52,11 @@ const SLATT=tex((x,n)=>{const h=n/8;for(let i=0;i<8;i++){x.fillStyle='#3a3d41';x
 const MESHT=tex((x,n)=>{x.clearRect(0,0,n,n);x.fillStyle='#2c2f33';for(let i=0;i<4;i++)x.fillRect(i*n/4,0,3,n);for(let j=0;j<2;j++)x.fillRect(0,j*n/2,n,3);},128,1); // 25x50 cm welded mesh / 1 m tile
 const ASPT=tex((x,n)=>{x.fillStyle='#4b4d50';x.fillRect(0,0,n,n);for(let i=0;i<9000;i++){const g=50+rnd()*60;x.fillStyle=`rgba(${g|0},${g|0},${(g+3)|0},.55)`;x.fillRect(rnd()*n,rnd()*n,1.5,1.5);}},256,1); // 3 m tile
 const std=(o)=>new THREE.MeshStandardMaterial(o);
+const WTILE=tex((x,n)=>{x.fillStyle='#cfccc6';x.fillRect(0,0,n,n);const tw=n/2,th=n/4;for(let r=0;r<4;r++)for(let c=0;c<2;c++){const g=236+rnd()*10;x.fillStyle=`rgb(${g|0},${(g-2)|0},${(g-5)|0})`;x.fillRect(c*tw+2,r*th+2,tw-4,th-4);x.fillStyle='rgba(255,255,255,.35)';x.fillRect(c*tw+2,r*th+2,tw-4,2);}},512,1); // 60x30 cm wall tiles, 1.2 m tile
 const FLATM=std({map:tex((x,n)=>{x.fillStyle='#c4c6c9';x.fillRect(0,0,n,n);for(let i=0;i<5000;i++){const g=150+rnd()*90;x.fillStyle=`rgba(${g|0},${g|0},${(g+4)|0},.5)`;x.fillRect(rnd()*n,rnd()*n,1.5,1.5);}},256,6),roughness:.95}); // flat roof: grey gravel/membrane
 const CAPM=new THREE.MeshBasicMaterial({color:0x3a3d42,toneMapped:false}); // prem8: dark wall tops read clearly from above
 const M={wall:std({color:0xf2ebe3,map:plaster,roughness:.9}),floor:std({map:wood,roughness:.55}),ceil:std({color:0xfaf6ef,roughness:1,emissive:0xd4c4a8,emissiveIntensity:.25}),
- glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),base:std({color:0xb9b5ad,roughness:.9}),slat:std({map:SLATT,color:0xffffff,roughness:.6,metalness:.2}),mesh:std({map:MESHT,color:0xffffff,roughness:.6,alphaTest:.5,side:THREE.DoubleSide}),asph:std({map:ASPT,color:0xffffff,roughness:.95}),sill:std({color:0x9a9ea3,roughness:.35,metalness:.6}),board:std({color:0xf3f1ec,roughness:.5}),
+ glass:new THREE.MeshPhysicalMaterial({color:0xc5d8e8,transparent:true,opacity:.3,roughness:.06,metalness:0,envMapIntensity:1.15}),frame:std({color:0x2f3235,roughness:.45,metalness:.2}),wtile:std({map:WTILE,color:0xffffff,roughness:.25,metalness:0}),skirt:std({color:0xf4f2ee,roughness:.5}),base:std({color:0xb9b5ad,roughness:.9}),slat:std({map:SLATT,color:0xffffff,roughness:.6,metalness:.2}),mesh:std({map:MESHT,color:0xffffff,roughness:.6,alphaTest:.5,side:THREE.DoubleSide}),asph:std({map:ASPT,color:0xffffff,roughness:.95}),sill:std({color:0x9a9ea3,roughness:.35,metalness:.6}),board:std({color:0xf3f1ec,roughness:.5}),
  door:std({color:0xe4e0d8,roughness:.5}),roof:std({map:roofTex,bumpMap:roofBump,bumpScale:1.8,color:0x9aa3ab,roughness:.72,metalness:.05}),stair:std({map:wood,roughness:.5}),lawn:std({map:grass,roughness:1,color:0xa8b888}),ground:std({map:grass,roughness:1,color:0xc4d0a4}),
  fac:std({color:0xf7f5f0,map:plaster,roughness:.95}),wood2:std({color:0x9b7653,map:wood,roughness:.55}),fence:std({color:0x4a4a48,roughness:.75,metalness:.05}),path:std({map:PAVT,color:0xffffff,roughness:.92}),deck:std({map:DECKT,color:0xffffff,roughness:.7}),plinth:std({color:0x2f3135,roughness:.92}),
  tile:std({map:tile,roughness:.35}),beton:std({map:beton,roughness:.85}),fab:fabric};
@@ -79,7 +80,7 @@ const FSTY={mix:{ent:'wood',ter:'dark',pl:'stone'},drevo:{ent:'wood',ter:'wood',
 let FGE=null,FZW=[];const facDS={};const facGable=k=>facDS[k]||(facDS[k]=Object.assign(FCM[k].m.clone(),{side:THREE.DoubleSide}));const facArr={};function facMats(k,side){const key=k+side;if(!facArr[key]){const a=[M.wall,M.wall,M.wall,M.wall,M.wall,M.wall];a[side>0?4:5]=FCM[k].m;facArr[key]=a;}return facArr[key];}
 function boxUV(g,ou=0,ov=0){const P=g.attributes.position,N=g.attributes.normal,uv=g.attributes.uv;for(let i=0;i<P.count;i++){const nx=Math.abs(N.getX(i)),ny=Math.abs(N.getY(i));const x=P.getX(i),y=P.getY(i),z=P.getZ(i);if(ny>.5)uv.setXY(i,x+ou,z+ov);else if(nx>.5)uv.setXY(i,z+ou,y+ov);else uv.setXY(i,x+ou,y+ov);}uv.needsUpdate=true;}
 function metreUV(g,s0,s1,y0,y1,side){const uv=g.attributes.uv,fi=side>0?4:5;for(let v=fi*4;v<fi*4+4;v++){const u=uv.getX(v),t=uv.getY(v);uv.setXY(v,side>0?s0+u*(s1-s0):s1-u*(s1-s0),y0+t*(y1-y0));}uv.needsUpdate=true;}
-if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(.5,.5);M.slat.map.repeat.set(1,1);M.mesh.map.repeat.set(1,1);M.asph.map.repeat.set(1/3,1/3);M.deck.map.repeat.set(1/1.2,1/1.2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
+if(M.roof.map)M.roof.map.repeat.set(6,6);if(M.lawn.map)M.lawn.map.repeat.set(.4,.4);if(M.path.map)M.path.map.repeat.set(.5,.5);M.wtile.map.repeat.set(1/1.2,1/1.2);M.slat.map.repeat.set(1,1);M.mesh.map.repeat.set(1,1);M.asph.map.repeat.set(1/3,1/3);M.deck.map.repeat.set(1/1.2,1/1.2);if(M.tile.map)M.tile.map.repeat.set(2,2);if(M.floor.map)M.floor.map.repeat.set(3,3);
 // prem8 y: Quest budget. In a headset session: no per-room ceiling fill point lights (emissive discs stay), at most 4 night point lights,
 // 1024 sun shadow map rendered only when the sun/scene changes (setHour drag already throttles), desktop untouched.
 let XRL=false;function xrLean(on){XRL=!!on;if(!scene)return;let n=0;scene.traverse(o=>{if(!o.isPointLight)return;if(o.userData.ceil){o.visible=!on;return;}if(o.parent===nightG){n++;o.visible=!on||n<=4;}});
@@ -433,6 +434,7 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
   // Only structural wall slabs get wallCut (dollhouse). Frames/doors/glass must never — they caused ghost windows in GLB/Blender.
   const isWallMat=mat===M.wall||mat===M.fac||mat===M.plinth||mat===WP||mat===WN||(Array.isArray(mat)&&(mat.includes(M.wall)||mat.includes(M.fac)));
   if(hh>0.4&&isWallMat){m.userData.wallCut={base:y0,h:hh};}
+  if(isWallMat&&mat!==M.plinth)m.userData.wp=[w,s0,s1,y0,y1,t];
   if(doGrow&&isWallMat){m.userData.grow=1;m.userData.growBase=y0;m.userData.growH=hh;m.scale.y=.001;m.position.y=y0;m.visible=false;}return m;};
  H.walls.forEach(w=>{const L=geo(w).L,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0),h=w.height||2.8;xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);
   const ops=[...(w.openings||[])].sort((a,b)=>a.offset-b.offset);let s=0;
@@ -440,7 +442,8 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
    if(o.type==='window'){box(w,a,b,e+sl+f,e+sl+o.height-f,M.glass,.02,0,1);box(w,a,b,e+sl,e+sl+f,M.frame,.12);box(w,a,b,e+sl+o.height-f,e+sl+o.height,M.frame,.12);box(w,a,a+f,e+sl,e+sl+o.height,M.frame,.12);box(w,b-f,b,e+sl,e+sl+o.height,M.frame,.12);if(b-a>.75)box(w,(a+b)/2-.035,(a+b)/2+.035,e+sl,e+sl+o.height,M.frame,.09,0,1);
     // exterior sill
     if(sg){const T=w.thickness;box(w,a-.03,b+.03,e+sl-.035,e+sl,M.sill,T/2+.06,sg*(T/4+.03),1);if(sl>.3)box(w,a-.02,b+.02,e+sl-.025,e+sl,M.board,T/2+.03,-sg*(T/4+.015),1);}else box(w,a-.02,b+.02,e+sl-.04,e+sl,M.frame,w.thickness+.08,0,1);}
-   else{box(w,a,a+.06,e,e+o.height,M.frame,w.thickness+.04);box(w,b-.06,b,e,e+o.height,M.frame,w.thickness+.04);box(w,a,b,e+o.height-.06,e+o.height,M.frame,w.thickness+.04);box(w,a-.02,b+.02,e,e+.04,M.frame,w.thickness+.1,0,1);
+   else{const JM=w._ext?M.frame:M.skirt;box(w,a,a+.06,e,e+o.height,JM,w.thickness+.04);box(w,b-.06,b,e,e+o.height,JM,w.thickness+.04);box(w,a,b,e+o.height-.06,e+o.height,JM,w.thickness+.04);
+    if(!w._ext&&o.height<2.5){const T=w.thickness+.03;box(w,a-.07,a,e,e+o.height+.07,M.skirt,T,0,1);box(w,b,b+.07,e,e+o.height+.07,M.skirt,T,0,1);box(w,a-.07,b+.07,e+o.height,e+o.height+.07,M.skirt,T,0,1);}box(w,a-.02,b+.02,e,e+.04,M.frame,w.thickness+.1,0,1);
     const G=geo(w),ang=-Math.atan2(G.u[1],G.u[0]),sd=o.out?-1:1,kd=o.kind||'single',mat=kd==='entrance'?M.frame:M.door;
     const isEnt=kd==='entrance'||(o.type==='door'&&o.out&&o.kind!=='sliding');
     const leaf=(hs,lw,dir,openRot)=>{const lf=new THREE.Mesh(new THREE.BoxGeometry(lw,o.height-.06,.04),mat);lf.castShadow=true;lf.position.set(dir*lw/2,(o.height-.06)/2,0);const piv=new THREE.Group();piv.position.set(G.x0+G.u[0]*hs-G.u[1]*sd*(w.thickness/2),e,G.z0+G.u[1]*hs+G.u[0]*sd*(w.thickness/2));
@@ -659,7 +662,7 @@ export function setWalk(v,xr){DIRTY=Math.max(DIRTY,90);walk=v;orb.enabled=!v;$('
  place(v||xr);return walk;}
 export function setRoof(r,smooth){DIRTY=Math.max(DIRTY,90);const prev=roof;roof=r;if(smooth&&world){if(r==='none'||DOLL){roofTgt=0;}else{roofTgt=1;world.traverse(o=>{if(o.userData.roof)o.visible=true;});} }else{roofTgt=(r==='none'||DOLL)?0:1;roofVis=roofTgt;}}
 export const isWalk=()=>walk;
-export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
+export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;interiorFinish(world);world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  walk=walk&&!anim;setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;return true;}
@@ -746,9 +749,19 @@ function doorTick(){if(doorMode!=='closed'||!doorPivs.length||!cam)return;
     d.u+=(tgt-d.u)*0.12; p.rotation.y=d.closed+(d.open-d.closed)*d.u; if(Math.abs(tgt-d.u)>.002)DIRTY=Math.max(DIRTY,4);});}
 export function setSun(h,smooth){DIRTY=Math.max(DIRTY,90);if(ATM.h!=null&&scene){return;}if(smooth){sunTween={a:sunH,b:h,t:0,dur:1.8};}else{sunH=h;sunTween=null;if(lastFp)fitSun(lastFp);}}
 // prem8 h6: room jumps look across the room: of 16 directions the one with the longest free view wins; we step back toward the opposite wall.
-function viewFrom(x,z){const W=(H&&H.walls)||[];const ray=(dx,dz)=>{let best=12;W.forEach(w=>{const ax=w.start[0],az=w.start[1],bx=w.end[0]-ax,bz=w.end[1]-az,den=dx*bz-dz*bx;if(Math.abs(den)<1e-9)return;const t=((ax-x)*bz-(az-z)*bx)/den,u=((ax-x)*dz-(az-z)*dx)/den;if(t>.05&&u>=0&&u<=1&&t<best)best=t;});return best;};
+function viewFrom(x,z){const W=(H&&H.walls)||[];let RK=null,L0=null;for(const k in roomKinds){const r=roomKinds[k];const l=r&&r.labelAt&&r.labelAt(x,z);if(l){RK=r;L0=l;break;}}
+ const inRoom=(dx,dz,d)=>{if(!RK)return d;for(let q=.2;q<d;q+=.15){if(RK.labelAt(x+dx*q,z+dz*q)!==L0)return Math.max(.1,q-.15);}return d;};
+ const ray=(dx,dz)=>inRoom(dx,dz,ray0(dx,dz)),ray0=(dx,dz)=>{let best=12;W.forEach(w=>{const ax=w.start[0],az=w.start[1],bx=w.end[0]-ax,bz=w.end[1]-az,den=dx*bz-dz*bx;if(Math.abs(den)<1e-9)return;const t=((ax-x)*bz-(az-z)*bx)/den,u=((ax-x)*dz-(az-z)*dx)/den;if(t>.05&&u>=0&&u<=1&&t<best)best=t;});return best;};
  let bd=-1,bdir=null;for(let i=0;i<16;i++){const a=i/16*Math.PI*2,dx=Math.sin(a),dz=-Math.cos(a),d=ray(dx,dz);if(d>bd+.05){bd=d;bdir=[dx,dz,a];}}
  if(!bdir)return null;const back=ray(-bdir[0],-bdir[1]),st=Math.max(0,Math.min(1.4,back-.5));return{x:x-bdir[0]*st,z:z-bdir[1]*st,yaw:bdir[2]};}
+// prem8 h7: interior finishes as children of each wall piece (so dollhouse cut / grow animation carry them):
+// wet rooms get 2.05 m of 60x30 wall tiles, other rooms a 7 cm skirting board on the floor-touching pieces. Exterior sides are skipped (no room there).
+function interiorFinish(root){const P=[];root.traverse(o=>{if(o.isMesh&&o.userData.wp)P.push(o);});
+ P.forEach(o=>{const[w,s0,s1,y0,y1,t]=o.userData.wp,RK=roomKinds[w.level];if(!RK||!RK.labelAt)return;const g=geo(w),lv=(H.levels||[]).find(l=>l.name===w.level),e0=lv?lv.elevation||0:0,L=s1-s0;if(L<.08)return;
+  const sm=(s0+s1)/2,cxm=g.x0+g.u[0]*sm,czm=g.z0+g.u[1]*sm,yc=(y0+y1)/2;
+  for(const sd of[1,-1]){const nx=-g.u[1]*sd,nz=g.u[0]*sd,lab=RK.labelAt(cxm+nx*(t/2+.15),czm+nz*(t/2+.15));if(!lab)continue;const kind=RK.kindOf[lab]||'other';
+   if(kind==='wet'){const a=Math.max(y0,e0),b=Math.min(y1,e0+2.05);if(b-a<.04)continue;const gg=new THREE.BoxGeometry(L,b-a,.012);boxUV(gg,sm,(a+b)/2-e0);const m=new THREE.Mesh(gg,M.wtile);m.position.set(0,(a+b)/2-yc,sd*(t/2+.006));m.receiveShadow=true;m.userData.noCol=true;o.add(m);}
+   else if(y0<e0+.03){const m=new THREE.Mesh(new THREE.BoxGeometry(L,.07,.014),M.skirt);m.position.set(0,e0+.035-yc,sd*(t/2+.007));m.userData.noCol=true;o.add(m);}}});}
 export function jump(x,z,e){DIRTY=Math.max(DIRTY,90);if(!walk)setWalk(true);const V=viewFrom(x,z);if(V){x=V.x;z=V.z;if(!(R.xr&&R.xr.isPresenting)){yaw=V.yaw;pitch=0;}}rig.position.set(x,e,z);if(body&&body.resolve)body.resolve(rig.position);cam.position.set(0,1.6,0);}
 
 const WP=[M.wall,M.wall,M.wall,M.wall,M.fac,M.wall],WN=[M.wall,M.wall,M.wall,M.wall,M.wall,M.fac];
