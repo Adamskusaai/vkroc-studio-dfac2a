@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261111zl';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261112a';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -24,6 +24,13 @@ export function debugViz(){let grow=0,short=0,roof=0,wallish=0,maxH=0,worldMaxY=
  });
  let wallCuts=0;if(world)world.traverse(o=>{if(o.userData&&o.userData.wallCut)wallCuts++;});
  return{ok:true,grow,short,roof,wallish,wallCuts,DOLL,maxH:+maxH.toFixed(2),worldMinY:+worldMinY.toFixed(2),worldMaxY:+worldMaxY.toFixed(2),samples,DOLL,roofVis,camY:cam?+cam.position.y.toFixed(2):null,camPos:cam?cam.position.toArray().map(n=>+n.toFixed(1)):null};}
+export function qaCam(px,py,pz,tx,ty,tz){camPath=null;if(walk)setWalk(false);orb.enabled=true;cam.position.set(px,py,pz);orb.target.set(tx,ty,tz);orb.update();DIRTY=Math.max(DIRTY,90);}
+// prem10 QA: vertical gaps between storeys. Under every upper wall (sampled each 0.25 m) and every upper room cell there must be solid geometry within 6 cm
+// below the upper floor level; otherwise sky/air shows between storeys. Returns {gaps,samples,where}.
+export function storeyQA(){if(!world||!H||!H.levels||H.levels.length<2)return{gaps:0,samples:0,where:[]};const rc=new THREE.Raycaster(),ms=[];world.traverse(o=>{if(o.isMesh&&o.material!==M.glass&&!o.userData.roof)ms.push(o);});
+ world.updateMatrixWorld(true);let gaps=0,n=0;const where=[];const probe=(x,y,z)=>{rc.set(new THREE.Vector3(x,y,z),new THREE.Vector3(0,-1,0));rc.far=.08;n++;if(!rc.intersectObjects(ms,false).length){gaps++;if(where.length<12)where.push([+x.toFixed(2),+z.toFixed(2)]);}};
+ H.levels.forEach((l,i)=>{if(!i)return;const e=(l.elevation||0)+.005;H.walls.filter(w=>w.level===l.name&&w._ext).forEach(w=>{const g=geo(w),N=Math.max(1,Math.floor(g.L/.25));for(let k=1;k<N;k++){const s=k/N*g.L;probe(g.x0+g.u[0]*s,e,g.z0+g.u[1]*s);}});
+  (CELLS[l.name]||[]).forEach(r=>{if((r[2]-r[0])*(r[3]-r[1])<.5)return;probe((r[0]+r[2])/2,e,(r[1]+r[3])/2);});});return{gaps,samples:n,where};}
 export function stopCam(){camPath=null;if(orb)orb.enabled=true;}
 export function isDoll(){return DOLL;}
 export const geo=w=>{const[x0,z0]=w.start,[x1,z1]=w.end,L=Math.hypot(x1-x0,z1-z0)||1e-9;return{x0,z0,L,u:[(x1-x0)/L,(z1-z0)/L]};};
@@ -365,7 +372,21 @@ function finishGrow(){wallGrow=null;if(!world)return;world.traverse(o=>{if(!o.is
   if(o.userData.grow){o.scale.y=1;o.position.y=o.userData.growBase+o.userData.growH*.5;o.visible=true;}
   else if(o.scale&&o.scale.y<0.999&&o.userData.growH!=null){o.scale.y=1;o.position.y=o.userData.growBase+o.userData.growH*.5;o.visible=true;}
  });}
-function resetExterior(){finishGrow();DOLL=false;roofTgt=(roof==='none')?0:1;roofVis=roofTgt;if(!world)return;
+
+// prem10 STOREY PICKER (Bez strechy): LVCUT=null shows everything; k = storey index that becomes the top cut. Storeys above k are hidden,
+// storeys below k are drawn as a light ghost (so the picked floor never floats), garden/plot stay normal. Tags are computed once per build from each object's lowest point.
+let LVCUT=null,GHOST=null;
+function tagLv(){if(!world||!H||world.userData.lvTag)return;world.userData.lvTag=1;const E=H.levels.map(l=>l.elevation||0),fp=world.userData.fp||(world.children[0]&&world.children[0].userData.fp),bb=new THREE.Box3();
+ const tagOne=o=>{if(o.userData.lvJ!=null){o.userData.lv=o.userData.lvJ;}else{bb.setFromObject(o);const y=isFinite(bb.min.y)?bb.min.y:o.position.y;let k=0;E.forEach((e,i)=>{if(y>=e-.06)k=i;});o.userData.lv=k;}
+  if(fp){bb.setFromObject(o);o.userData.inH=isFinite(bb.min.x)&&bb.max.x>fp[0]-.4&&bb.min.x<fp[2]+.4&&bb.max.z>fp[1]-.4&&bb.min.z<fp[3]+.4&&(bb.max.x-bb.min.x)<(fp[2]-fp[0])+3;}};
+ const kids=o=>o.children.forEach(c=>{if(c.isGroup&&!c.userData.furn&&!c.userData.doorLeaf&&c.children.length>12&&c.userData.lvJ==null)kids(c);else tagOne(c);});kids(world);}
+function applyCut(){if(!world)return;const on=DOLL&&LVCUT!=null&&H&&H.levels&&H.levels.length>1;if(on)tagLv();
+ world.traverse(o=>{if(o.userData.cutHid){o.visible=true;o.userData.cutHid=0;}if(o.userData.m0){o.material=o.userData.m0;o.userData.m0=null;}});
+ if(!on)return;if(!GHOST)GHOST=new THREE.MeshBasicMaterial({color:0xe6e0d8,transparent:true,opacity:.32,depthWrite:false});
+ world.traverse(o=>{const lv=o.userData.lv;if(lv==null)return;if(lv>LVCUT){if(o.visible){o.visible=false;o.userData.cutHid=1;}}else if(lv<LVCUT&&o.userData.inH){o.traverse(x=>{if(x.isMesh&&!x.userData.m0){x.userData.m0=x.material;x.material=GHOST;}});}});DIRTY=Math.max(DIRTY,90);}
+export function setLevelCut(k){LVCUT=(k==null||k<0||!H||!H.levels||k>=H.levels.length)?null:k;applyCut();return LVCUT;}
+export function getLevelCut(){return LVCUT;}
+function resetExterior(){finishGrow();DOLL=false;roofTgt=(roof==='none')?0:1;roofVis=roofTgt;if(!world)return;applyCut();
  world.traverse(o=>{if(o.userData.roofP0)o.position.copy(o.userData.roofP0);if(o.userData.roof){o.visible=roof!=='none';if(o.material&&o.userData.roofMat){o.material.opacity=1;o.material.transparent=false;o.material.depthWrite=true;}}
   if(o.userData.ceil)o.visible=false;if(o.userData.cap)o.visible=false;if(o.isLight&&o.userData.ceil)o.visible=false;
   if(o.userData.wallCut){const{base,h}=o.userData.wallCut;o.scale.y=1;o.position.y=base+h/2;}if(o.userData.doorLeaf)o.scale.y=1;
@@ -511,6 +532,29 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
      const pl=new THREE.PointLight(0xffd4a0,0.16,Math.max(r[2]-r[0],r[3]-r[1])*1.15,2);pl.position.set(cx,l.elevation+topH-.22,cz);pl.userData.ceil=1;root.add(pl);}}});
   // prem9: the stair opening is a hole in THIS floor only - the ceiling above it stays closed (no sky strip), unless a stair from this level climbs through the same spot
   const up2=stairs.filter(st=>st.level===l.name).map(stairRect);hole.forEach(h=>{if(up2.some(g=>g[0]<h[2]&&g[2]>h[0]&&g[1]<h[3]&&g[3]>h[1]))return;add(new THREE.BoxGeometry(h[2]-h[0],.05,h[3]-h[1]),M.ceil,(h[0]+h[2])/2,l.elevation+topH+.025,(h[1]+h[3])/2,0,1).userData.ceil=1;});});
+ // prem10 STOREY JOINT (Adam: "druhé poschodie je vo vzduchu"): levels sit 3.05 m apart but walls are 2.8 m tall, so a 25 cm slot stayed open between storeys.
+ // LOGIC RULE: the floor above is a real slab. (1) lower walls under the upper floor continue up to it (slab edge in the facade), (2) a structural slab fills the
+ // upper rooms' footprint between the lower wall tops and the upper floor, (3) upper walls with no wall below get a beam down to the lower wall top,
+ // (4) an upper part that hangs >1.5 m past the walls below is a covered terrace: a post goes under each such free corner. Everything is tagged with its storey (lvJ) for the storey picker.
+ window.__posts=[];if(!/[?&]nojoint=1/.test(location.search))H.levels.forEach((l,i)=>{const up=H.levels[i+1];if(!up)return;const uc=CELLS[up.name]||[],lw=H.walls.filter(w=>w.level===l.name),uw=H.walls.filter(w=>w.level===up.name);if(!uc.length||!lw.length||!uw.length)return;
+  const eu=up.elevation||0,el=l.elevation||0,lt=el+Math.max(...lw.map(w=>(w.base||0)+(w.height||l.height||2.8)));if(eu-lt<.01)return;
+  const tag=(n0,k)=>{for(let j=n0;j<root.children.length;j++)root.children[j].userData.lvJ=k;};
+  const inUp=(x,z,m)=>uc.some(u=>x>u[0]-m&&x<u[2]+m&&z>u[1]-m&&z<u[3]+m);
+  const segD=(x,z,w)=>{const g=geo(w),px=x-g.x0,pz=z-g.z0,s=Math.max(0,Math.min(g.L,px*g.u[0]+pz*g.u[1]));return Math.hypot(px-g.u[0]*s,pz-g.u[1]*s);};
+  const lowWallAt=(x,z,m)=>lw.some(w=>segD(x,z,w)<(w.thickness||.3)/2+m);
+  let n0=root.children.length;
+  lw.forEach(w=>{const g=geo(w),e=el+(w.base||0),h=w.height||2.8;if(e+h>=eu-.005)return;const T=(w.thickness||.3)/2+.12,N=Math.max(2,Math.ceil(g.L/.1));let a=null;
+   for(let k=0;k<=N;k++){const s=k/N*g.L,x=g.x0+g.u[0]*s,z=g.z0+g.u[1]*s,c=k<N&&(inUp(x,z,.02)||inUp(x-g.u[1]*T,z+g.u[0]*T,0)||inUp(x+g.u[1]*T,z-g.u[0]*T,0)||uw.some(q=>segD(x,z,q)<(q.thickness||.3)/2));
+    if(c&&a===null)a=s;if((!c||k===N)&&a!==null){const b=c?g.L:s;if(b-a>.05)box(w,Math.max(0,a-.02),Math.min(g.L,b+.02),e+h,eu+.002,M.wall,0,0,1);a=null;}}});
+  uc.forEach(r=>{add(new THREE.BoxGeometry(r[2]-r[0]+.02,eu-lt-.002,r[3]-r[1]+.02),M.fac,(r[0]+r[2])/2,(lt+eu)/2,(r[1]+r[3])/2,0,1).userData.slab=1;});
+  uw.forEach(w=>{const g=geo(w),N=Math.max(2,Math.ceil(g.L/.1));let a=null;
+   for(let k=0;k<=N;k++){const s=k/N*g.L,x=g.x0+g.u[0]*s,z=g.z0+g.u[1]*s,c=k<N&&!lowWallAt(x,z,.02);
+    if(c&&a===null)a=s;if((!c||k===N)&&a!==null){const b=c?g.L:s;if(b-a>.05)box(w,Math.max(0,a-.02),Math.min(g.L,b+.02),lt,eu+.002,M.wall,0,0,1);a=null;}}});
+  tag(n0,i+1);
+  const lc=CELLS[l.name]||[],onLow=(x,z)=>lowWallAt(x,z,.05)||lc.some(u=>x>u[0]-.05&&x<u[2]+.05&&z>u[1]-.05&&z<u[3]+.05);
+  const pts=[];uw.filter(w=>w._ext).forEach(w=>[w.start,w.end].forEach(p=>{if(!pts.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<.05))pts.push(p);}));
+  pts.forEach(p=>{if(onLow(p[0],p[1]))return;let d=1e9;lw.forEach(w=>{d=Math.min(d,segD(p[0],p[1],w));});if(d<1.5)return;
+   const pm=add(new THREE.BoxGeometry(.24,lt-el,.24),M.fac,p[0],el+(lt-el)/2,p[1],0);pm.userData.post=1;pm.userData.lvJ=i;window.__posts.push([p[0],p[1],up.name]);});});
  // prem8: kitchen tile zone inside open-plan living (bbox of kitchen pieces + 0.9 m working aisle)
  H.levels.forEach(l=>{const RK=roomKinds[l.name];if(!RK)return;const grp={};(H.furn||[]).filter(f=>f.level===l.name&&['kitch','fridge','island'].includes(f.t)).forEach(f=>{const L=RK.labelAt(f.p[0],f.p[1]);if(L&&RK.kindOf[L]==='living')(grp[L]=grp[L]||[]).push(f);});
   Object.values(grp).forEach(fs=>{let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;fs.forEach(f=>{const F=FUR[f.t]||{w:1,d:1},rot=(f.r||0)%2,w=rot?F.d:F.w,d=rot?F.w:F.d;x0=Math.min(x0,f.p[0]-w/2);x1=Math.max(x1,f.p[0]+w/2);z0=Math.min(z0,f.p[1]-d/2);z1=Math.max(z1,f.p[1]+d/2);});
