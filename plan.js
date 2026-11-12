@@ -197,6 +197,8 @@ function snap(S){for(const s of S){for(const end of ['a','b']){const p=s[end];le
  }return S.filter(s=>s.b-s.a>s.t*.8);}
 // ---------- openings ----------
 function classifyGap(A,lo,hi,c,t,ink,W,H){let lines=0;const nS=7;for(let k=0;k<nS;k++){const off=-t*.7+k*(t*1.4)/(nS-1);let on=0,tot=0;for(let u=lo+2;u<hi-2;u+=1){const x=Math.round(A.hz?u:c+off),y=Math.round(A.hz?c+off:u);if(x<0||y<0||x>=W||y>=H)continue;tot++;if(ink[y*W+x])on++;}if(tot&&on>.7*tot)lines++;}
+ if(classifyGap.paper&&!(globalThis.__PF||{}).noArc){const g=hi-lo;let best=0;for(const sg of[-1,1])for(const[h,dr]of[[lo,1],[hi,-1]]){let on=0,n=0;for(let d=15;d<=75;d+=5){const an=d*Math.PI/180,u=h+dr*g*Math.cos(an),v=c+sg*(t/2+g*Math.sin(an));let hit=0;for(let e=-2;e<=2&&!hit;e++)for(let f=-2;f<=2&&!hit;f++){const x=Math.round((A.hz?u:v)+e),y=Math.round((A.hz?v:u)+f);if(x>=0&&y>=0&&x<W&&y<H&&ink[y*W+x])hit=1;}n++;on+=hit;}best=Math.max(best,on/n);}
+  if(best>=.7)return 'door';if(lines>=1)return 'window';}
  return lines>=2?'window':'door';}
 function findOpenings(S,ink,W,H,ppm,bb){const out=[];const used=new Set();
  const isExt=(A,c,t)=>A.hz?Math.min(Math.abs(c-bb[1]),Math.abs(c-bb[3]))<t*1.5:Math.min(Math.abs(c-bb[0]),Math.abs(c-bb[2]))<t*1.5;
@@ -299,7 +301,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
    if(o.debug)(dbg.thin=dbg.thin||[]).push([mL2,S2.filter(q=>q.hz).map(q=>[q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]),add2.length]);S=S.concat(add2);}
   S=mergeColinear(S,2);if(dbg.paper&&!(globalThis.__PF||{}).noIso)S=dropIsolated(S,W,H);S=snap(S);S=mergeColinear(S,1);return S;};
  const V=[];const add=(name,mask,wk,kOpen,kInt)=>{let S=run(mask,wk,/^t?h\d/.test(name),kInt||wk);if(o.debug)dbg["raw_"+name]=S.map(q=>[q.hz,q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]);if(S.length<3)return;S=focus(S);if(S.length<3)return;S=o._cyan?closeCorners(S):S;void(S);const bb=bbox(S);
-  const ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
+  const ops=(classifyGap.paper=!!dbg.paper,findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
   V.push({name,S,mask,wk,kOpen,kInt,bb,q});dbg['q_'+name]=[S.length,+q.Q.toFixed(2),q.nR];};
  add('ink',base.wm,base.wk,base.kOpen,base.kInt);
  if(nTone>W*H*.0008){const B=wallMask(body,W,H);add('tone',B.wm,B.wk,B.kOpen,B.kInt);}
@@ -318,7 +320,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
  dbg.nS=S.length;
  let bb=best.bb;
- let ops=findOpenings(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
+ let ops=(classifyGap.paper=!!dbg.paper,findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
  tm('pick');let sc=estimateScale(S,ops,bb);dbg.est=estimateScale.last.map(v=>+v.toFixed(1));
  try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];dimScale.split=!!dbg.paper;
   // prem8 photo stage: dimension text may be upside down (plan shot at 180°) or too small/blurred for the 1x ink mask ->
@@ -339,7 +341,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
      const V=S.filter(q=>!q.hz),Hz=S.filter(q=>q.hz);if(V.length>=2&&Hz.length>=2){const xr=[Math.min(...V.map(q=>q.c-q.t/2)),Math.max(...V.map(q=>q.c+q.t/2))],yr=[Math.min(...Hz.map(q=>q.c-q.t/2)),Math.max(...Hz.map(q=>q.c+q.t/2))];
       S=S.map(q=>{const r=q.hz?xr:yr;return(q.a<r[0]-2||q.b>r[1]+2)?{...q,a:Math.max(q.a,r[0]),b:Math.min(q.b,r[1])}:q;}).filter(q=>q.b-q.a>q.t*2);}}}}}catch(e){dbg.dimErr=String(e);}
  tm('dims');if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
- ops=findOpenings(S,ink,W,H,sc.ppm,bb);
+ ops=(classifyGap.paper=!!dbg.paper,findOpenings)(S,ink,W,H,sc.ppm,bb);
  {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
  if(cyan){let nw=0;S.forEach((A,i)=>{const L=A.b-A.a;let run=-1;const h=Math.max(2,A.t/2+2);const isC=u=>{for(let v=-h;v<=h;v+=1){const x=Math.round(A.hz?u:A.c+v),y=Math.round(A.hz?A.c+v:u);if(x>=0&&y>=0&&x<W&&y<H&&cyan[y*W+x])return true;}return false;};
   for(let u=A.a;u<=A.b+1;u++){const on=u<=A.b&&isC(u);if(on&&run<0)run=u;if(!on&&run>=0){const lo=run,hi=u-1;run=-1;if(hi-lo>=.4*sc.ppm&&!ops.some(p=>p.i===i&&p.lo<hi&&p.hi>lo)){ops.push({i,j:null,end:'x',to:null,type:'window',lo,hi,inside:1,ext:true,g:hi-lo});nw++;}}}});dbg.cyanWin=nw;}
@@ -467,7 +469,7 @@ function parseDim(txt){// imperial: OCR reads ' and " as commas -> 32'6" = "32,6
 // a short bar touching no other wall at either end is a room label / text line read as a wall (blurred letters merge into a
 // solid bar in photos); real partitions meet another wall at least at one end
 function dropIsolated(S,W,H){const mx=Math.max(W,H),out=[],tm=median(S.map(q=>q.t))||0;for(const q of S){const L=q.b-q.a;if(L>=.085*mx||q.t>1.1*tm||q.t<6){out.push(q);continue;}
- const m=Math.max(q.t,6)*1.5+4;const near=(r,e)=>{if(r===q)return false;const rm=r.t/2+m;if(r.hz===q.hz)return Math.abs(r.c-q.c)<rm&&e>r.a-rm&&e<r.b+rm;return Math.abs(r.c-e)<rm&&q.c>r.a-rm&&q.c<r.b+rm;};
+ const m=Math.max(q.t,6)*1.5+4;const near=(r,e)=>{if(r===q)return false;const rm=r.t/2+m;if(r.hz===q.hz)return Math.abs(r.c-q.c)<.35*Math.max(r.t,q.t)+2&&e>r.a-rm&&e<r.b+rm;return Math.abs(r.c-e)<rm&&q.c>r.a-rm&&q.c<r.b+rm;};
  const gap=sg=>{let d=1e9;for(const r of S){if(r===q||r.hz!==q.hz||r.b<q.a||r.a>q.b)continue;const v=(r.c-q.c)*sg;if(v>0)d=Math.min(d,v);}return d;};
  if(S.some(r=>near(r,q.a))||S.some(r=>near(r,q.b))||Math.min(gap(1),gap(-1))<.06*mx)out.push(q);}return out;}
 function sheetFrame(ink,W,H){const lab=new Int32Array(W*H),st=[],hit=[];let id=0;
