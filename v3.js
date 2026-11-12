@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261112f';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261112g';
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -570,8 +570,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   g.position.set(f.p[0],l.elevation,f.p[1]);g.rotation.y=-((f.r||0)*Math.PI/2);g.userData.furn=f.t;g.userData.noCol=true;root.add(g);});
  // solid oak slab over whole footprint (guarantees readable floors from dollhouse + interior)
  if(xs.length&&zs.length){const fx0=Math.min(...xs),fx1=Math.max(...xs),fz0=Math.min(...zs),fz1=Math.max(...zs);
-  const oak=new THREE.MeshBasicMaterial({color:0xd2bea0, map:wood.clone(), toneMapped:false});
-  oak.map.colorSpace=THREE.SRGBColorSpace;oak.map.repeat.set(4,4);oak.map.needsUpdate=true;
+  const oak=M.floor;/* v12g: the footprint slab uses the chosen floor (style / Podlahy), no fixed oak */
   const slab=add(new THREE.BoxGeometry(Math.max(1,fx1-fx0-.55),.04,Math.max(1,fz1-fz0-.55)),oak,(fx0+fx1)/2,.008,(fz0+fz1)/2,0,1);slab.receiveShadow=false;slab.userData.floor=1;}
 
  // plinth strip around footprint for grounding

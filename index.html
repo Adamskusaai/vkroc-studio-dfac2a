@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/","three-mesh-bvh":"https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.1/build/index.module.js"}}</script>
-<link rel="modulepreload" href="app.js?v=20261112f"><link rel="modulepreload" href="icons.js?v=20261112f">
+<link rel="modulepreload" href="app.js?v=20261112g"><link rel="modulepreload" href="icons.js?v=20261112g">
 <style>
 :root{--ink:#0B0B0B;--paper:#F3F1ED;--w:#fff;--or:#E2552D;--orh:#C8461F;--g:#6B6B6B;--l:#E3DFD8;--l2:#ECE9E3;--r:14px;--sh:0 1px 2px rgba(11,11,11,.06),0 8px 24px rgba(11,11,11,.06);--f:Inter,system-ui,-apple-system,Segoe UI,sans-serif;--h:Archivo,Inter,sans-serif;--ease:cubic-bezier(.2,.8,.2,1)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:500 14px/1.45 var(--f);overflow:hidden}
@@ -125,14 +125,14 @@ body.pres #tbvw,body.pres .tb{display:none!important}
  #jumps{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:0;right:0;transform:none;max-width:none;padding:2px 10px;scrollbar-width:none}#jumps::-webkit-scrollbar{display:none}#jumps button{flex:0 0 auto}
  body.pres #tbvw .modes{display:none}
 }
-</style><style id="dock3css">/* v12d: visible 3D settings dock (replaces the hidden ✦ Vzhľad menu) */
+</style><style>/* v12g: leaving 3D hides every 3D-only overlay */body:not(.in3d) #dock3,body:not(.in3d) #stypick,body:not(.in3d) #look,body:not(.in3d) #tbvw,body:not(.in3d) #jumps,body:not(.in3d) #lvpick,body:not(.in3d) #pbar,body:not(.in3d) #agent,body:not(.in3d) #VRButton{display:none!important}</style><style id="dock3css">/* v12d: visible 3D settings dock (replaces the hidden ✦ Vzhľad menu) */
 #dock3{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));display:flex;gap:2px;padding:5px;background:#0B0B0BE6;border-radius:18px;z-index:32;max-width:96vw;overflow-x:auto;box-shadow:0 6px 20px #0004;scrollbar-width:none}
 #dock3::-webkit-scrollbar{display:none}
 #dock3 button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:60px;height:54px;padding:4px 6px;color:#fff;background:none;border:0;border-radius:13px;font:600 11px/1.1 inherit;cursor:pointer;flex:0 0 auto}
 #dock3 button:hover{background:#ffffff1a}#dock3 button.on{background:#E2552D}
 #dock3 .ic{width:22px;height:22px}
 #lookb{display:none!important}
-#stypick{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}#stypick button.sw{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 4px;font:600 11.5px inherit;border-radius:12px;border:1.5px solid #e5e1da;background:#fff;flex:none}#stypick button.sw.on{border-color:#E2552D;box-shadow:0 0 0 2px #E2552D33}#stypick .dots{display:flex;gap:3px}#stypick .dots i{width:16px;height:16px;border-radius:50%;border:1px solid #0002;display:block}
+#stypick{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}#stypick button.sw{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 4px;font:600 11.5px inherit;border-radius:12px;border:1.5px solid #e5e1da;background:#fff;flex:none}#stypick button.sw.on{border-color:#E2552D;box-shadow:0 0 0 2px #E2552D33;background:#FFF1EA!important;color:#1a1a1a!important}#stypick .dots{display:flex;gap:3px}#stypick .dots i{width:16px;height:16px;border-radius:50%;border:1px solid #0002;display:block}
 #look.one{position:fixed;top:auto;right:auto;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom));min-width:270px;max-width:94vw}
 #look.one label:not(.sel),#look.one .lkx:not(.sel){display:none!important}
 #look .lkx{display:flex;gap:8px;flex-wrap:wrap}#look .lkx button{flex:1;padding:9px 12px;border-radius:10px;border:1px solid #e5e1da;background:#fff;font:600 13px inherit;cursor:pointer}#look .lkx button.go{background:#E2552D;color:#fff;border-color:#E2552D}
@@ -182,5 +182,5 @@ body.pres #tbvw,body.pres .tb{display:none!important}
 </div></main>
 <div id="toasts"></div>
 <div id="ov"><div id="ovb"></div></div><input type="file" id="img" accept="image/*,application/pdf,.pdf,.heic,.heif" hidden><input type="file" id="imgs" accept="image/*,application/pdf,.pdf" multiple hidden><input type="file" id="ld" accept=".json" hidden>
-<script type="module" src="app.js?v=20261112f"></script>
+<script type="module" src="app.js?v=20261112g"></script>
 <div id="jumps" hidden></div><div id="lvpick" role="group" aria-label="Podlažie" hidden></div><div id="pbar"><div class="pbrand"><b class="pl">VKRO<em>Č</em></b><span id="prn"></span></div><div class="pbtn"><button id="ptour" class="go"><i data-i="next"></i><span>Auto-prehliadka</span></button><button id="pdoll"><i data-i="layers"></i><span>Bez strechy</span></button><button id="pext"><i data-i="home"></i><span>Exteriér</span></button><button id="pexit"><i data-i="x"></i><span>Ukončiť</span></button></div></div><div id="agent" hidden></div></body></html>
