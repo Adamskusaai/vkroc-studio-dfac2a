@@ -76,13 +76,43 @@ export async function loadKit() {
   return ready;
 }
 
+
+// v12e: tiny procedural PBR-ish detail maps (generated once, no downloads): wood grain, fabric weave, leather grain.
+// Neutral light-grey maps tinted by the style colour, so every style keeps its palette but loses the flat plastic look.
+const TX = {};
+function ptex(kind) {
+  if (TX[kind]) return TX[kind];
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d');
+  const im = x.createImageData(S, S), D = im.data; let seed = kind.length * 977;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const N = new Float32Array(S * S); for (let i = 0; i < S * S; i++) N[i] = rnd();
+  const sm = (u, v) => { u = ((u % S) + S) % S; v = ((v % S) + S) % S; const a = u | 0, b = v | 0, fu = u - a, fv = v - b, a1 = (a + 1) % S, b1 = (b + 1) % S;
+    return (N[b * S + a] * (1 - fu) + N[b * S + a1] * fu) * (1 - fv) + (N[b1 * S + a] * (1 - fu) + N[b1 * S + a1] * fu) * fv; };
+  for (let y = 0; y < S; y++) for (let X = 0; X < S; X++) {
+    let v;
+    if (kind === 'wood') { const t = y + 6 * sm(X / 24, y / 24) + 3 * sm(X / 6, y / 40); v = .86 + .1 * Math.sin(t * .55) * Math.sin(t * .13 + 1) + .05 * (sm(X / 2, y / 30) - .5); }
+    else if (kind === 'fabric') { const w = ((X >> 1) + (y >> 1)) & 1; v = .9 + (w ? .045 : -.03) + .07 * (sm(X / 10, y / 10) - .5) + .04 * (N[y * S + X] - .5); }
+    else { v = .9 + .1 * (sm(X / 5, y / 5) - .5) + .07 * (sm(X / 20, y / 20) - .5) - (sm(X / 3, y / 3) > .82 ? .06 : 0); }
+    const k = Math.max(0, Math.min(255, v * 255)) | 0, i = (y * S + X) * 4; D[i] = D[i + 1] = D[i + 2] = k; D[i + 3] = 255; }
+  x.putImageData(im, 0, 0);
+  const T = new THREE.CanvasTexture(c); T.wrapS = T.wrapT = THREE.RepeatWrapping; T.colorSpace = THREE.SRGBColorSpace; T.repeat.set(kind === 'fabric' ? 3 : 2, kind === 'fabric' ? 3 : 1); T.anisotropy = 4;
+  return (TX[kind] = T);
+}
+const MC = new Map();
+function stdT(c, kind, rough, metal = 0) {
+  const k = c + '|' + kind + '|' + rough + '|' + metal; if (MC.has(k)) return MC.get(k);
+  let map = null; try { if (typeof document !== 'undefined') map = ptex(kind); } catch (e) { map = null; }
+  const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: rough, metalness: metal, map });
+  MC.set(k, m); return m;
+}
 function proc(type, F, cols) {
   const g = new THREE.Group();
-  const wood = std(cols.wood || '#c4a07a', 0.55);
-  const fab = std(cols.fab || F.c || '#7a6854', 0.88);
+  const wood = stdT(cols.wood || '#c4a07a', 'wood', 0.55);
+  const LTH = cols.leather && (type === 'sofa' || type === 'armch' || type === 'lounge' || type === 'chair');
+  const fab = LTH ? stdT(cols.fab || F.c || '#7a4a2e', 'leather', 0.5, 0.05) : stdT(cols.fab || F.c || '#7a6854', 'fabric', 0.9);
   const white = std('#f4f1ec', 0.7);
-  const dark = std('#2a2c2e', 0.45, 0.2);
-  const metal = std('#b8bcc0', 0.35, 0.55);
+  const dark = std(cols.metal || '#2a2c2e', 0.45, 0.2);
+  const metal = std(cols.metal || '#b8bcc0', cols.metal ? 0.4 : 0.35, cols.metal ? 0.7 : 0.55);
   const { w, d, h } = F;
 
   if (type === 'bed' || type === 'bed1') {
@@ -90,7 +120,7 @@ function proc(type, F, cols) {
     box(g, wood, 0, 0.14, 0, w, 0.22, d, 0.04);
     box(g, std('#f2ebe3', 0.92), 0, 0.34, 0.02, w - 0.1, 0.12, d - 0.14, 0.05);
     box(g, wood, 0, 0.5, -d / 2 + 0.05, w, 0.65, 0.07, 0.03);
-    const duvet = std(cols.bed || '#5e4330', 0.9);
+    const duvet = stdT(cols.bed || '#5e4330', 'fabric', 0.92);
     box(g, duvet, 0, 0.46, d * 0.08, w - 0.12, 0.14, d * 0.68, 0.06);
     const pw = type === 'bed' ? w * 0.34 : w * 0.48;
     box(g, std('#f5eee6', 0.95), type === 'bed' ? -w * 0.2 : 0, 0.56, -d / 2 + 0.3, pw, 0.12, 0.32, 0.05);
@@ -102,7 +132,7 @@ function proc(type, F, cols) {
     // bunk bed: 4 posts, two decks, guard rail on top, ladder at the foot end
     ao(g, w + 0.1, d + 0.1);
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => box(g, wood, (a * (w - 0.06)) / 2, h / 2, (b * (d - 0.06)) / 2, 0.06, h, 0.06, 0.01));
-    const duvet = std(cols.bed || '#5e4330', 0.9), sheet = std('#f2ebe3', 0.92), pil = std('#f5eee6', 0.95);
+    const duvet = stdT(cols.bed || '#5e4330', 'fabric', 0.92), sheet = std('#f2ebe3', 0.92), pil = std('#f5eee6', 0.95);
     [0.2, 1.15].forEach((y) => {
       box(g, wood, 0, y, 0, w, 0.08, d, 0.02);
       box(g, sheet, 0, y + 0.1, 0, w - 0.1, 0.12, d - 0.1, 0.04);
@@ -117,7 +147,7 @@ function proc(type, F, cols) {
     box(g, wood, -w / 2 + 0.03, 0.85, d / 2 - 0.42, 0.04, 1.3, 0.04, 0);
   } else if (type === 'sofa') {
     ao(g, w + 0.1, d + 0.1);
-    const linen = std(cols.fab || '#6e5c4a', 0.9);
+    const linen = stdT(cols.fab || '#6e5c4a', 'fabric', 0.9);
     box(g, wood, 0, 0.04, 0, w - 0.1, 0.06, d - 0.1, 0.02);
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) =>
       box(g, wood, (a * w) / 2 - a * 0.12, 0.08, (b * d) / 2 - b * 0.1, 0.05, 0.14, 0.05, 0.01)
@@ -137,7 +167,7 @@ function proc(type, F, cols) {
     }
   } else if (type === 'armch') {
     ao(g, w + 0.08, d + 0.08);
-    const linen = std(cols.fab || '#7a6854', 0.9);
+    const linen = stdT(cols.fab || '#7a6854', 'fabric', 0.9);
     box(g, wood, 0, 0.05, 0, w - 0.08, 0.06, d - 0.08, 0.02);
     box(g, linen, 0, 0.28, 0, w - 0.06, 0.28, d - 0.06, 0.05);
     box(g, linen, 0, 0.5, 0, w - 0.14, 0.12, d - 0.18, 0.04);
@@ -266,7 +296,7 @@ function proc(type, F, cols) {
     }
   } else if (type === 'rug' || type === 'runner') {
     const base = cols.fab || cols.rug || (type === 'runner' ? '#6a3a28' : '#a03828');
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), std(base, 1));
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), stdT(base, 'fabric', 1));
     m.position.set(0, 0.045, 0); m.receiveShadow = true; m.renderOrder=2; g.add(m);
     // patterned border + centre medallion readable from dollhouse
     const border = std(cols.border || '#d8c4a8', 1);
@@ -301,7 +331,7 @@ function proc(type, F, cols) {
     am.map.colorSpace = THREE.SRGBColorSpace;
     box(g, am, 0, 1.35, 0.02, w - 0.08, (h || 0.7) - 0.08, 0.015, 0);
   } else if (type === 'curtain') {
-    const cloth = std(cols.curtain || cols.fab || '#b8a890', 0.95);
+    const cloth = stdT(cols.curtain || cols.fab || '#b8a890', 'fabric', 0.95);
     box(g, wood, 0, 2.15, 0, w + 0.08, 0.035, 0.035, 0.01);
     box(g, cloth, -w * 0.28, 1.15, 0, w * 0.36, 1.9, 0.04, 0.02);
     box(g, cloth, w * 0.28, 1.15, 0, w * 0.36, 1.9, 0.04, 0.02);
