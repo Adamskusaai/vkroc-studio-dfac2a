@@ -306,6 +306,9 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  add('ink',base.wm,base.wk,base.kOpen,base.kInt);
  if(nTone>W*H*.0008){const B=wallMask(body,W,H);add('tone',B.wm,B.wk,B.kOpen,B.kInt);}
  {const km=Math.max(6,Math.round(.022*Math.max(W,H))),pfS=compsFilter(nTone>W*H*.0008?body:ink,W,H,k=>{const a=k.x1-k.x0+1,b=k.y1-k.y0+1;return Math.max(a,b)>=.025*Math.max(W,H)||Math.min(a,b)<.3*Math.max(a,b);}),pf0=pairFill(pfS,W,H,km,lw*2+2),pf=close1(close1(pf0,W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-pfS[i];dbg.pairD=+(d*7/(W*H)).toFixed(4);if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('pair',B.wm,B.wk,B.kOpen,B.kInt);}}
+ /* v12b light poché: CAD exports draw partitions as a dark outline pair with a LIGHT grey fill (≈ #cdcdcd) next to dark hatched outer walls;
+    the ink threshold sees only the two hairlines. A looser threshold + opening (drops 1-2 px furniture/label lines, keeps ≥ kOpen wide bodies) reads them as solid walls. */
+ if(!dbg.paper&&!(globalThis.__PF||{}).noLP){const m2=inkMask(n,W,H,.86);let lp=0;for(let i=0;i<W*H;i+=5)if(m2[i]&&!ink[i])lp++;dbg.lpF=+(lp*5/(W*H)).toFixed(4);if(lp*5>W*H*.004){const ok=Math.max(4,Math.round(base.kOpen*.7));const hm=openK(m2,W,H,ok);const B=wallMask(hm,W,H);add('lp',B.wm,B.wk,B.kOpen,B.kInt);}}
  // prem8 sketch stage: thin, wobbly, broken hand strokes (pen/pencil photo) -> looser threshold, short axis closings bridge
  // breaks and wobble, then the double-line walls are filled like 'pair'. Only when strokes are thin and no reading closes rooms.
  if(!o.noSketch&&((globalThis.__PF||{}).oldSk?lw<=3:(dbg.paper?lw<=3:lw<=2))&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
@@ -315,7 +318,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  for(const src of solidOK?[]:nTone>W*H*.0008?[ink,body]:[ink]){const inkBig=compsFilter(src,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.025*Math.max(W,H));
   for(const kc of[5,9,13]){const kk=Math.max(kc,lw*3+1);const hm=openK(closeK(inkBig,W,H,kk),W,H,Math.max(base.kOpen,Math.round(kc*.6)));add((src===ink?'h':'th')+kc,hm,Math.max(base.wk,kk),base.kOpen,base.kInt);}}
  tm('var');if(!V.length)return null;
- const pen=v=>v.name==='pair'?.35:0;let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q-pen(v)>best.q.Q-pen(best)+.05)best=v;}
+ const pen=v=>v.name==='pair'||v.name==='lp'?.35:0;let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q-pen(v)>best.q.Q-pen(best)+.05)best=v;}
  dbg.pick=best.name;dbg.nR=best.q.nR;dbg.Q=best.q.Q;let S=pruneLoose(best.S);dbg.pruned=best.S.length-S.length;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
  dbg.nS=S.length;
