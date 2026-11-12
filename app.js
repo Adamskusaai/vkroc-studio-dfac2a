@@ -1,7 +1,7 @@
-import {detectWalls,gapMerge} from './cv.js?v=20261112h';
-import {readPlan} from './plan.js?v=20261112h';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261112h';
-import {I,paint} from './icons.js?v=20261112h';
+import {detectWalls,gapMerge} from './cv.js?v=20261112i';
+import {readPlan} from './plan.js?v=20261112i';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261112i';
+import {I,paint} from './icons.js?v=20261112i';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
 function stairRect(st){const L=st.length||3.6,W=st.width||1,d=st.dir||0,c=Math.cos(d),s=Math.sin(d),xs=[0,L*c,-W*s,L*c-W*s].map(v=>v+st.pos[0]),zs=[0,L*s,W*c,L*s+W*c].map(v=>v+st.pos[1]);return[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];}
@@ -185,7 +185,7 @@ function assignTypes(R,L){const RS=R.r;if(!RS.length)return {};const key=R.k+'|'
  for(const M of Object.values(U)){const free=()=>M.filter(r=>!T[r.id]).sort((a,b)=>b.a-a.a),has=n=>M.some(r=>T[r.id]&&T[r.id].startsWith(n));
   // corridors / entrance
   const hall=r=>{if(Object.values(T).filter(n=>n==='Chodba'||n==='Predsieň').length>=3)return;/* max 3 halls per house */T[r.id]=ext.has(r.id)&&!has('Predsieň')?'Predsieň':!has('Chodba')?'Chodba':!has('Predsieň')?'Predsieň':'Chodba';};
-  free().forEach(r=>{const I=info(r);if(I.asp>2.2&&I.mn<2.1&&r.a<26)hall(r);});
+  free().forEach(r=>{const I=info(r);if(I.asp>2.2&&I.mn<2.1&&r.a<26)hall(r);});/* v12i: an L-shaped/irregular room opening to 3+ rooms is a hallway */const nbr=r=>RS.filter(q=>{if(q===r)return false;const A=r.bb,B=q.bb,ox=Math.min(A[2],B[2])-Math.max(A[0],B[0]),oz=Math.min(A[3],B[3])-Math.max(A[1],B[1]);return(ox>=.6&&oz>-.6)||(oz>=.6&&ox>-.6);}).length;free().forEach(r=>{if(!has('Chodba')&&(adj[r.id].size>=3||nbr(r)>=6)&&info(r).fill<.7&&r.a<16)hall(r);});
   free().filter(r=>ext.has(r.id)&&r.a<9).slice(0,1).forEach(r=>{if(!has('Predsieň'))T[r.id]='Predsieň';});
   // tiny rooms
   free().filter(r=>r.a<2.8).sort((a,b)=>a.a-b.a).forEach(r=>{T[r.id]=!has('WC')?'WC':!has('Špajza')?'Špajza':'Komora';});
@@ -310,7 +310,7 @@ function dlg(title,body,btns,o={}){if(dlgRes)dlgRes(null);return new Promise(res
 addEventListener('keydown',e=>{if(e.key==='Escape'&&$('ov').classList.contains('on')){$('ov').onclick({target:$('ov')});}});
 var esc=t=>String(t).replace(/[<>&"]/g,c=>'&#'+c.charCodeAt(0)+';');
 async function askName(def,ti,ok){const r=await dlg(ti||'Názov projektu','<input type="text" value="'+esc(def)+'" placeholder="napr. Rodinný dom Kováč">',[['Zrušiť',null],[ok||'Vytvoriť',1,'go']]);return r?(r.name||def):null;}
-const shrink=(im,M=2000)=>{const D=Math.max(im.width,im.height),k=D<=2400?1:Math.min(1,M/D),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return c.toDataURL('image/jpeg',D>2000&&k===1?.92:.85);};/* v12g: big sheets (2000-2400 px) are neither downscaled nor heavily compressed; sheets up to 2400 px are not downscaled (keeps 10 px captions readable) */
+const shrink=(im,M=2000,jp)=>{const D=Math.max(im.width,im.height),k=D<=2400?1:Math.min(1,M/D),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return k===1&&D>2000?(jp?c.toDataURL('image/jpeg',.92):c.toDataURL('image/png')):c.toDataURL('image/jpeg',.85);};/* v12i: no downscale -> lossless PNG (browser JPEG encoders differ, so the read differed per device) *//* v12g: big sheets (2000-2400 px) are neither downscaled nor heavily compressed; sheets up to 2400 px are not downscaled (keeps 10 px captions readable) */
 let pdfjs=null;
 async function readPdf(f){busy('Načítavam PDF…');try{if(!pdfjs){pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs');pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';}
  const doc=await pdfjs.getDocument({data:await f.arrayBuffer()}).promise;let n=1;busy(0);
@@ -318,7 +318,7 @@ async function readPdf(f){busy('Načítavam PDF…');try{if(!pdfjs){pdfjs=await 
  busy('Vykresľujem stranu '+n+'…');const pg=await doc.getPage(n),v0=pg.getViewport({scale:1}),sc=2400/Math.max(v0.width,v0.height),vp=pg.getViewport({scale:sc}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
  await pg.render({canvasContext:x,viewport:vp}).promise;busy(0);return shrink(c);}catch(e){busy(0);console.warn(e);dlg('PDF sa nepodarilo otvoriť','<p>Skúste výkres uložiť ako obrázok (JPG/PNG) alebo urobiť snímku obrazovky.</p>',[['OK',1,'go']]);return null;}}
 function readImg(f){if(/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name))return readPdf(f);
- return new Promise(res=>{const u=URL.createObjectURL(f),im=new Image();im.onload=()=>{res(shrink(im));URL.revokeObjectURL(u);};
+ return new Promise(res=>{const u=URL.createObjectURL(f),im=new Image();im.onload=()=>{res(shrink(im,2000,/jpe?g/i.test(f.type)||/\.jpe?g$/i.test(f.name)));URL.revokeObjectURL(u);};
   im.onerror=()=>{res(null);dlg('Obrázok sa nedá otvoriť',/hei[cf]/i.test(f.type+f.name)?'<p>Formát HEIC (fotky z iPhonu) tento prehliadač nevie zobraziť. Na iPhone: Nastavenia → Fotoaparát → Formáty → <b>Najkompatibilnejšie</b>, alebo pošlite fotku ako JPG / urobte snímku obrazovky.</p>':'<p>Podporované sú JPG, PNG, WebP a PDF.</p>',[['OK',1,'go']]);};im.src=u;});}
 let imgMode='ask',calPts=[];
 function lvUI(){const sel=$('lvl');sel.innerHTML=H.levels.map(l=>'<option'+(l.name===lvl?' selected':'')+'>'+esc(l.name)+'</option>').join('')+'<option value="+">+ Pridať podlažie</option>';$('stb').hidden=H.levels.length<2;}
@@ -350,7 +350,7 @@ function finishCorners(){if(cornerPts.length<4)return;cv._cornerMode=0;snap();co
 async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)toast('Najprv nahrajte výkres pre toto podlažie.','warn');return;}if(recBusy)return;recBusy=1;busy('Rozpoznávam steny…');await new Promise(r=>setTimeout(r,40));
  let R=null;const man=H.walls.some(w=>!w.auto);
  // new reader first (perspective, deskew, hatch, dimension text); old pipeline for site plans and as fallback
- if(!(H.underlay.site&&!man)&&!/[?&]cv=old/.test(location.search)){try{const P=readPlan(bg,{rect:H.underlay.rect||man,mW:(H.underlay.cal||man)?bgW:null});if(P&&P.walls.length>=4&&(P.conf>=.45||(P.dbg&&P.dbg.nR>=2))){R=P;if(man)R.guess=false;const lvn=LV().name;H.rlab=(H.rlab||[]).filter(l=>l.level!==lvn).concat((P.labels||[]).map(l=>({level:lvn,p:l.p,n:l.n})));H.rarea=(H.rarea||[]).filter(l=>l.level!==lvn).concat(((P.dbg&&P.dbg.areas)||[]).map(l=>({level:lvn,p:l.p,v:l.v})));}window.__plan=P?{n:P.walls.length,conf:+P.conf.toFixed(2),scale:P.scaleSrc,dims:P.dbg&&P.dbg.dims,log:P.dbg&&P.dbg.dimLog,pick:P.dbg&&P.dbg.pick,nR:P.dbg&&P.dbg.nR,sw:P.dbg&&P.dbg.stackWin,ops:P.dbg&&P.dbg.ops,lab:P.dbg&&P.dbg.labels,wlog:P.dbg&&P.dbg.wlog}:null;}catch(e){console.warn(e);}}
+ if(!(H.underlay.site&&!man)&&!/[?&]cv=old/.test(location.search)){try{const PO={rect:H.underlay.rect||man,mW:(H.underlay.cal||man)?bgW:null},P=readPlan(bg,PO);window.__lastP={o:PO,bgw:bg.width,bgh:bg.height,labels:P&&P.labels,words:P&&P.dbg&&P.dbg.words,nw:P&&P.walls.length,ppm:P&&P.dbg&&P.dbg.ppm,t:P&&P.dbg&&P.dbg.t,paper:P&&P.dbg&&P.dbg.paper};if(P&&P.walls.length>=4&&(P.conf>=.45||(P.dbg&&P.dbg.nR>=2))){R=P;if(man)R.guess=false;const lvn=LV().name;H.rlab=(H.rlab||[]).filter(l=>l.level!==lvn).concat((P.labels||[]).map(l=>({level:lvn,p:l.p,n:l.n})));H.rarea=(H.rarea||[]).filter(l=>l.level!==lvn).concat(((P.dbg&&P.dbg.areas)||[]).map(l=>({level:lvn,p:l.p,v:l.v})));}window.__plan=P?{n:P.walls.length,conf:+P.conf.toFixed(2),scale:P.scaleSrc,dims:P.dbg&&P.dbg.dims,log:P.dbg&&P.dbg.dimLog,pick:P.dbg&&P.dbg.pick,nR:P.dbg&&P.dbg.nR,sw:P.dbg&&P.dbg.stackWin,ops:P.dbg&&P.dbg.ops,lab:P.dbg&&P.dbg.labels,wlog:P.dbg&&P.dbg.wlog}:null;}catch(e){console.warn(e);}}
  if(!R)try{R=detectWalls(bg,{sens:+$('sens').value,mW:H.underlay.cal||man?bgW:null,rect:H.underlay.rect||man,site:H.underlay.site&&!man,w:bgW});if(man)R.guess=false;}catch(e){console.warn(e);}
  const ws=R?R.walls:[];busy(0);recBusy=0;if(!nosnap)snap();const lv=LV();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lv.name));
  if(R&&!H.underlay.rect&&!man){H.underlay={src:R.mode==='plan'?R.canvas.toDataURL('image/jpeg',.85):H.underlay.src,w:R.w,rect:1,guess:R.guess,site:R.mode==='site'?1:0};}else if(R&&R.guess&&!H.underlay.cal){H.underlay.w=R.w;H.underlay.guess=true;}
@@ -391,9 +391,9 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
  else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
-const DEMO_V='20261112h';
+const DEMO_V='20261112i';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
-async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261112h')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
+async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261112i')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
 if(/[?&]demo=2/.test(location.search))setTimeout(()=>demo2(),400);
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
@@ -437,7 +437,7 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261112h');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261112i');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 // prem10 storey picker (Bez strechy): Všetko / 1NP / 2NP …; only for multi-storey houses. Picking a storey = it becomes the top cut (upper storeys hidden, lower ones ghosted).
 let LVSEL=-1;function lvPickUI(md){const P=$('lvpick');if(!P)return;const ok=md==='doll'&&H&&H.levels&&H.levels.length>1;P.hidden=!ok;if(!ok)return;
  P.innerHTML='';[['Všetko',-1],...H.levels.map((l,i)=>[l.name,i])].forEach(([t,i])=>{const b=document.createElement('button');b.textContent=t;b.dataset.l=t;b.setAttribute('aria-pressed',LVSEL===i?'true':'false');if(LVSEL===i)b.classList.add('on');

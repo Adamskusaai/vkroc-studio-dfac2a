@@ -1,3 +1,4 @@
+import {LTJ} from './ltpl.js?v=20261112i';
 // plan.js — robust floor-plan reader (plain JS, no deps). prem8.
 // readPlan(img,{rect}) -> {walls:[{start,end,thickness,op:[]}], canvas, w, guess, mode:'plan', conf, scaleSrc, dbg} | null
 // Steps: paper detect + perspective warp -> colour-annotation removal -> illumination normalisation -> deskew ->
@@ -394,7 +395,8 @@ function pruneLoose(S){let ch=1;while(ch&&S.length>4){ch=0;for(const s of S){con
 
 // ---------- room labels (printed words, letter templates + fuzzy dictionary; SK/CZ/DE/EN incl. abbreviations) ----------
 let LTPL=null;const LCH='ABCDEFGHIJKLMNOPRSTUVWZYabcdefghijklmnoprstuvwzy';
-function letterTemplates(){if(LTPL)return LTPL;LTPL=[];const fams=['Arial','DejaVu Sans','Liberation Sans','Roboto','Verdana','Arial Narrow','sans-serif'];const c=mk(80,80),x=c.getContext('2d');
+/* v12i: letter templates are pre-rendered (ltpl.js) so text reading is identical on every device/font set */function letterTemplates(){if(LTPL)return LTPL;if(LTJ&&LTJ.length&&!(globalThis.__PF||{}).liveLT){LTPL=LTJ.map(e=>({ch:e[0],g:Float32Array.from(e[1],v=>v/255),asp:e[2],top:e[3],bot:e[4]}));return LTPL;}return letterTemplatesLive();}
+globalThis.__LTlive=()=>letterTemplatesLive();function letterTemplatesLive(){LTPL=null;if(LTPL)return LTPL;LTPL=[];const fams=['Arial','DejaVu Sans','Liberation Sans','Roboto','Verdana','Arial Narrow','sans-serif'];const c=mk(80,80),x=c.getContext('2d');
  for(const f of fams)for(const wt of['normal','bold'])for(const ch of LCH){x.setTransform(1,0,0,1,0,0);x.fillStyle='#fff';x.fillRect(0,0,80,80);x.fillStyle='#000';x.font=`${wt} 52px ${f}`;x.textBaseline='alphabetic';x.fillText(ch,8,62);
   const d=x.getImageData(0,0,80,80).data,m=new Uint8Array(6400);for(let i=0;i<6400;i++)m[i]=d[i*4]<128?1:0;let x0=80,y0=80,x1=-1,y1=-1;for(let y=0;y<80;y++)for(let xx=0;xx<80;xx++)if(m[y*80+xx]){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(y<y0)y0=y;if(y>y1)y1=y;}
   if(x1<0)continue;LTPL.push({ch,g:grid(m,80,x0,y0,x1+1,y1+1),asp:(x1-x0+1)/(y1-y0+1),top:y0,bot:y1});}
