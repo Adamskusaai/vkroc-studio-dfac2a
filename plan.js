@@ -327,7 +327,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   // retry on the 180°-rotated mask and on a 2x bilinear upscale of the cleaned page (own threshold), lengths scaled back
   const r180=(m,w,h)=>{const o=new Uint8Array(w*h);for(let i=0;i<w*h;i++)o[i]=m[w*h-1-i];return o;};
   const tryD=(m,w,h,f,flip)=>{const b2=bb.map(v=>v*f),bq=flip?[w-b2[2],h-b2[3],w-b2[0],h-b2[1]]:b2;const R=dimScale(flip?r180(m,w,h):m,w,h,bq,tE*f,sc.ppm*f);if(R&&R.lines)R.lines=R.lines.map(L=>{let v=L.v/f,a=L.a/f,b=L.b/f;if(flip){const Wv=L.rot?W:H,Wu=L.rot?H:W;v=Wv-v;[a,b]=[Wu-b,Wu-a];}return{...L,v,a,b};});return R?{...R,ppm:R.ppm/f,via:f+(flip?'r':'')}:null;};
-  let D=tryD(ink,W,H,1,0);
+  dimScale.areas=[];let D=tryD(ink,W,H,1,0);dbg.areasPx=dimScale.areas;dimScale.areas=null;
   if(!D||D.n<2){const D2=tryD(ink,W,H,1,1);if(D2&&(!D||D2.n>D.n))D=D2;}
   if((!D||D.n<2)&&W*H<4.5e6&&(dbg.paper||W*H<1.2e6||(globalThis.__PF||{}).up)){const W2=W*2,H2=H*2,u=new Uint8Array(W2*H2);for(let y=0;y<H2;y++){const fy=Math.min(H-1.001,Math.max(0,(y-.5)/2)),y0=fy|0,ay=fy-y0;for(let x=0;x<W2;x++){const fx=Math.min(W-1.001,Math.max(0,(x-.5)/2)),x0=fx|0,ax=fx-x0,i=y0*W+x0;const v=(n[i]*(1-ax)+n[i+1]*ax)*(1-ay)+(n[i+W]*(1-ax)+n[i+W+1]*ax)*ay;u[y*W2+x]=v<.55?1:0;}}
    if(o.debug){const hh=Math.round(H2*.3),dc=mk(W2,hh),x=dc.getContext('2d'),id=x.createImageData(W2,hh);for(let i=0;i<W2*hh;i++){const v=u[i]?0:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);dbg.uimg=dc.toDataURL();}
@@ -358,7 +358,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  // confidence: closed outline + reasonable count + interior walls
  const cov=sideCoverage(S,bb);const conf=Math.min(1,(cov.n/4)*.6+(S.length>=6?.25:S.length/24)+(ops.length?.15:0));
  dbg.cov=cov;dbg.ops=ops.length;dbg.scale=sc.src;dbg.ppm=+ppm.toFixed(2);
- let labels=[];if(!o.noLabels){try{const t0=performance.now();readLabels.log=[];readLabels.words=[];readLabels.wlog=[];labels=readLabels(ink,W,H,[bb[0]-2,bb[1]-2,bb[2]+2,bb[3]+2],ppm).map(l=>({n:l.n,s:l.s,t:l.t,p:[r(l.p[0]),r(l.p[1])]}));dbg.labels=labels.map(l=>l.t+'>'+l.n);dbg.wlog=readLabels.wlog;dbg.werr=readLabels.werr;dbg.wordsP=readLabels.words.map(w=>({t:w.t,p:[r(w.p[0]),r(w.p[1])]}));dbg.words=readLabels.log.slice(0,40);dbg.tLab=Math.round(performance.now()-t0);}catch(e){dbg.labErr=String(e);}}
+ let labels=[];if(!o.noLabels){try{const t0=performance.now();readLabels.log=[];readLabels.words=[];readLabels.wlog=[];labels=readLabels(ink,W,H,[bb[0]-2,bb[1]-2,bb[2]+2,bb[3]+2],ppm).map(l=>({n:l.n,s:l.s,t:l.t,p:[r(l.p[0]),r(l.p[1])]}));dbg.labels=labels.map(l=>l.t+'>'+l.n);dbg.areas=(dbg.areasPx||[]).map(q=>({v:q.v,p:[r(q.p[0]),r(q.p[1])]}));delete dbg.areasPx;dbg.wlog=readLabels.wlog;dbg.werr=readLabels.werr;dbg.wordsP=readLabels.words.map(w=>({t:w.t,p:[r(w.p[0]),r(w.p[1])]}));dbg.words=readLabels.log.slice(0,40);dbg.tLab=Math.round(performance.now()-t0);}catch(e){dbg.labErr=String(e);}}
  tm('end');return{walls,labels,canvas:c,w:Math.round(W/ppm*100)/100,guess:sc.src!=='user'&&sc.src!=='dims',mode:'plan',conf,scaleSrc:sc.src,dbg};}
 function bbox(S){return[Math.min(...S.map(s=>s.hz?s.a:s.c)),Math.min(...S.map(s=>s.hz?s.c:s.a)),Math.max(...S.map(s=>s.hz?s.b:s.c)),Math.max(...S.map(s=>s.hz?s.c:s.b))];}
 function sideCoverage(S,bb){const cov=(hz,c,lo,hi)=>S.filter(s=>s.hz===hz&&Math.abs(s.c-c)<2*s.t+3).reduce((a,s)=>a+Math.max(0,Math.min(s.b,hi)-Math.max(s.a,lo)),0)/Math.max(1,hi-lo);
@@ -420,7 +420,7 @@ export function readLabels(ink,W,H,bb,ppm){const out=[];const UNM=[];const T=let
   const WO=[],WT=wordTemplates(),hiT=out.length>0;/* letter OCR already read some words: only very clear shape matches *//* only when the letter OCR read nothing at all (hand-lettered sketch) */for(const u of M){if(!WT.length)break;const gw=wgrid(ink,W,u.x0,u.y0,u.x1,u.y1),asp=(u.x1-u.x0)/(u.y1-u.y0);let b1=null,b2=null;
    for(const t of WT){const pa=Math.abs(Math.log(asp/t.asp));if(pa>.45)continue;const sc=corr(gw,t.g)-pa*.6;if(!b1||sc>b1.s){if(b1&&b1.n!==t.n)b2=b1;b1={n:t.n,s:sc,w:t.w};}else if(t.n!==b1.n&&(!b2||sc>b2.s))b2={n:t.n,s:sc};}
    (readLabels.wlog=readLabels.wlog||[]).push((b1?b1.w+':'+b1.s.toFixed(2)+'/'+(b2?b2.s.toFixed(2):'-'):'none')+'@'+Math.round(u.x0)+','+Math.round(u.y0));
-   if(b1&&b1.s>=(hiT||RARE.has(b1.n)?.66:.56)&&(!b2||b1.s-b2.s>=(hiT?.06:.05)))WO.push({n:b1.n,s:+b1.s.toFixed(2),t:'~'+b1.w,p:[(u.x0+u.x1)/2,(u.y0+u.y1)/2],x0:u.x0,x1:u.x1,h:u.y1-u.y0});}
+   if(b1&&((b1.s>=(hiT||RARE.has(b1.n)?.66:.56)&&(!b2||b1.s-b2.s>=(hiT?.06:.05)))||/* v12b: clean CAD caption, far ahead of every other word */(!RARE.has(b1.n)&&b1.s>=.6&&(!b2||b1.s-b2.s>=.3))))WO.push({n:b1.n,s:+b1.s.toFixed(2),t:'~'+b1.w,p:[(u.x0+u.x1)/2,(u.y0+u.y1)/2],x0:u.x0,x1:u.x1,h:u.y1-u.y0});}
   /* the same non-bedroom name read twice by shape = repeated furniture captions ("Wall locker" x4), not room names */for(const l of WO)if(!(l.n==='Izba'&&out.concat(WO).some(q=>q!==l&&/^Detsk/.test(q.n)&&Math.abs(q.p[1]-l.p[1])<.5*ppm&&l.p[0]-q.p[0]>0&&l.p[0]-q.p[0]<3*ppm))/* 'izba' of 'Detská izba' */&&(l.n==='Izba'||l.n==='Detská izba'||WO.filter(q=>q.n===l.n).length<2))out.push(l);}catch(e){readLabels.werr=String(e);}
  /* prem8 y: 'izba' as the 2nd word of a two-word name ('Detská izba', 'Pracovná izba', 'Obývacia izba') is not its own room */
  return out.filter(l=>!(l.n==='Izba'&&out.some(q=>q!==l&&q.n!=='Izba'&&q.x1!=null&&l.x0!=null&&Math.abs(q.p[1]-l.p[1])<.6*Math.max(q.h,l.h)&&q.x1<l.x0+2&&l.x0-q.x1<1.3*Math.max(q.h,l.h))));}
@@ -498,7 +498,7 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
    if(g.length>=2&&g.length<=8)strings.push({rot,g});}}
  for(const S of strings){const ord=S.rot?[...S.g].sort((a,b)=>b.y0-a.y0):S.g;// vertical text reads bottom->top
   let best=null;for(const dir of S.rot?[1,-1]:[0]){const chars=S.rot?(dir>0?ord:[...ord].reverse()):ord;const r=readString(chars,ink,W,dir);if(!best||r.s>best.s)best={...r,dir};}
-  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;
+  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);if(m&&m[3]){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length,v=+(m[1]+'.'+m[2]);if(v>=1&&v<=150&&cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3])dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;
   // dimension line next to the text, then the nearest perpendicular marks (ticks / extension lines) on each side
   const x0=Math.min(...S.g.map(c=>c.x0)),x1=Math.max(...S.g.map(c=>c.x1)),y0=Math.min(...S.g.map(c=>c.y0)),y1=Math.max(...S.g.map(c=>c.y1)),th=S.rot?x1-x0:y1-y0;
   // work in (u along line, v across) coordinates
