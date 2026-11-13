@@ -185,7 +185,10 @@ function axisSegs(wm,W,H,minLen,hz){const o=open1(wm,W,H,minLen,hz);const segs=[
    if(x>0&&o[j-1]&&!lab[j-1]){lab[j-1]=id;st.push(j-1);}if(x<W-1&&o[j+1]&&!lab[j+1]){lab[j+1]=id;st.push(j+1);}if(y>0&&o[j-W]&&!lab[j-W]){lab[j-W]=id;st.push(j-W);}if(y<H-1&&o[j+W]&&!lab[j+W]){lab[j+W]=id;st.push(j+W);}}
   const L=hz?x1-x0+1:y1-y0+1,T=n/L;if(L<minLen||T>L*.6)continue;
   // split thick blobs (two parallel walls touching) are rare; use mean thickness
-  segs.push(hz?{hz:1,a:x0,b:x1+1,c:(y0+y1+1)/2,t:Math.max(1,T)}:{hz:0,a:y0,b:y1+1,c:(x0+x1+1)/2,t:Math.max(1,T)});}
+  /* v13d (wide-pair readings only): an L/T-shaped component (long wall + a stub hanging off it) has a bbox far thicker than its
+     mean thickness; take the dense band around the fullest row/column instead of the bbox centre */
+  let cc=hz?(y0+y1+1)/2:(x0+x1+1)/2,tt=Math.max(1,T);const ext=hz?y1-y0+1:x1-x0+1;if(axisSegs.dense&&ext>2.5*T+2){const cnt=new Int32Array(ext);for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const j=y*W+x;if(lab[j]===id)cnt[hz?y-y0:x-x0]++;}let mI=0;for(let k=1;k<ext;k++)if(cnt[k]>cnt[mI])mI=k;let k0=mI,k1=mI;while(k0>0&&cnt[k0-1]>=.6*cnt[mI])k0--;while(k1<ext-1&&cnt[k1+1]>=.6*cnt[mI])k1++;cc=(hz?y0:x0)+(k0+k1+1)/2;tt=k1-k0+1;}
+  segs.push(hz?{hz:1,a:x0,b:x1+1,c:cc,t:tt}:{hz:0,a:y0,b:y1+1,c:cc,t:tt});}
  return segs;}
 function mergeColinear(S,gapMax){let ch=1;while(ch){ch=0;for(let i=0;i<S.length&&!ch;i++)for(let j=i+1;j<S.length&&!ch;j++){const A=S[i],B=S[j];if(A.hz!==B.hz)continue;if(Math.abs(A.c-B.c)>Math.max(A.t,B.t)*.5+1)continue;if(Math.abs(A.t-B.t)>Math.max(A.t,B.t)*.5+1)continue;
   const g=Math.max(A.a,B.a)-Math.min(A.b,B.b);if(g>gapMax)continue;const LA=A.b-A.a,LB=B.b-B.a;S[i]={hz:A.hz,a:Math.min(A.a,B.a),b:Math.max(A.b,B.b),c:(A.c*LA+B.c*LB)/(LA+LB),t:(A.t*LA+B.t*LB)/(LA+LB),op:[...(A.op||[]),...(B.op||[])]};S.splice(j,1);ch=1;}}return S;}
@@ -238,14 +241,14 @@ function estimateScale(S,ops,bb){const bw=Math.max(bb[2]-bb[0],bb[3]-bb[1]);cons
  estimateScale.last=[pD,pT,doors.length,outer.length];return{ppm,src};}
 // outline walls: two thin parallel lines with nothing between (white or grey) -> fill the band.
 // Stacks of 3+ lines (windows) and hatch are left alone.
-function pairFill(ink,W,H,kmax,lwm){const o=new Uint8Array(ink);
+function pairFill(ink,W,H,kmax,lwm,strict){const o=new Uint8Array(ink);
  for(const hz of[1,0]){const N=hz?W:H,L=hz?H:W;const at=(u,v)=>hz?v*W+u:u*W+v;const P=[];// scan across the wall direction
   for(let u=0;u<N;u++){const R=[];let v=0;while(v<L){if(ink[at(u,v)]){const v0=v;while(v<L&&ink[at(u,v)])v++;R.push([v0,v-1]);}else v++;}const pu=[];
    for(let k=0;k+1<R.length;k++){const a=R[k],b=R[k+1],g=b[0]-a[1]-1;if(g<1||g>kmax)continue;if(a[1]-a[0]>lwm||b[1]-b[0]>lwm)continue;
     const gp=k>0?a[0]-R[k-1][1]-1:1e9,gn=k+2<R.length?R[k+2][0]-b[1]-1:1e9;if(gp<=kmax*1.2||gn<=kmax*1.2)continue;pu.push([a[1]+1,b[0]-1]);k++;}
    P.push(pu);}
   // keep only bands that continue along the wall (hatch / text give scattered pairs)
-  for(let u=0;u<N;u++)for(const[p0,p1]of P[u]){let ok=0;for(let d=-3;d<=3;d++){if(!d||u+d<0||u+d>=N)continue;if(P[u+d].some(q=>Math.abs(q[0]-p0)<=Math.abs(d)+1&&Math.abs(q[1]-p1)<=Math.abs(d)+1))ok++;}
+  for(let u=0;u<N;u++)for(const[p0,p1]of P[u]){let ok=0;for(let d=-3;d<=3;d++){if(!d||u+d<0||u+d>=N)continue;{const tl=strict?1:Math.abs(d)+1;if(P[u+d].some(q=>Math.abs(q[0]-p0)<=tl&&Math.abs(q[1]-p1)<=tl))ok++;}}
    if(ok>=4)for(let w=p0;w<=p1;w++)o[at(u,w)]=1;}}
  return o;}
 function close1(m,W,H,L,hz){const r=L>>1;return inv(dil1(inv(dil1(m,W,H,r,hz)),W,H,r,hz));}
@@ -274,10 +277,41 @@ function quality(S,ops,bb,ppm,W,H){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/
  return{Q,nR,encl:encl/bbA};}
 // ---------- main ----------
 // prem8: digital (no paper found) uploads are read with both cleanings; the reading with the more plausible rooms wins
-export function readPlan(img,o={}){if(o._cm)return readPlan1(img,o);const R=readPlan0(img,o);if(R&&R.dbg&&!(R.dbg.nR>0)&&!o._cyan&&!(globalThis.__PF||{}).noCyan){/* outline open: retry with coloured window symbols as wall body */let C=null;try{C=readPlan1(img,{...o,_cm:R.dbg.cm||'new',_cyan:1,noPaper:!R.dbg.paper});}catch(e){C=null;}if(C&&C.dbg&&(C.dbg.nR||0)>0){C.dbg.cyanRetry=1;return C;}}return R;}
+// v13d: upload normalisation. Phone screenshots / tall pages carry the plan in a small part of the image (status bar, title,
+// footnotes, empty margins); the max-side working resolution then shrinks the drawing until thin walls vanish. Find the drawing
+// region (content blob holding most long thin axis lines, full-width UI bars ignored) and crop to it, so the reader's working
+// resolution goes to the drawing itself. Only clean (mostly white) images, only when the drawing is a small part of a tall/wide page.
+export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)return null;const s=Math.min(1,1000/Math.max(W0,H0)),W=Math.max(8,Math.round(W0*s)),H=Math.max(8,Math.round(H0*s));
+ const c=mk(W,H),x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.imageSmoothingQuality='high';x.drawImage(img,0,0,W,H);const g=grayOf(c),N=W*H;
+ let nl=0;for(let i=0;i<N;i++)if(g[i]>215)nl++;const light=nl/N,asp=Math.max(W,H)/Math.min(W,H);const info={light:+light.toFixed(2),asp:+asp.toFixed(2)};uploadRegion.info=info;if(light<.6)return null;
+ const d=new Uint8Array(N);for(let i=0;i<N;i++)d[i]=g[i]<165?1:0;
+ const T=30,Lm=Math.max(24,Math.round(.035*Math.max(W,H)));
+ const thV=new Uint16Array(N),thH=new Uint16Array(N);// dark extent across the line (filled areas / UI bars are thick)
+ for(let X=0;X<W;X++){let y=0;while(y<H){if(!d[y*W+X]){y++;continue;}let e=y;while(e<H&&d[e*W+X])e++;for(let k=y;k<e;k++)thV[k*W+X]=e-y;y=e;}}
+ for(let Y=0;Y<H;Y++){let xx=0;while(xx<W){if(!d[Y*W+xx]){xx++;continue;}let e=xx;while(e<W&&d[Y*W+e])e++;for(let k=xx;k<e;k++)thH[Y*W+k]=e-xx;xx=e;}}
+ const ln=new Uint8Array(N);let nLn=0;
+ for(let Y=0;Y<H;Y++){let xx=0;while(xx<W){const i=Y*W+xx;if(!(d[i]&&thV[i]<=T)){xx++;continue;}let e=xx;while(e<W&&d[Y*W+e]&&thV[Y*W+e]<=T)e++;const L=e-xx;if(L>=Lm&&L<.85*W)for(let k=xx;k<e;k++){if(!ln[Y*W+k])nLn++;ln[Y*W+k]=1;}xx=e;}}
+ for(let X=0;X<W;X++){let y=0;while(y<H){const i=y*W+X;if(!(d[i]&&thH[i]<=T)){y++;continue;}let e=y;while(e<H&&d[e*W+X]&&thH[e*W+X]<=T)e++;const L=e-y;if(L>=Lm&&L<.85*H)for(let k=y;k<e;k++){if(!ln[k*W+X])nLn++;ln[k*W+X]=1;}y=e;}}
+ if(!nLn)return null;
+ const C=12,gw=Math.ceil(W/C),gh=Math.ceil(H/C),cnt=new Uint16Array(gw*gh),lw=new Float32Array(gw*gh);
+ for(let Y=0;Y<H;Y++)for(let X=0;X<W;X++){const i=Y*W+X,k=((Y/C)|0)*gw+((X/C)|0);if(g[i]<225)cnt[k]++;if(ln[i])lw[k]++;}
+ const lab=new Int32Array(gw*gh).fill(-1),bbs=[],ws=[],G=2;let tot=0;for(let k=0;k<gw*gh;k++)tot+=lw[k];
+ for(let k0=0;k0<gw*gh;k0++){if(cnt[k0]<3||lab[k0]>=0)continue;const id=bbs.length,st=[k0];lab[k0]=id;const bb=[1e9,1e9,-1,-1];let w=0;
+  while(st.length){const k=st.pop(),cx=k%gw,cy=(k/gw)|0;w+=lw[k];if(cx<bb[0])bb[0]=cx;if(cy<bb[1])bb[1]=cy;if(cx>bb[2])bb[2]=cx;if(cy>bb[3])bb[3]=cy;
+   for(let yy=Math.max(0,cy-G);yy<=Math.min(gh-1,cy+G);yy++)for(let xx=Math.max(0,cx-G);xx<=Math.min(gw-1,cx+G);xx++){const q=yy*gw+xx;if(cnt[q]>=3&&lab[q]<0){lab[q]=id;st.push(q);}}}
+  const bw=bb[2]-bb[0]+1,bh=bb[3]-bb[1]+1;if((bw>=.85*gw&&bh<=.1*gh)||(bh>=.85*gh&&bw<=.1*gw))w=0;bbs.push(bb);ws.push(w);}
+ if(!bbs.length)return null;let kb=0;for(let k=1;k<ws.length;k++)if(ws[k]>ws[kb])kb=k;const bb=bbs[kb],share=ws[kb]/Math.max(1,tot);
+ const x0=bb[0]*C,y0=bb[1]*C,x1=Math.min(W,(bb[2]+1)*C),y1=Math.min(H,(bb[3]+1)*C),area=(x1-x0)*(y1-y0)/N;
+ Object.assign(info,{share:+share.toFixed(2),area:+area.toFixed(2),bb:[x0,y0,x1,y1]});
+ if(!(share>=.6&&(x1-x0)>=.25*W&&(y1-y0)>=.2*H&&((asp>=1.6&&area<=.5)||area<=.2)))return null;
+ const pad=.05*Math.max(x1-x0,y1-y0),X0=Math.max(0,Math.floor((x0-pad)/s)),Y0=Math.max(0,Math.floor((y0-pad)/s)),X1=Math.min(W0,Math.ceil((x1+pad)/s)),Y1=Math.min(H0,Math.ceil((y1+pad)/s));
+ const o=mk(X1-X0,Y1-Y0),ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(img,X0,Y0,X1-X0,Y1-Y0,0,0,o.width,o.height);info.crop=[X0,Y0,X1,Y1];return o;}
+export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);let cr=null;try{cr=uploadRegion(img);}catch(e){cr=null;}const ci=uploadRegion.info;
+ if(!cr)return readPlanX(img,o);const R=readPlanX(cr,o);if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}/* cropped reading failed: fall back to the full image */const F=readPlanX(img,o);if(F&&F.dbg)F.dbg.cropFail=ci;return F||R;}
+function readPlanX(img,o={}){if(o._cm)return readPlan1(img,o);const R=readPlan0(img,o);if(R&&R.dbg&&!(R.dbg.nR>0)&&!o._cyan&&!(globalThis.__PF||{}).noCyan){/* outline open: retry with coloured window symbols as wall body */let C=null;try{C=readPlan1(img,{...o,_cm:R.dbg.cm||'new',_cyan:1,noPaper:!R.dbg.paper});}catch(e){C=null;}if(C&&C.dbg&&(C.dbg.nR||0)>0){C.dbg.cyanRetry=1;return C;}}return R;}
 function readPlan0(img,o){const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&(A.dbg.paper||((globalThis.__PF||{}).skip&&(A.dbg.Q||0)>=4.5)))return A;/* photo, or a confident first reading -> no second pass (speed) */
  let B=null;try{B=readPlan1(img,A?{...o,_cm:'old',noPaper:1,noSketch:1}:{...o,_cm:'old'});/* first reading failed completely -> full second reading (paper + sketch) */}catch(e){B=null;}if(!B)return A;if(!A){B.dbg.aNull=1;return B;}
- const qa=(A.dbg.Q||0)+(A.dbg.scale==='dims'?.6:0),qb=(B.dbg.Q||0)+(B.dbg.scale==='dims'?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.tA=A.dbg.t;R.dbg.tB=B.dbg.t;R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
+ const qa=(A.dbg.Q||0)+(/^(room)?dims$/.test(A.dbg.scale)?.6:0),qb=(B.dbg.Q||0)+(/^(room)?dims$/.test(B.dbg.scale)?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.tA=A.dbg.t;R.dbg.tB=B.dbg.t;R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
 function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.t||{};dbg.t[k]=Math.round(performance.now()-T0);};let c=imgCanvas(img,MAXD);const CG=o._cm==='old'?cleanGrayOld:cleanGray;inkMask.off=o._cm==='old';
  if(!o.rect&&!o.noPaper){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
  focus.nearE=!!o._cyan;tm('paper');let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
@@ -318,9 +352,17 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  const solidOK=V.length&&V[0].S.length>=4&&(base.wk>2.2*lw+2)&&sideCoverage(V[0].S,V[0].bb).n>=2;dbg.solidOK=!!solidOK;
  for(const src of solidOK?[]:nTone>W*H*.0008?[ink,body]:[ink]){const inkBig=compsFilter(src,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.025*Math.max(W,H));
   for(const kc of[5,9,13]){const kk=Math.max(kc,lw*3+1);const hm=openK(closeK(inkBig,W,H,kk),W,H,Math.max(base.kOpen,Math.round(kc*.6)));add((src===ink?'h':'th')+kc,hm,Math.max(base.wk,kk),base.kOpen,base.kInt);}}
+ /* v13d wide pairs: hollow walls (two thin lines, no fill) on small flats / cropped screenshots are thicker than the 'pair'
+    gap limit (2.2 % of the sheet). Only when no reading closes rooms: retry pair filling with wider gaps. */
+ if(!V.some(v=>v.q.nR>=2)&&!(globalThis.__PF||{}).noPairW){const mx=Math.max(W,H),pfS=compsFilter(ink,W,H,k=>Math.max(k.x1-k.x0+1,k.y1-k.y0+1)>=.025*mx);
+  for(const kf of[.035,.05]){const pf=close1(close1(pairFill(pfS,W,H,Math.round(kf*mx),lw*2+2,1),W,H,9,1),W,H,9,0);/* strict: only axis-parallel line pairs (door-leaf triangles are not walls) */let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-pfS[i];if(d>W*H*.0003/7){let B=wallMask(pf,W,H);/* single-line wall faces (outer wall drawn as one line) bridging two filled wall bodies -> wall band */
+   const tb=Math.max(6,B.wk),th=openK(pf,W,H,Math.max(7,lw*2+3)),r=Math.round(tb*.8)+3,near=(x,y)=>{for(let yy=Math.max(0,y-r);yy<=Math.min(H-1,y+r);yy+=2)for(let xx=Math.max(0,x-r);xx<=Math.min(W-1,x+r);xx+=2)if(th[yy*W+xx])return 1;return 0;};let nb=0;
+   for(const hz of[1,0])for(const q of axisSegs(pfS,W,H,Math.max(3*tb,Math.round(.08*mx)),hz)){if(q.t>Math.max(4,lw*2))continue;const a=Math.round(q.a),b=Math.round(q.b),c=Math.round(q.c);let inT=0,n=0;for(let k=a;k<=b;k+=2){n++;if(th[hz?c*W+k:k*W+c])inT++;}if(inT>.5*n)continue;
+    if(!(hz?near(a,c)&&near(b,c):near(c,a)&&near(c,b)))continue;nb++;const h2=Math.round(tb/2);for(let k=a;k<=b;k++)for(let e=c-h2;e<=c+h2;e++){if(e<0||e>=(hz?H:W))continue;pf[hz?e*W+k:k*W+e]=1;}}
+   if(nb){B=wallMask(pf,W,H);dbg['bridge'+Math.round(kf*1000)]=nb;}const n0=V.length;axisSegs.dense=1;try{add('pairW'+Math.round(kf*1000),B.wm,B.wk,B.kOpen,B.kInt);}finally{axisSegs.dense=0;}/* a wide-pair reading only counts when it closes rooms (non-plans: no junk) */if(V.length>n0&&V[V.length-1].q.nR<2)V.pop();}}}
  tm('var');if(!V.length)return null;
  const pen=v=>v.name==='pair'||v.name==='lp'?.35:0;let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q-pen(v)>best.q.Q-pen(best)+.05)best=v;}
- /* v12j near-tie stability: a reading that closes more rooms wins when its quality is within 0.3 (tiny resize/aliasing differences between browsers used to flip ink<->pair) */if(!o.forceHatch&&!dbg.paper&&!(globalThis.__PF||{}).noTie){const b0=best;if(!pen(b0))for(const v of V)if(v.q.nR>best.q.nR&&v.q.Q>=b0.q.Q-.25)best=v;dbg.tie=best!==b0?b0.name+'>'+best.name:0;}dbg.cands=V.map(v=>[v.name,+v.q.Q.toFixed(2),v.q.nR,v.S.length]);dbg.pick=best.name;dbg.nR=best.q.nR;dbg.Q=best.q.Q;let S=pruneLoose(best.S);dbg.pruned=best.S.length-S.length;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
+ /* v12j near-tie stability: a reading that closes more rooms wins when its quality is within 0.3 (tiny resize/aliasing differences between browsers used to flip ink<->pair) */if(!o.forceHatch&&!dbg.paper&&!(globalThis.__PF||{}).noTie){const b0=best;if(!pen(b0))for(const v of V)if(v.q.nR>best.q.nR&&v.q.Q>=b0.q.Q-.25)best=v;dbg.tie=best!==b0?b0.name+'>'+best.name:0;}/* v13d: wide-pair readings exist only when no other reading closed 2+ rooms; one that closes 3+ rooms beats a near-equal non-closing reading */if(!o.forceHatch){const b1=best;for(const v of V)if(/^pairW/.test(v.name)&&v.q.nR>=3&&v.q.nR>=b1.q.nR+2&&v.q.Q>=b1.q.Q-1&&(best===b1||v.q.nR>best.q.nR||(v.q.nR===best.q.nR&&v.q.Q>best.q.Q)))best=v;if(best!==b1)dbg.tie=b1.name+'>'+best.name;}dbg.cands=V.map(v=>[v.name,+v.q.Q.toFixed(2),v.q.nR,v.S.length]);dbg.pick=best.name;dbg.nR=best.q.nR;dbg.Q=best.q.Q;let S=pruneLoose(best.S);dbg.pruned=best.S.length-S.length;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
  dbg.nS=S.length;
  let bb=best.bb;
@@ -331,11 +373,19 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   // retry on the 180°-rotated mask and on a 2x bilinear upscale of the cleaned page (own threshold), lengths scaled back
   const r180=(m,w,h)=>{const o=new Uint8Array(w*h);for(let i=0;i<w*h;i++)o[i]=m[w*h-1-i];return o;};
   const tryD=(m,w,h,f,flip)=>{const b2=bb.map(v=>v*f),bq=flip?[w-b2[2],h-b2[3],w-b2[0],h-b2[1]]:b2;const R=dimScale(flip?r180(m,w,h):m,w,h,bq,tE*f,sc.ppm*f);if(R&&R.lines)R.lines=R.lines.map(L=>{let v=L.v/f,a=L.a/f,b=L.b/f;if(flip){const Wv=L.rot?W:H,Wu=L.rot?H:W;v=Wv-v;[a,b]=[Wu-b,Wu-a];}return{...L,v,a,b};});return R?{...R,ppm:R.ppm/f,via:f+(flip?'r':'')}:null;};
-  dimScale.areas=[];let D=tryD(ink,W,H,1,0);dbg.areasPx=dimScale.areas;dimScale.areas=null;
+  dimScale.areas=[];dimScale.txts=[];let D=tryD(ink,W,H,1,0);const TX=dimScale.txts;dimScale.txts=null;dbg.areasPx=dimScale.areas;dimScale.areas=null;
   if(!D||D.n<2){const D2=tryD(ink,W,H,1,1);if(D2&&(!D||D2.n>D.n))D=D2;}
   /* v12f: clean web/CAD exports have small text too (10 px caps on a 1600 px sheet) -> the 2x pass runs whenever the 1x dimensions are not conclusive */const nu2=!(dbg.paper||W*H<1.2e6||(globalThis.__PF||{}).up);/* on the newly covered big clean sheets the 2x reading must have two agreeing dimensions */if((!D||D.n<2)&&W*H<4.5e6&&(dbg.paper||W*H<1.2e6||!(globalThis.__PF||{}).noUp2||(globalThis.__PF||{}).up)){const W2=W*2,H2=H*2,u=new Uint8Array(W2*H2);for(let y=0;y<H2;y++){const fy=Math.min(H-1.001,Math.max(0,(y-.5)/2)),y0=fy|0,ay=fy-y0;for(let x=0;x<W2;x++){const fx=Math.min(W-1.001,Math.max(0,(x-.5)/2)),x0=fx|0,ax=fx-x0,i=y0*W+x0;const v=(n[i]*(1-ax)+n[i+1]*ax)*(1-ay)+(n[i+W]*(1-ax)+n[i+W+1]*ax)*ay;u[y*W2+x]=v<.55?1:0;}}
    if(o.debug){const hh=Math.round(H2*.3),dc=mk(W2,hh),x=dc.getContext('2d'),id=x.createImageData(W2,hh);for(let i=0;i<W2*hh;i++){const v=u[i]?0:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);dbg.uimg=dc.toDataURL();}
    for(const fl of[0,1]){if(D&&D.n>=2&&fl)break;if(!fl)dimScale.areas=[];const D3=tryD(u,W2,H2,2,fl);if(!fl){const A2=dimScale.areas.map(q=>({v:q.v,p:[q.p[0]/2,q.p[1]/2]}));dimScale.areas=null;if(A2.length>(dbg.areasPx||[]).length)dbg.areasPx=A2;}if(D3&&(!D||D3.n>D.n)&&!(nu2&&D3.n<2))D=D3;}}
+  /* v13d room-inner dimensions: flat plans often write the clear room size inside the room next to a wall, with no dimension
+     line. Without a dimension-line reading, measure the clear span between the found walls through each such number, along its
+     reading direction; three or more numbers agreeing on one scale (and within 2x of the door/wall guess) set the scale. */
+  if(!(D&&D.n>=1)&&TX.length>=3&&!(globalThis.__PF||{}).noRoomDim){const cand=[];TX.forEach((t,k)=>{const cx=(t.b[0]+t.b[2])/2,cy=(t.b[1]+t.b[3])/2;if(cx<bb[0]||cx>bb[2]||cy<bb[1]||cy>bb[3])return;
+    const along=t.rot?cy:cx,acr=t.rot?cx:cy;let lo=-1e9,hi=1e9;for(const q of S){if(!!q.hz!==!!t.rot)continue;if(acr<q.a-2||acr>q.b+2)continue;const e0=q.c-q.t/2,e1=q.c+q.t/2;if(e0>along)hi=Math.min(hi,e0);else if(e1<along)lo=Math.max(lo,e1);}
+    (dbg.roomDimL=dbg.roomDimL||[]).push([t.txt,t.rot,Math.round(cx),Math.round(cy),Math.round(lo),Math.round(hi),t.vals.join('/')]);if(lo<-1e8||hi>1e8)return;const span=hi-lo,tl=t.rot?t.b[3]-t.b[1]:t.b[2]-t.b[0];if(span<2*tl)return;for(const v of t.vals){if(v<.6||v>15)continue;const p=span/v;if(!(sc.ppm>0)||(p/sc.ppm<2&&sc.ppm/p<2))cand.push({p,k});}});
+   let bR=null;for(const c of cand){const m=cand.filter(d=>Math.abs(d.p/c.p-1)<.04),n=new Set(m.map(d=>d.k)).size;if(!bR||n>bR.n)bR={n,ppm:median(m.map(d=>d.p))};}
+   dbg.roomDim=[TX.length,cand.length,bR&&bR.n,bR&&+bR.ppm.toFixed(1)];if(bR&&bR.n>=3){sc={ppm:bR.ppm,src:'roomdims'};dbg.scale0='roomdims';}}
   if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};
    // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
    if(D.lines&&D.lines.length){const n0=S.length,cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2;
@@ -504,7 +554,7 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
    if(g.length>=2&&g.length<=8)strings.push({rot,g});}}
  for(const S of strings){const ord=S.rot?[...S.g].sort((a,b)=>b.y0-a.y0):S.g;// vertical text reads bottom->top
   let best=null;for(const dir of S.rot?[1,-1]:[0]){const chars=S.rot?(dir>0?ord:[...ord].reverse()):ord;const r=readString(chars,ink,W,dir);if(!best||r.s>best.s)best={...r,dir};}
-  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);if(m&&m[3]){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length,v=+(m[1]+'.'+m[2]);if(v>=1&&v<=150&&cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3])dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;
+  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);if(m&&m[3]){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length,v=+(m[1]+'.'+m[2]);if(v>=1&&v<=150&&cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3])dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;if(dimScale.txts){const xs0=Math.min(...S.g.map(c=>c.x0)),xs1=Math.max(...S.g.map(c=>c.x1)),ys0=Math.min(...S.g.map(c=>c.y0)),ys1=Math.max(...S.g.map(c=>c.y1));dimScale.txts.push({txt:best.txt,vals,rot:S.rot,b:[xs0,ys0,xs1,ys1]});}
   // dimension line next to the text, then the nearest perpendicular marks (ticks / extension lines) on each side
   const x0=Math.min(...S.g.map(c=>c.x0)),x1=Math.max(...S.g.map(c=>c.x1)),y0=Math.min(...S.g.map(c=>c.y0)),y1=Math.max(...S.g.map(c=>c.y1)),th=S.rot?x1-x0:y1-y0;
   // work in (u along line, v across) coordinates
@@ -533,4 +583,6 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
  let best=null;for(const c of cand){const sup=new Set(cand.filter(d=>Math.abs(d.p/c.p-1)<.035).map(d=>d.k));const ps=cand.filter(d=>Math.abs(d.p/c.p-1)<.035).map(d=>d.p);const sc=sup.size;if(!best||sc>best.cons)best={ppm:median(ps),cons:sc};}
  // a single overall dimension (line spans most of the house, confident read) is trusted even when far from the door/wall guess
  if(best&&best.cons<2&&!(prior&&Math.abs(best.ppm/prior-1)<.3)){const ov=cand.find(c=>Math.abs(c.p/best.ppm-1)<.035&&out[c.k].ext>=.6*bw&&out[c.k].s>=.85);if(!ov)best=null;else best.via='overall';}
+ /* v13d: weak dimension consensus (<=2 strings) that disagrees with the door/wall size guess by more than 2x is a mismatched text (room sizes written inside rooms, no dimension line) */
+ if(best&&best.cons<=2&&best.via!=='overall'&&prior&&!(globalThis.__PF||{}).noDimPrior&&(best.ppm/prior>2||prior/best.ppm>2)){dimScale.log&&dimScale.log.push('prior-reject '+best.ppm.toFixed(1)+'/'+prior.toFixed(1));best=null;}
  return best?{ppm:best.ppm,n:best.cons,dims:out.map(o=>o.txt+'@'+o.ext+'/'+o.s),lines:out.filter(o=>o.line).map(o=>o.line)}:null;}
