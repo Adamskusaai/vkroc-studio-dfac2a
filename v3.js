@@ -620,8 +620,11 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;if(uc.some(u=>mx>u[0]-.2&&mx<u[2]+.2&&mz>u[1]-.2&&mz<u[3]+.2))return;const T=w.thickness||.3,ang=-Math.atan2(g.u[1],g.u[0]);
    const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;if(dc.length&&dc.some(r=>mx>r[0]-.6&&mx<r[2]+.6&&mz>r[1]-.6&&mz<r[3]+.6)){add(new THREE.BoxGeometry(g.L,.62,.02),M.glass,mx,lh+.4+.31,mz,ang,1);add(new THREE.BoxGeometry(g.L+.04,.05,.06),M.frame,mx,lh+1.05,mz,ang,1);}});});
  if(roof!=='none'&&IRR){const ah=.5,tc=CELLS[top.name]||[];
-  tc.forEach(r=>{add(new THREE.BoxGeometry(r[2]-r[0]+.3,.2,r[3]-r[1]+.3),FLATM,(r[0]+r[2])/2,th+.1,(r[1]+r[3])/2,0,1).userData.roof=1;});
-  tw.forEach(w=>{if(!w._ext)return;const g=geo(w),T=w.thickness||.3,L=g.L+T,ang=-Math.atan2(g.u[1],g.u[0]),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;
+  /* v13c: ONE continuous roof - each room cell grows by the outer-wall thickness so the slab also covers every wall top (no gaps / dark wall lines above the roof); clipped to the building outline */
+  {const gT=Math.max(.3,...tw.filter(w=>w._ext).map(w=>w.thickness||.3)),eo2=Math.max(.15,...tw.filter(w=>w._ext).map(w=>(w.thickness||.3)/2)),B=[fp[0]-eo2,fp[1]-eo2,fp[2]+eo2,fp[3]+eo2],ca=tc.reduce((a,r)=>a+(r[2]-r[0])*(r[3]-r[1]),0),fa=(fp[2]-fp[0])*(fp[3]-fp[1]);
+   const cs=ca<.6*fa?[[fp[0],fp[1],fp[2],fp[3]]]:tc;cs.forEach(r=>{const x0=Math.max(B[0],r[0]-gT),x1=Math.min(B[2],r[2]+gT),z0=Math.max(B[1],r[1]-gT),z1=Math.min(B[3],r[3]+gT);if(x1-x0<.05||z1-z0<.05)return;add(new THREE.BoxGeometry(x1-x0,.2,z1-z0),FLATM,(x0+x1)/2,th+.1,(z0+z1)/2,0,1).userData.roof=1;});}
+  /* v13c: no per-wall parapets on irregular footprints - jogs/inner walls flagged exterior drew dark lines across the roof; the roof stays one flat slab */
+  if(0)tw.forEach(w=>{if(!w._ext)return;const g=geo(w),T=w.thickness||.3,L=g.L+T,ang=-Math.atan2(g.u[1],g.u[0]),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;
    const p=add(new THREE.BoxGeometry(L,ah+.1,T),M.fac,mx,th+ah/2-.05,mz,ang,1);p.userData.roof=1;p.castShadow=true;
    add(new THREE.BoxGeometry(L+.06,.05,T+.06),M.frame,mx,th+ah+.025,mz,ang,1).userData.roof=1;});}
  else if(roof!=='none'){const eave=.40; // ~0.4 m overhang past wall outer face
