@@ -327,6 +327,25 @@ function cropChrome(img){const W0=img.width,H0=img.height;if(W0<80||H0<80)return
  const pad=4;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(W0,x1+pad);y1=Math.min(H0,y1+pad);
  const o=mk(x1-x0,y1-y0);o.getContext('2d').drawImage(img,x0,y0,x1-x0,y1-y0,0,0,o.width,o.height);
  cropChrome.info={box:[x0,y0,x1,y1]};return o;}
+/* White PDF page sitting in a dark letterbox (phone screenshot). Tight crop so the page fills the working canvas. Rejects photos (textured surround) and already-full pages. */
+function cropPage(img){const W0=img.width,H0=img.height;if(W0<80||H0<80)return null;
+ const s=Math.min(1,800/Math.max(W0,H0)),W=Math.max(8,Math.round(W0*s)),H=Math.max(8,Math.round(H0*s));
+ const c=mk(W,H),x=c.getContext('2d');x.drawImage(img,0,0,W,H);const d=x.getImageData(0,0,W,H).data,m=new Uint8Array(W*H),thr=210;
+ for(let i=0;i<W*H;i++){const g=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(g>thr)m[i]=1;}
+ const lab=new Int32Array(W*H),st=[];let bestN=0,bb=null;
+ for(let i=0;i<W*H;i++){if(!m[i]||lab[i])continue;const id=i+1;st.push(i);lab[i]=id;let n=0,x0=1e9,y0=1e9,x1=-1,y1=-1;
+  while(st.length){const j=st.pop();n++;const xx=j%W,yy=(j/W)|0;if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy;
+   if(xx>0&&m[j-1]&&!lab[j-1]){lab[j-1]=id;st.push(j-1);}if(xx<W-1&&m[j+1]&&!lab[j+1]){lab[j+1]=id;st.push(j+1);}
+   if(yy>0&&m[j-W]&&!lab[j-W]){lab[j-W]=id;st.push(j-W);}if(yy<H-1&&m[j+W]&&!lab[j+W]){lab[j+W]=id;st.push(j+W);}}
+  if(n>bestN){bestN=n;bb=[x0,y0,x1+1,y1+1];}}
+ if(!bb)return null;let[x0,y0,x1,y1]=bb;const boxA=(x1-x0)*(y1-y0)/(W*H);if(boxA<.08||boxA>.75||(x1-x0)<.15*W&&(y1-y0)<.15*H)return null;
+ let s1=0,s2=0,nO=0;for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++){if(xx>=x0&&xx<x1&&yy>=y0&&yy<y1)continue;const g=(d[(yy*W+xx)*4]+d[(yy*W+xx)*4+1]+d[(yy*W+xx)*4+2])/3;s1+=g;s2+=g*g;nO++;}
+ if(!nO)return null;const om=s1/nO,osd=Math.sqrt(Math.max(0,s2/nO-om*om));if(om>=90||osd>=40)return null;
+ const X0=Math.max(0,Math.floor(x0/s)),Y0=Math.max(0,Math.floor(y0/s)),X1=Math.min(W0,Math.ceil(x1/s)),Y1=Math.min(H0,Math.ceil(y1/s));
+ if(X1-X0<80||Y1-Y0<80)return null;
+ const pad=Math.max(6,Math.round(.02*Math.max(X1-X0,Y1-Y0)));const a=Math.max(0,X0-pad),b=Math.max(0,Y0-pad),e=Math.min(W0,X1+pad),f=Math.min(H0,Y1+pad);
+ const o=mk(e-a,f-b);o.getContext('2d').drawImage(img,a,b,e-a,f-b,0,0,o.width,o.height);
+ cropPage.info={box:[a,b,e,f],page:1};return o;}
 /* Drop a small, far cluster of walls (key-plan thumbnail, elevation) and keep the main unit. */
 function dropSatellites(S){if(!S||S.length<6)return S;
  const n=S.length,par=S.map((_,i)=>i),find=i=>par[i]===i?i:(par[i]=find(par[i]));
@@ -439,7 +458,7 @@ export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)r
  const pad=.05*Math.max(x1-x0,y1-y0),X0=Math.max(0,Math.floor((x0-pad)/s)),Y0=Math.max(0,Math.floor((y0-pad)/s)),X1=Math.min(W0,Math.ceil((x1+pad)/s)),Y1=Math.min(H0,Math.ceil((y1+pad)/s));
  const o=mk(X1-X0,Y1-Y0),ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(img,X0,Y0,X1-X0,Y1-Y0,0,0,o.width,o.height);info.crop=[X0,Y0,X1,Y1];return o;}
 export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);
- let src=img,ch=null;try{if(!(globalThis.__PF||{}).noChrome){ch=cropChrome(img);if(ch){src=ch;o=Object.assign({},o);o._chrome=cropChrome.info;}}}catch(e){}
+ let src=img,ch=null,page=0;try{if(!(globalThis.__PF||{}).noChrome){const pg=cropPage(img);if(pg){src=pg;ch=pg;page=1;o=Object.assign({},o);o._chrome=cropPage.info;}else{ch=cropChrome(img);if(ch){src=ch;o=Object.assign({},o);o._chrome=cropChrome.info;}}}}catch(e){}
  const run=im=>{let cr=null;try{cr=uploadRegion(im);}catch(e){cr=null;}const ci=uploadRegion.info;
   if(!cr)return readPlanX(im,o);
   const R=readPlanX(cr,o);if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}
@@ -448,7 +467,9 @@ export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF|
  const A=run(src);if(A&&A.dbg&&o._chrome)A.dbg.chrome=o._chrome;
  if(!ch)return A;
  const B=run(img);if(!B)return A;if(!A)return B;
- if(qual(B)>qual(A)+.05){if(B.dbg){B.dbg.chromeSkip=o._chrome;B.dbg.chromeQ=[+qual(A).toFixed(2),+qual(B).toFixed(2)];}return B;}
+ /* a letterbox page crop is the higher-res reading; only skip it if the uncropped score is clearly better */
+ const margin=page?1.5:.05;
+ if(qual(B)>qual(A)+margin){if(B.dbg){B.dbg.chromeSkip=o._chrome;B.dbg.chromeQ=[+qual(A).toFixed(2),+qual(B).toFixed(2)];}return B;}
  if(A.dbg)A.dbg.chromeQ=[+qual(A).toFixed(2),+qual(B).toFixed(2)];return A;}
 function readPlanX(img,o={}){if(o._cm)return readPlan1(img,o);const R=readPlan0(img,o);if(R&&R.dbg&&!(R.dbg.nR>0)&&!o._cyan&&!(globalThis.__PF||{}).noCyan){/* outline open: retry with coloured window symbols as wall body */let C=null;try{C=readPlan1(img,{...o,_cm:R.dbg.cm||'new',_cyan:1,noPaper:!R.dbg.paper});}catch(e){C=null;}if(C&&C.dbg&&(C.dbg.nR||0)>0){C.dbg.cyanRetry=1;return C;}}return R;}
 function readPlan0(img,o){const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&(A.dbg.paper||((globalThis.__PF||{}).skip&&(A.dbg.Q||0)>=4.5)))return A;/* photo, or a confident first reading -> no second pass (speed) */
@@ -537,8 +558,8 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   dbg.areaSc=[Rpx.length,areas.length,A&&A.n,A&&+A.ppm.toFixed(1)];
   const sheet=!!(PT||o._chrome);
   if(sheet&&B){sc={ppm:B.ppm,src:'scalebar'};dbg.scale0='scalebar';}
-  else if(sheet&&A&&A.n>=2){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}
-  if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1&&sc.src!=='scalebar'&&sc.src!=='areas')sc={ppm:D.ppm,src:'dims'};
+  else if(sheet&&A&&A.n>=2){const agr=!sc.ppm||(A.ppm/sc.ppm<1.2&&sc.ppm/A.ppm<1.2);if(PT||agr){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}}
+  if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1&&sc.src!=='scalebar'&&sc.src!=='areas'){const agree=!sc.ppm||(D.ppm/sc.ppm<1.2&&sc.ppm/D.ppm<1.2);if(D.n>=2||agree||!o._chrome)sc={ppm:D.ppm,src:'dims'};}
    // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
    if(D.lines&&D.lines.length){const n0=S.length,cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2;
     const outer=q=>{const ctr=q.hz?cy:cx,out=Math.sign(q.c-ctr);return !S.some(o=>o!==q&&!!o.hz===!!q.hz&&Math.sign(o.c-q.c)===out&&Math.abs(o.c-q.c)>q.t&&Math.min(o.b,q.b)-Math.max(o.a,q.a)>.3*(q.b-q.a));};
@@ -706,7 +727,7 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
    if(g.length>=2&&g.length<=8)strings.push({rot,g});}}
  for(const S of strings){const ord=S.rot?[...S.g].sort((a,b)=>b.y0-a.y0):S.g;// vertical text reads bottom->top
   let best=null;for(const dir of S.rot?[1,-1]:[0]){const chars=S.rot?(dir>0?ord:[...ord].reverse()):ord;const r=readString(chars,ink,W,dir);if(!best||r.s>best.s)best={...r,dir};}
-  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=dimScale.loose?best.txt.match(/^(\d{1,3})[,.](\d{1,2})(?:(\d{1,3}|m\d?))?,?$/):best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);if(m&&(dimScale.loose||m[3])){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length,v=+(m[1]+'.'+m[2]);if(v>=1&&v<=150&&cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3])dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;if(dimScale.txts){const xs0=Math.min(...S.g.map(c=>c.x0)),xs1=Math.max(...S.g.map(c=>c.x1)),ys0=Math.min(...S.g.map(c=>c.y0)),ys1=Math.max(...S.g.map(c=>c.y1));dimScale.txts.push({txt:best.txt,vals,rot:S.rot,b:[xs0,ys0,xs1,ys1]});}
+  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app. Screenshot area tables sit beside the plan (outside the wall bbox); OCR often drops the comma ('1975' = 19.75). */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=dimScale.loose?best.txt.match(/^(\d{1,3})[,.](\d{1,2})(?:(\d{1,3}|m\d?))?,?$/):best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);const g=(!m||!(dimScale.loose||m[3]))&&dimScale.loose&&best.txt.match(/^(\d{1,2})(\d{2})$/);const v=m&&(dimScale.loose||m[3])?+(m[1]+'.'+m[2]):(g?+(g[1]+'.'+g[2]):0);if(v>=1&&v<=150&&!(g&&v<5)){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length;if(dimScale.loose||(cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3]))dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;if(dimScale.txts){const xs0=Math.min(...S.g.map(c=>c.x0)),xs1=Math.max(...S.g.map(c=>c.x1)),ys0=Math.min(...S.g.map(c=>c.y0)),ys1=Math.max(...S.g.map(c=>c.y1));dimScale.txts.push({txt:best.txt,vals,rot:S.rot,b:[xs0,ys0,xs1,ys1]});}
   // dimension line next to the text, then the nearest perpendicular marks (ticks / extension lines) on each side
   const x0=Math.min(...S.g.map(c=>c.x0)),x1=Math.max(...S.g.map(c=>c.x1)),y0=Math.min(...S.g.map(c=>c.y0)),y1=Math.max(...S.g.map(c=>c.y1)),th=S.rot?x1-x0:y1-y0;
   // work in (u along line, v across) coordinates
