@@ -105,8 +105,9 @@ function ao(g, w, d, y = 0.012) {
   return m;
 }
 
-function artMap() {
-  if (cache.has('artTex')) return cache.get('artTex');
+let ART_N = 0;
+function artMap(v = 0) {
+  if (cache.has('artTex' + v)) return cache.get('artTex' + v);
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const x = c.getContext('2d');
   x.fillStyle = '#e8e0d4'; x.fillRect(0, 0, 256, 256);
@@ -125,7 +126,7 @@ function artMap() {
   x.fillStyle = 'rgba(255,255,255,.15)'; x.fillRect(0, 0, 256, 18);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  cache.set('artTex', t);
+  cache.set('artTex' + v, t);
   return t;
 }
 
@@ -434,16 +435,19 @@ function proc(type, F, cols) {
     cap.position.set(0, 1.15, 0);
     g.add(cap);
   } else if (type === 'art') {
-    box(g, wood, 0, 1.35, 0, w, h || 0.7, 0.03, 0.01);
-    const am = std('#ddd', 0.9);
-    am.map = artMap();
-    am.map.colorSpace = THREE.SRGBColorSpace;
-    box(g, am, 0, 1.35, 0.02, w - 0.08, (h || 0.7) - 0.08, 0.015, 0);
+    // v20261117i: framed print - slim frame, white passe-partout, abstract print (4 variants), hung at F.ay
+    const ay = F.ay || 1.5, hh = h || 0.7, fr = std(cols.sty === 'klasik' || cols.sty === 'indus' ? '#2b2420' : (cols.wood || '#c4a07a'), 0.6);
+    box(g, fr, 0, ay, 0, w, hh, 0.03, 0.006);
+    box(g, std('#f4f1ea', 0.95), 0, ay, 0.0135, w - 0.05, hh - 0.05, 0.006, 0);
+    const am = std('#ffffff', 0.85); am.map = artMap(ART_N++ % 4); am.map.colorSpace = THREE.SRGBColorSpace;
+    box(g, am, 0, ay, 0.0175, (w - 0.05) * 0.7, (hh - 0.05) * 0.7, 0.002, 0);
   } else if (type === 'curtain') {
     const cloth = stdT(cols.curtain || cols.fab || '#b8a890', 'fabric', 0.95);
-    box(g, wood, 0, 2.15, 0, w + 0.08, 0.035, 0.035, 0.01);
-    box(g, cloth, -w * 0.28, 1.15, 0, w * 0.36, 1.9, 0.04, 0.02);
-    box(g, cloth, w * 0.28, 1.15, 0, w * 0.36, 1.9, 0.04, 0.02);
+    // v20261117i: rod at F.rodY over the window, two panels parked at the sides (F.pw wide), hanging to 2 cm above the floor
+    const ry = F.rodY || 2.15, pw = F.pw || w * 0.36, ph = ry - 0.05;
+    cyl(g, metal, 0, ry, 0, 0.012, 0.012, w + 0.06, 8).rotation.z = Math.PI / 2;
+    box(g, cloth, -(w / 2 - pw / 2), 0.02 + ph / 2, 0, pw, ph, 0.04, 0.02);
+    box(g, cloth, w / 2 - pw / 2, 0.02 + ph / 2, 0, pw, ph, 0.04, 0.02);
   } else if (type === 'shoe' || type === 'bench') {
     ao(g, w + 0.05, d + 0.05);
     box(g, wood, 0, 0.22, 0, w, 0.08, d, 0.02);

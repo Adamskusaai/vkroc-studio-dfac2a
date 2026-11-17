@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261117h';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261117l';
 onPhSwap(()=>{DIRTY=Math.max(DIRTY,30);});
 export function phInfo(){return PH_STATS;}
 export function phWait(){return phPending();}
@@ -37,6 +37,23 @@ export function storeyQA(){if(!world||!H||!H.levels||H.levels.length<2)return{ga
 export function stopCam(){camPath=null;if(orb)orb.enabled=true;}
 export function isDoll(){return DOLL;}
 export const geo=w=>{const[x0,z0]=w.start,[x1,z1]=w.end,L=Math.hypot(x1-x0,z1-z0)||1e-9;return{x0,z0,L,u:[(x1-x0)/L,(z1-z0)/L]};};
+const GLAZED=o=>o.type==='window'||(o.type==='door'&&(o.kind==='sliding'||o.kind==='terrace'));
+function wallMount(f,F,l){const ws=H.walls.filter(w=>w.level===f.level);let bw=null,bd=.9,bq=0;
+ ws.forEach(w=>{const g=geo(w),px=f.p[0]-g.x0,pz=f.p[1]-g.z0,q=Math.max(0,Math.min(g.L,px*g.u[0]+pz*g.u[1])),d=Math.hypot(px-g.u[0]*q,pz-g.u[1]*q)-(w.thickness||.3)/2;
+  if(f.t==='curtain'&&!(w.openings||[]).some(o=>GLAZED(o)&&Math.abs(o.offset+o.width/2-q)<1.6))return;if(d<bd){bd=d;bw=w;bq=q;}});
+ if(!bw)return null;const g=geo(bw),T=(bw.thickness||.3)/2,nx=-g.u[1],nz=g.u[0],sd=((f.p[0]-g.x0)*nx+(f.p[1]-g.z0)*nz)>=0?1:-1,ry=Math.atan2(nx*sd,nz*sd),ops=bw.openings||[],lh=l.height||2.8;
+ const at=(q,off)=>({x:g.x0+g.u[0]*q+nx*sd*off,z:g.z0+g.u[1]*q+nz*sd*off});
+ if(f.t==='curtain'){let o=null,od=1.6;ops.forEach(p=>{if(!GLAZED(p))return;const d=Math.abs(p.offset+p.width/2-bq);if(d<od){od=d;o=p;}});if(!o)return null;
+  let m=.35;ops.forEach(p=>{if(p===o)return;const gap=p.offset>o.offset?p.offset-(o.offset+o.width):o.offset-(p.offset+p.width);if(gap>-.01)m=Math.min(m,gap/2-.03);});m=Math.max(.06,Math.min(m,o.offset,g.L-o.offset-o.width));
+  const q=o.offset+o.width/2,rod=o.width+2*m,rodY=Math.min((o.sill||0)+o.height+.12,lh-.06),p=at(q,T+.08);
+  return{...p,ry,F:{w:rod,rodY,pw:m+.15},rec:{t:'curtain',w:bw.id,q,oq:q,off:T+.08}};}
+ const w=F.w||.9,h=F.h||.7,free=q=>q-w/2>.15&&q+w/2<g.L-.15&&!ops.some(o=>o.offset<q+w/2+.15&&o.offset+o.width>q-w/2-.15);
+ /* furniture in front of the span: tall pieces (>1.3 m: wardrobes, shelves, fridges) block the span, lower ones lift the piece to 25 cm above their top */
+ const near=(x,z)=>(H.furn||[]).filter(q2=>q2!==f&&q2.level===f.level&&!['art','mirror','curtain','rug','runner','towel','lamp','plant'].includes(q2.t)&&FUR[q2.t]&&Math.hypot(q2.p[0]-x,q2.p[1]-z)<Math.max(q2.w||FUR[q2.t].w,q2.d||FUR[q2.t].d)/2+.35+w/2*.5).map(q2=>FUR[q2.t].h||0);
+ const SR=(H.stairs||[]).filter(st=>{const li=H.levels.findIndex(x=>x.name===st.level);return st.level===f.level||(H.levels[li+1]||{}).name===f.level;}).map(stairRect);
+ let q=null,p=null,top=0;for(const dq of[0,.15,-.15,.3,-.3,.45,-.45,.6,-.6,.9,-.9]){const qq=bq+dq;if(!free(qq))continue;const pp=at(qq,T+.012),hs=near(pp.x,pp.z);if(hs.some(v=>v>1.3))continue;
+  if(SR.some(r=>pp.x>r[0]-1&&pp.x<r[2]+1&&pp.z>r[1]-1&&pp.z<r[3]+1))continue;q=qq;p=pp;top=Math.max(0,...hs);break;}if(q==null)return null;
+ const ay=Math.min(Math.max(1.5,top+.25+h/2),lh-h/2-.3);return{...p,ry,F:{ay},rec:{t:f.t,w:bw.id,q,off:T+.012,ay,h}};}
 export function stairRect(st){const L=st.length||3.6,W=st.width||1,d=st.dir||0,c=Math.cos(d),s=Math.sin(d),xs=[0,L*c,-W*s,L*c-W*s].map(v=>v+st.pos[0]),zs=[0,L*s,W*c,L*s+W*c].map(v=>v+st.pos[1]);return[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];}
 function tex(draw,n=256,rep=1){const c=document.createElement('canvas');c.width=c.height=n;draw(c.getContext('2d'),n);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep,rep);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=TCH?2:4;return t;}
 const rnd=(()=>{let s=7;return()=>(s=(s*16807)%2147483647)/2147483647;})();
@@ -105,7 +122,11 @@ window.__xrLean=xrLean;
 // prem8 z: identical materials (same type + params + textures + userData) are shared -> fewer GPU state changes / programs on Quest.
 // Code that changes one object's material (roof fade) clones it first, so sharing is safe; custom-shader materials are left alone.
 const MBASE=THREE.Material.prototype;function dedupMats(root){const C=new Map();let n=0,u=0;
- const key=m=>{if(m.onBeforeCompile!==MBASE.onBeforeCompile||m.customProgramCacheKey!==MBASE.customProgramCacheKey||m.isShaderMaterial)return null;let j;try{j=m.toJSON({textures:{},images:{},materials:{}});}catch(e){return null;}delete j.uuid;delete j.name;delete j.metadata;return m.type+JSON.stringify(j);};
+ /* v20261117i FREEZE FIX: the key used to be material.toJSON() which serialised every texture image with canvas.toDataURL (~16 s per style switch on a 2k-texture house).
+    Same key, textures referenced by uuid only. */
+ const TXP=new Proxy({},{get:(t,k)=>typeof k==='string'?{uuid:k}:undefined,has:()=>true});
+ /* same key as before (material.toJSON), but every texture is pre-registered in meta.textures via a proxy, so three never serialises the image (no toDataURL) */
+ const key=m=>{if(m.onBeforeCompile!==MBASE.onBeforeCompile||m.customProgramCacheKey!==MBASE.customProgramCacheKey||m.isShaderMaterial)return null;let j;try{j=m.toJSON({textures:TXP,images:{},materials:{}});}catch(e){return null;}delete j.uuid;delete j.name;delete j.metadata;return m.type+JSON.stringify(j);};
  root.traverse(o=>{if(!o.isMesh||!o.material)return;const one=m=>{n++;const k=key(m);if(!k)return m;const h=C.get(k);if(h)return h;C.set(k,m);u++;return m;};o.material=Array.isArray(o.material)?o.material.map(one):one(o.material);});
  root.userData.mats={n,u};}
 // prem8 h9: desktop post-processing = GTAO ambient occlusion + 4x MSAA target + OutputPass (ACES + sRGB). Off on touch devices,
@@ -582,8 +603,13 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   const rugC=(f.t==='rug'&&rk&&RUGC[rk]&&H.style==='skandi')?RUGC[rk]:(S.rug||'#c4a484');
   // v20261117g RULE: one hob + one sink per kitchen - only the longest kitchen run on a level carries them (audit: kitchen-multi-hob)
   if(f.t==='kitch'){const ks=(H.furn||[]).filter(q=>q.t==='kitch'&&q.level===f.level).sort((p,q)=>(q.w||2.8)-(p.w||2.8));if(ks[0]!==f)F={...F,run2:1};}
+  /* v20261117i GENERATOR RULES (wall-mounted pieces, Stani review): curtains snap to the nearest window / glazed door on the same wall: rod centred on it, rod = opening
+     + margin (shrunk so it never reaches the next opening), panels parked at the sides, 8 cm off the wall, rod 12 cm above the opening, panels to the floor. Art and mirrors
+     hang flat on the nearest wall FACING the room, centred, on a free stretch of wall (no opening within 15 cm), never within 1 m of a stair, at eye height or 25 cm above
+     the furniture below. Pieces without a valid wall are dropped. audit: curtain-off-window, art-placement */
+  let WM=null;if(f.t==='art'||f.t==='mirror'||f.t==='curtain'){WM=wallMount(f,F,l);if(!WM)return;F={...F,...WM.F};}
   const g=makeFurn(f.t,F,{wood:(S.wood||'#d4b48a'),fab:f.c||(f.t==='rug'?rugC:(S[f.t]||F.c)),bed:f.cb||S.bed||'#c4a882',rug:f.c||rugC,curtain:S.curtain||'#b8a890',leather:S.leather,metal:S.metal,sty:H.style||''});
-  g.position.set(f.p[0],l.elevation,f.p[1]);g.rotation.y=-((f.r||0)*Math.PI/2);g.userData.furn=f.t;g.userData.noCol=true;root.add(g);});
+  g.position.set(f.p[0],l.elevation,f.p[1]);g.rotation.y=-((f.r||0)*Math.PI/2);if(WM){g.position.set(WM.x,l.elevation,WM.z);g.rotation.y=WM.ry;g.userData.wm=WM.rec;}g.userData.furn=f.t;g.userData.noCol=true;root.add(g);});
  // solid oak slab over whole footprint (guarantees readable floors from dollhouse + interior)
  if(xs.length&&zs.length){const fx0=Math.min(...xs),fx1=Math.max(...xs),fz0=Math.min(...zs),fz1=Math.max(...zs);
   const oak=M.floor;/* v12g: the footprint slab uses the chosen floor (style / Podlahy), no fixed oak */
@@ -597,6 +623,10 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
  stairs.forEach(st=>{const l=lv[st.level],li=H.levels.indexOf(l),up=H.levels[li+1];if(!l||!up)return;const r=stairRect(st),d=st.dir||0,c=Math.cos(d),sn=Math.sin(d),L=st.length||3.6,W=st.width||1,eu=up.elevation||0,el=l.elevation||0;
   const near=(lvN,x,z,m)=>H.walls.some(w=>{if(w.level!==lvN)return false;const g=geo(w),px=x-g.x0,pz=z-g.z0,q=Math.max(0,Math.min(g.L,px*g.u[0]+pz*g.u[1]));return Math.hypot(px-g.u[0]*q,pz-g.u[1]*q)<(w.thickness||.3)/2+m;});
   const topE=[st.pos[0]+c*L,st.pos[1]+sn*L];
+  /* v20261117i RULE (stair opening edge): the slab edge around the stair opening is lined with a white reveal from the ceiling below up to the floor above, so the
+     opening reads as a clean cut (no grey slab core / structure visible above the stairs). audit: stair-opening-unlined */
+  {const y0=el+(l.height||2.8)-.01,y1=eu+.065,hh=y1-y0;if(hh>.02)[[r[0],r[1],r[2],r[1],0,1],[r[2],r[1],r[2],r[3],-1,0],[r[2],r[3],r[0],r[3],0,-1],[r[0],r[3],r[0],r[1],1,0]].forEach(([x0,z0,x1,z1,nx,nz])=>{
+    const ln=Math.hypot(x1-x0,z1-z0);if(ln<.2)return;const ln2=add(new THREE.BoxGeometry(ln+.02,hh,.02),M.ceil,(x0+x1)/2+nx*.01,y0+hh/2,(z0+z1)/2+nz*.01,nz?0:Math.PI/2,1);ln2.userData.stairLining=1;});}
   [[r[0],r[1],r[2],r[1]],[r[2],r[1],r[2],r[3]],[r[2],r[3],r[0],r[3]],[r[0],r[3],r[0],r[1]]].forEach(([x0,z0,x1,z1])=>{const mx=(x0+x1)/2,mz=(z0+z1)/2,ln=Math.hypot(x1-x0,z1-z0);if(ln<.2)return;
    const ex=x1-x0,ez=z1-z0;if(Math.abs((topE[0]-mx)*ez-(topE[1]-mz)*ex)/ln<.05&&Math.abs(ex*c+ez*sn)/ln<.2)return; // arrival edge stays open
    if(near(up.name,mx,mz,.08)&&near(up.name,x0+ex*.15,z0+ez*.15,.08)&&near(up.name,x0+ex*.85,z0+ez*.85,.08))return; // a wall closes this edge
@@ -911,15 +941,21 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
   // v20261117h: slab-edge flashing band max 6 cm proud of the wall (was a 20 cm fascia that wrapped past the corners)
   world.traverse(o=>{const u=o.userData||{};if(u.flash&&u.flash>.06)P.push({rule:'flashing-too-proud',d:u.flash});
 });
+  // v20261117i: wall-mounted pieces - curtains centred on a glazed opening of their wall and close to it; art/mirrors on a free wall stretch, away from stairs
+  world.traverse(o=>{const r=o.userData&&o.userData.wm;if(!r)return;const w=H.walls.find(x=>x.id===r.w);if(!w){P.push({rule:'wallmount-no-wall',t:r.t});return;}const g=geo(w),ops=w.openings||[];
+   if(r.t==='curtain'){if(!ops.some(p=>GLAZED(p)&&Math.abs(p.offset+p.width/2-r.q)<.03))P.push({rule:'curtain-off-window',p:[r2(o.position.x),r2(o.position.z)]});if(r.off>(w.thickness||.3)/2+.12)P.push({rule:'curtain-off-wall'});}
+   else{const hw=(r.t==='art'?.9:.7)/2;if(ops.some(p=>p.offset<r.q+hw+.1&&p.offset+p.width>r.q-hw-.1))P.push({rule:'art-placement',why:'over-opening',t:r.t});if(r.ay!=null&&r.ay+r.h/2>2.5)P.push({rule:'art-placement',why:'too-high',t:r.t,top:r2(r.ay+r.h/2)});
+    if((H.stairs||[]).map(stairRect).some(q=>o.position.x>q[0]-.95&&o.position.x<q[2]+.95&&o.position.z>q[1]-.95&&o.position.z<q[3]+.95))P.push({rule:'art-placement',why:'near-stair',t:r.t});}});
+  {let nl=0;world.traverse(o=>{if(o.userData&&o.userData.stairLining)nl++;});const ns=(H.stairs||[]).filter(st=>{const li=H.levels.findIndex(x=>x.name===st.level);return H.levels[li+1];}).length;if(nl<ns*4)P.push({rule:'stair-opening-unlined',linings:nl,stairs:ns});}
   // furniture footprints must not interpenetrate (rugs/wall decor excluded; chairs may tuck under tables/desks)
   const SKIP=new Set(['rug','runner','curtain','art','mirror','towel','tvw','hooks','wshelf','lamp']),TUCK=new Set(['chair','stool']),UND=new Set(['table','desk','island','otable','kitch']);
   const fr=(H.furn||[]).filter(f=>!SKIP.has(f.t)&&FUR[f.t]).map(f=>{const D=FUR[f.t],w=f.w||D.w,d=f.d||D.d,q=((f.r||0)%2)?[d,w]:[w,d];return [f,f.p[0]-q[0]/2,f.p[1]-q[1]/2,f.p[0]+q[0]/2,f.p[1]+q[1]/2];});
   for(let i=0;i<fr.length;i++)for(let j=i+1;j<fr.length;j++){const A=fr[i],B=fr[j];if(A[0].level!==B[0].level)continue;const ta=A[0].t,tb=B[0].t;if((TUCK.has(ta)&&UND.has(tb))||(TUCK.has(tb)&&UND.has(ta)))continue;
    const ox=Math.min(A[3],B[3])-Math.max(A[1],B[1]),oz=Math.min(A[4],B[4])-Math.max(A[2],B[2]);if(ox>.03&&oz>.03)P.push({rule:'furn-overlap',a:ta,b:tb,level:A[0].level,p:A[0].p});}}
  return P;}
-let LMS=null;const _lmv=new THREE.Vector3();
+let LMS=null;let LMSRC=[];const _lmv=new THREE.Vector3();
 function lmCands(w){const use=new Map();w.traverse(o=>{if(o.isMesh)use.set(o.geometry,(use.get(o.geometry)||0)+1);});const out=[];
- w.traverse(o=>{if(!o.isMesh||Array.isArray(o.material)||o.material===FLATW||o.material===FLATM)return;for(let p=o;p&&p!==w;p=p.parent){const u=p.userData||{};if(u.furn||u.doorLeaf||u.lamp||u.door||u.ceil)return;}
+ w.traverse(o=>{if(!o.isMesh||Array.isArray(o.material)||o.material===FLATW||o.material===FLATM)return;for(let p=o;p&&p!==w;p=p.parent){const u=p.userData||{};if(u.furn||u.doorLeaf||u.lamp||u.door||u.ceil||u.stairLining)return;}
   const m=o.material,g=o.geometry;if(!m||m.transparent||m.opacity<1||!(m.isMeshStandardMaterial||m.isMeshLambertMaterial))return; // unlit MeshBasic floors stay live (their clone lost the floor look)if(use.get(g)>1)return;
   if(!/^(Box|Extrude|Shape|Plane|Buffer)Geometry$/.test(g.type)||!g.attributes.position)return;if(g.attributes.position.count>20000)return;
   g.computeBoundingBox();const s=g.boundingBox.getSize(_lmv),mx=Math.max(s.x,s.y,s.z);if(mx<.25||mx>80)return;out.push(o);});return out;}
@@ -936,10 +972,11 @@ async function lmHook(){const src=H&&H.lightmap&&H.lightmap.src;if(LMS&&LMS.w!==
   const [bin,tex]=await Promise.all([fetch(base+meta.uv).then(r=>r.arrayBuffer()),new THREE.TextureLoader().loadAsync(base+(mob&&meta.texMob?meta.texMob:meta.tex))]);if(w!==world)return;
   const C=lmCands(w),cn=o=>{const g=o.geometry;return g.index?g.index.count-g.index.count%3:g.attributes.position.count;};if(C.length!==meta.counts.length||C.some((o,i)=>cn(o)!==meta.counts[i])){console.warn('lightmap: mesh mismatch, live lighting',C.length,meta.counts.length);return;}
   tex.colorSpace=THREE.SRGBColorSpace;tex.flipY=false;tex.channel=1;tex.generateMipmaps=true;tex.minFilter=THREE.LinearMipmapLinearFilter;tex.anisotropy=4;
-  const U=new Uint16Array(bin),cl=new Map(),mats=[],bas=[];let q=0;
-  C.forEach((o,i)=>{if(o.geometry.index){const g0=o.geometry;o.geometry=g0.toNonIndexed();g0.dispose();}const n=meta.counts[i],a=new Float32Array(n*2);for(let j=0;j<n*2;j++)a[j]=U[q+j]/65535;q+=n*2;o.geometry.setAttribute('uv1',new THREE.BufferAttribute(a,2));
-   const o0=o.material;let m=cl.get(o0);if(!m){m=o0.clone();m.lightMap=tex;m.userData.lmEnv=m.envMapIntensity!=null?m.envMapIntensity:1;mats.push(m);cl.set(o0,m);}o.material=m;if(m.isMeshBasicMaterial)bas.push([o,o0,m]);});
-  LMS={w,mats,bas,kb:meta.kb||1.6,k:meta.k||1,ms:Math.round(performance.now()-t0)};window.__lmS=LMS;window.__lm={meshes:C.length,mats:mats.length,ms:LMS.ms,tex:mob&&meta.texMob?meta.texMob:meta.tex};applyAtmo(true);DIRTY=Math.max(DIRTY,60);
+  const U=new Uint16Array(bin),cl=new Map(),mats=[],bas=[];let q=0;LMSRC=[];
+  const GS=new Set();let shg=0;/* v20261117j FIX (lightmap shards): candidates may share one non-indexed geometry (extruded slabs/ceilings); uv1 written on the shared buffer was overwritten by the last mesh -> every other user sampled someone else's lightmap islands. Each candidate now owns its geometry. */
+  C.forEach((o,i)=>{if(o.geometry.index){const g0=o.geometry;o.geometry=g0.toNonIndexed();}else if(GS.has(o.geometry)){o.geometry=o.geometry.clone();shg++;}GS.add(o.geometry);const n=meta.counts[i],a=new Float32Array(n*2);for(let j=0;j<n*2;j++)a[j]=U[q+j]/65535;q+=n*2;o.geometry.setAttribute('uv1',new THREE.BufferAttribute(a,2));
+   const o0=o.material;let m=cl.get(o0);if(!m){m=o0.clone();m.lightMap=tex;LMSRC.push([o0,m]);m.userData.lmEnv=m.envMapIntensity!=null?m.envMapIntensity:1;mats.push(m);cl.set(o0,m);}o.material=m;if(m.isMeshBasicMaterial)bas.push([o,o0,m]);});
+  LMS={w,mats,bas,kb:meta.kb||1.6,k:meta.k||1,ms:Math.round(performance.now()-t0)};window.__lmS=LMS;window.__lm={meshes:C.length,shared:shg,mats:mats.length,ms:LMS.ms,tex:mob&&meta.texMob?meta.texMob:meta.tex};applyAtmo(true);DIRTY=Math.max(DIRTY,60);
  }catch(e){console.warn('lightmap failed, live lighting',e);}}
 function lmAtmo(up){if(!LMS||LMS.w!==world)return;const d=up,cut=.7*d;if(hemiL)hemiL.intensity*=1-cut;if(fillL)fillL.intensity*=1-cut*.8;if(roofFillL)roofFillL.intensity*=1-cut*.8;
  LMS.mats.forEach(m=>{if(m.isMeshBasicMaterial)m.lightMapIntensity=Math.PI*LMS.kb;else{m.lightMapIntensity=LMS.k*d;m.envMapIntensity=m.userData.lmEnv*(1-.5*d);}});
@@ -965,7 +1002,9 @@ export const STY={minimal:{sofa:'#d9d6cf',armch:'#cfcac1',table:'#e9e5dd',ctable
 export const FUR={bed:{w:1.6,d:2.05,h:.5,c:'#e9e4da'},bed1:{w:.9,d:2,h:.5,c:'#e9e4da'},bunk:{w:.9,d:2,h:1.65,c:'#e9e4da'},sofa:{w:2.4,d:1.0,h:.8,c:'#6a5644'},armch:{w:.85,d:.85,h:.8,c:'#7a6550'},table:{w:1.8,d:1.0,h:.75,c:'#d4b48a'},ctable:{w:1.1,d:.7,h:.42,c:'#d4b48a'},desk:{w:1.2,d:.6,h:.75,c:'#e0c9a6'},tv:{w:1.8,d:.42,h:.5,c:'#3b3d40'},ward:{w:1.8,d:.62,h:2.2,c:'#f4f1ea'},kitch:{w:2.8,d:.62,h:.9,c:'#f7f5f0'},fridge:{w:.65,d:.7,h:1.85,c:'#dcdcdc'},bath:{w:1.7,d:.75,h:.55,c:'#ffffff'},shower:{w:.9,d:.9,h:.1,c:'#ffffff'},sink:{w:.6,d:.45,h:.85,c:'#ffffff'},wc:{w:.4,d:.65,h:.42,c:'#ffffff'},shelf:{w:.9,d:.35,h:1.8,c:'#d4b48a'},plant:{w:.45,d:.45,h:1.1,c:'#5b7d4a'},rug:{w:3.2,d:3.4,h:.02,c:'#7a4530'},runner:{w:2.4,d:.7,h:.02,c:'#6a4a3a'},lamp:{w:.35,d:.35,h:1.3,c:'#2f3235'},chair:{w:.45,d:.5,h:.9,c:'#f1ece2'},art:{w:.9,d:.04,h:.7,c:'#c4b8a4'},curtain:{w:1.4,d:.08,h:2.0,c:'#e8e2d6'},shoe:{w:1.0,d:.4,h:.7,c:'#d4b48a'},bench:{w:1.2,d:.4,h:.45,c:'#c4a07a'},nstand:{w:.45,d:.4,h:.55,c:'#c4a07a'},dresser:{w:1.2,d:.5,h:.9,c:'#e8e0d4'},sideb:{w:1.6,d:.45,h:.85,c:'#c4a07a'},side:{w:.45,d:.45,h:.5,c:'#c4a07a'},stool:{w:.38,d:.38,h:.75,c:'#6a5644'},island:{w:1.6,d:.8,h:.9,c:'#efe8de'},pendant:{w:.4,d:.4,h:.3,c:'#e8dcc8'},mirror:{w:.7,d:.04,h:.9,c:'#c5d4e0'},towel:{w:.55,d:.12,h:.7,c:'#d8c8b0'},coat:{w:.5,d:.5,h:1.8,c:'#3a4a5a'},toy:{w:.55,d:.4,h:.5,c:'#c4783a'},otable:{w:1.4,d:.8,h:.75,c:'#a08060'},lounge:{w:1.6,d:.85,h:.55,c:'#5a6a4a'},wshelf:{w:.8,d:.25,h:1.8,c:'#c4a07a'},tvw:{w:1.2,d:.06,h:.7,c:'#1a1c20'},hooks:{w:.6,d:.08,h:.3,c:'#8a6a4a'},washer:{w:.6,d:.6,h:.85,c:'#f2f2f0'}};
 const FM={};function fm(c,soft){const k=c+(soft?'~f':'');return FM[k]||(FM[k]=new THREE.MeshStandardMaterial({color:c,roughness:soft?.85:.72,map:soft?fabric:null}));}
 const FLO={dub:[0xbea07d,'wood',.55],orech:[0x8a6448,'wood',.55],dlazba:[0xe6e2da,'tile',.35],beton:[0xb0aea8,'beton',.85],tmave:[0x5a4636,'wood',.6]};
-export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');FLATM.color.set(o.roof||'#3e444c').lerp(new THREE.Color(0xb8b8b4),.55);const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;}}
+/* v20261117i: style/colour switches only touch materials in place; lightmapped clones follow their source (colour, map, roughness) so 'Steny dnu' also recolours baked walls */
+function lmSync(){LMSRC.forEach(([a,b])=>{if(a.color&&b.color)b.color.copy(a.color);if(b.map!==a.map){b.map=a.map;b.needsUpdate=true;}if(a.roughness!=null)b.roughness=a.roughness;});}
+export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;queueMicrotask(lmSync);M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');FLATM.color.set(o.roof||'#3e444c').lerp(new THREE.Color(0xb8b8b4),.55);const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;}}
 let SUNK=1,roofFillL=null,hemiL=null,fillL=null,skyDay=null,ATM={t:'day',w:'sun'},wxObj=null,nightG=null;
 let sunH=16.5,lastFp=null,doorMode='open',doorPivs=[],mktGlass=false;
 export function checkClearances(){
