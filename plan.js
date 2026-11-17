@@ -281,6 +281,116 @@ function quality(S,ops,bb,ppm,W,H){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/
 // footnotes, empty margins); the max-side working resolution then shrinks the drawing until thin walls vanish. Find the drawing
 // region (content blob holding most long thin axis lines, full-width UI bars ignored) and crop to it, so the reader's working
 // resolution goes to the drawing itself. Only clean (mostly white) images, only when the drawing is a small part of a tall/wide page.
+
+/* v20261117h: crop uniform viewer chrome (phone status/toolbars, desktop title bars, side bezels)
+   so the working resolution stays on the drawing. Only nearly-uniform border strips are removed. */
+function cropChrome(img){const W0=img.width,H0=img.height;if(W0<80||H0<80)return null;
+ const c=mk(W0,H0),x=c.getContext('2d');x.drawImage(img,0,0);const d=x.getImageData(0,0,W0,H0).data;
+ const row=y=>{let s=0,s2=0;for(let i=0;i<W0;i++){const k=(y*W0+i)*4,g=(d[k]+d[k+1]+d[k+2])/3;s+=g;s2+=g*g;}const m=s/W0;return{m,sd:Math.sqrt(Math.max(0,s2/W0-m*m))};};
+ const col=xx=>{let s=0,s2=0;for(let i=0;i<H0;i++){const k=(i*W0+xx)*4,g=(d[k]+d[k+1]+d[k+2])/3;s+=g;s2+=g*g;}const m=s/H0;return{m,sd:Math.sqrt(Math.max(0,s2/H0-m*m))};};
+ const isDark=s=>s.sd<28&&s.m<80;const isLite=s=>s.sd<28&&s.m>195;const isBar=s=>isDark(s)||isLite(s);
+ let y0=0,y1=H0,x0=0,x1=W0;
+ while(y0<H0*.22&&isBar(row(y0)))y0++;
+ while(y1>H0*.78&&isBar(row(y1-1)))y1--;
+ while(x0<W0*.22&&isBar(col(x0)))x0++;
+ while(x1>W0*.78&&isBar(col(x1-1)))x1--;
+ const bandRow=(a,b)=>{let s=0,n=0;for(let y=a;y<b;y++){s+=row(y).m;n++;}return n?s/n:255;}
+ const bandCol=(a,b)=>{let s=0,n=0;for(let x=a;x<b;x++){s+=col(x).m;n++;}return n?s/n:255;}
+ if(y0>=12&&bandRow(0,y0)>=247)y0=0;if(H0-y1>=12&&bandRow(y1,H0)>=247)y1=H0;
+ if(x0>=12&&bandCol(0,x0)>=247)x0=0;if(W0-x1>=12&&bandCol(x1,W0)>=247)x1=W0;
+ if(y0<12&&H0-y1<12&&x0<12&&W0-x1<12)return null;
+ const liteMin=s=>Math.max(40,.08*s);
+ const topLite=y0>=12&&isLite(row((y0/2)|0)),botLite=H0-y1>=12&&isLite(row(((y1+H0)/2)|0));
+ const leftLite=x0>=12&&isLite(col((x0/2)|0)),rightLite=W0-x1>=12&&isLite(col(((x1+W0)/2)|0));
+ if(topLite&&!(botLite||y0>=liteMin(H0)))y0=0;if(botLite&&!(topLite||H0-y1>=liteMin(H0)))y1=H0;
+ if(leftLite&&!(rightLite||x0>=liteMin(W0)))x0=0;if(rightLite&&!(leftLite||W0-x1>=liteMin(W0)))x1=W0;
+ if(y0<12&&H0-y1<12&&x0<12&&W0-x1<12)return null;
+ if((y1-y0)<.55*H0||(x1-x0)<.55*W0)return null;
+ /* only crop a screenshot/letterbox frame: opposite sides, same kind, nearly equal width (desk window chrome, phone bars). Uneven dark table edges around a photographed plan are not a frame. */
+ const close=(a,b)=>a>0&&b>0&&a/b<1.12&&b/a<1.12;
+ const sideKind=(horiz,a,b)=>{if(b-a<12)return '';const s=horiz?bandRow(a,b):bandCol(a,b);return s<80?'D':(s>195&&s<247?'L':'');};
+ const kL=sideKind(0,0,x0),kR=sideKind(0,x1,W0),kT=sideKind(1,0,y0),kB=sideKind(1,y1,H0);
+ const frameLR=kL&&kL===kR&&close(x0,W0-x1)&&x0>=Math.max(16,.05*W0);
+ const frameTB=kT&&kT===kB&&close(y0,H0-y1)&&y0>=Math.max(16,.05*H0);
+ /* dark bars are letterboxing along the long edge (sides on a portrait shot, top/bottom on landscape). A dark table around a photo is not that. Light bars are window chrome and may sit on any pair. */
+ const darkLR=frameLR&&kL==='D'&&H0>=W0, darkTB=frameTB&&kT==='D'&&W0>H0, liteLR=frameLR&&kL==='L', liteTB=frameTB&&kT==='L';
+ const keepLR=darkLR||liteLR, keepTB=darkTB||liteTB;
+ const wx0=x0,wy0=y0,wx1=x1,wy1=y1;
+ if(keepLR){/* keep walked L/R; also trim same-kind leftover T/B (status / title bar) */if(!(keepTB||kT===(kL||kT)||kB===(kL||kB))){y0=0;y1=H0;}else{if(kT!==kL&&!keepTB)y0=0;if(kB!==kL&&!keepTB)y1=H0;}}
+ else if(keepTB){if(!(kL===kT||kR===kT)){x0=0;x1=W0;}else{if(kL!==kT)x0=0;if(kR!==kT)x1=W0;}}
+ else{x0=0;y0=0;x1=W0;y1=H0;}
+ if(y0<12&&H0-y1<12&&x0<12&&W0-x1<12)return null;
+ if((y1-y0)<.55*H0||(x1-x0)<.55*W0)return null;
+ const pad=4;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(W0,x1+pad);y1=Math.min(H0,y1+pad);
+ const o=mk(x1-x0,y1-y0);o.getContext('2d').drawImage(img,x0,y0,x1-x0,y1-y0,0,0,o.width,o.height);
+ cropChrome.info={box:[x0,y0,x1,y1]};return o;}
+/* Drop a small, far cluster of walls (key-plan thumbnail, elevation) and keep the main unit. */
+function dropSatellites(S){if(!S||S.length<6)return S;
+ const n=S.length,par=S.map((_,i)=>i),find=i=>par[i]===i?i:(par[i]=find(par[i]));
+ const mid=q=>[q.hz?(q.a+q.b)/2:q.c,q.hz?q.c:(q.a+q.b)/2];
+ const box=ix=>{let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;ix.forEach(i=>{const q=S[i],h=q.t/2;if(q.hz){x0=Math.min(x0,q.a);x1=Math.max(x1,q.b);y0=Math.min(y0,q.c-h);y1=Math.max(y1,q.c+h);}else{y0=Math.min(y0,q.a);y1=Math.max(y1,q.b);x0=Math.min(x0,q.c-h);x1=Math.max(x1,q.c+h);}});return[x0,y0,x1,y1];};
+ const area=b=>Math.max(1,(b[2]-b[0])*(b[3]-b[1]));
+ const overlap=(a,b)=>!(a[2]<b[0]||b[2]<a[0]||a[3]<b[1]||b[3]<a[1]);
+ const span=Math.max(...S.map(q=>q.b),...S.map(q=>q.c))-Math.min(...S.map(q=>q.a),...S.map(q=>q.c));
+ const lim=Math.max(80,.45*span);
+ for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const ma=mid(S[i]),mb=mid(S[j]);if(Math.hypot(ma[0]-mb[0],ma[1]-mb[1])<lim)par[find(j)]=find(i);}
+ const groups={};S.forEach((q,i)=>{(groups[find(i)]=groups[find(i)]||[]).push(i);});
+ const gs=Object.values(groups).map(ix=>({ix,L:ix.reduce((s,i)=>s+S[i].b-S[i].a,0),b:box(ix)}));
+ gs.sort((a,b)=>b.L-a.L);if(gs.length<2||gs[0].L<80)return S;
+ const main=gs[0],mb=main.b,keep=new Set();
+ gs.forEach(g=>{const far=!overlap(g.b,mb)&&Math.hypot((g.b[0]+g.b[2])/2-(mb[0]+mb[2])/2,(g.b[1]+g.b[3])/2-(mb[1]+mb[3])/2)>.3*span;
+  if(g!==main&&far&&area(g.b)<.08*area(mb)&&g.L<.15*main.L)return;
+  g.ix.forEach(i=>keep.add(i));});
+ return keep.size>=4&&keep.size<n?S.filter((_,i)=>keep.has(i)):S;}
+
+function barScale(txts,W,H){if(!txts||!txts.length)return null;const ticks=[];
+ for(const t of txts){const s=String(t.txt||'').trim().replace(/\s+/g,' ');const cx=(t.b[0]+t.b[2])/2,cy=(t.b[1]+t.b[3])/2;
+  const m=/^(\d{1,2})\s*m$/i.exec(s);if(m){const v=+m[1];if(v>=1&&v<=20)ticks.push({v,cx,cy,m:1});continue;}
+  if(/^\d{1,2}$/.test(s)){const v=+s;if(v<=10)ticks.push({v,cx,cy,m:0});}}
+ let best=null;
+ for(const axis of['x','y'])for(const t of ticks){const coord=axis==='x'?t.cx:t.cy;const g=ticks.filter(u=>Math.abs((axis==='x'?u.cx:u.cy)-coord)<22);
+  if(!g.some(u=>u.m))continue;const by={};g.forEach(u=>(by[u.v]=by[u.v]||[]).push(u));if(!(0 in by))continue;
+  let end=null;for(const e of[10,5,4,3,2,1])if(e in by&&by[e].some(u=>u.m||e>=5)){end=e;break;}if(!end)continue;
+  const along=u=>axis==='x'?u.cy:u.cx;const p0=by[0].reduce((s,u)=>s+along(u),0)/by[0].length,p1=by[end].reduce((s,u)=>s+along(u),0)/by[end].length,dist=Math.abs(p1-p0);
+  if(dist<40||dist>.45*Math.max(W,H))continue;let ok=1;for(const v of Object.keys(by)){if(+v===0||+v>end)continue;const pv=by[v].reduce((s,u)=>s+along(u),0)/by[v].length;if(Math.abs(pv-(p0+(p1-p0)*(+v/end)))>.12*dist)ok=0;}if(!ok)continue;
+  const ppm=dist/end;if(ppm<20||ppm>250)continue;const sc=Object.keys(by).length+(end===5||end===10?3:0);if(!best||sc>best.sc)best={ppm,sc,src:'scalebar'};}
+ return best;}
+function mapPdfText(o,img,W,H,dbg){const raw=o&&o.pdfText;if(!raw||!raw.length)return null;
+ if(dbg&&(dbg.paper||Math.abs(dbg.skew||0)>.5)){dbg.pdfTextSkip='warp';return null;}
+ const ch=o._chrome&&o._chrome.box,xOff=ch?ch[0]:0,yOff=ch?ch[1]:0;
+ const sx=W/img.width,sy=H/img.height;
+ return raw.map(t=>{const b=t.b||[t.x0,t.y0,t.x1,t.y1];if(!b||b.length<4)return null;
+  return{txt:t.txt||t.t||'',b:[(b[0]-xOff)*sx,(b[1]-yOff)*sy,(b[2]-xOff)*sx,(b[3]-yOff)*sy]};}).filter(Boolean);}
+function textAreas(txts){if(!txts)return[];const out=[];
+ for(const t of txts){const s=String(t.txt||'').trim().replace(/\s+/g,' ');
+  const u=/^(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:m(?:2|²)|\u00b2)/i.exec(s);
+  const d=!u&&/^(\d{1,3}[.,]\d{1,2})$/.exec(s);
+  const m=u||d;if(!m)continue;const v=parseFloat(m[1].replace(',','.'));
+  if(v>=1.2&&v<=200)out.push({v,p:[(t.b[0]+t.b[2])/2,(t.b[1]+t.b[3])/2]});}
+ return out;}
+function roomPixels(S,W,H,ops){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/f)+2,g=new Uint8Array(gw*gh);
+ const rect=(x0,y0,x1,y1)=>{for(let y=Math.max(0,Math.floor(y0/f));y<=Math.min(gh-1,Math.ceil(y1/f));y++)for(let x=Math.max(0,Math.floor(x0/f));x<=Math.min(gw-1,Math.ceil(x1/f));x++)g[y*gw+x]=1;};
+ S.forEach(s=>{const h=Math.max(s.t,f*1.5)/2;s.hz?rect(s.a,s.c-h,s.b,s.c+h):rect(s.c-h,s.a,s.c+h,s.b);});if(ops)ops.forEach(p=>{const A=S[p.i];if(!A||p.type==='wall')return;const h=Math.max(A.t,f*1.5)/2;A.hz?rect(p.lo,A.c-h,p.hi,A.c+h):rect(A.c-h,p.lo,A.c+h,p.hi);});
+ const rooms=[],lab=new Int32Array(gw*gh);let id=1;
+ for(let i=0;i<gw*gh;i++){if(g[i]||lab[i])continue;id++;let n=0,edge=0,sx=0,sy=0,st=[i];lab[i]=id;
+  while(st.length){const k=st.pop(),x=k%gw,y=(k/gw)|0;n++;sx+=x;sy+=y;if(!x||!y||x===gw-1||y===gh-1)edge=1;
+   for(const j of[x>0?k-1:-1,x<gw-1?k+1:-1,y>0?k-gw:-1,y<gh-1?k+gw:-1])if(j>=0&&!g[j]&&!lab[j]){lab[j]=id;st.push(j);}}
+  if(!edge&&n*f*f>=600)rooms.push({px:n*f*f,cx:(sx/n)*f,cy:(sy/n)*f});}
+ return rooms;}
+function areaScale(rooms,areas,prior){if(!rooms||!rooms.length||!areas||!areas.length)return null;
+ const vs=areas.map(a=>a.v).sort((a,b)=>a-b);
+ const isTot=v=>{const rest=vs.filter(u=>u<v-0.01);if(rest.length<2)return 0;const s=rest.reduce((a,b)=>a+b,0);if(Math.abs(s-v)/v<.05)return 1;for(let i=0;i<rest.length;i++)if(Math.abs(s-rest[i]-v)/v<.05)return 1;return 0;};
+ const A=areas.filter(a=>a.v>=1.2&&a.v<=80&&!isTot(a.v));if(!A.length)return null;
+ const Rs=rooms.slice().sort((a,b)=>b.px-a.px),As=A.slice().sort((a,b)=>b.v-a.v);
+ const paired=[],usedR=new Set(),usedA=new Set();
+ As.forEach((a,ia)=>{let best=null;Rs.forEach((r,ir)=>{if(usedR.has(ir))return;const d=Math.hypot(r.cx-a.p[0],r.cy-a.p[1]),rad=Math.sqrt(r.px)/2;if(d<rad*1.15&&(!best||d<best.d))best={ir,d,r,a};});if(best){usedR.add(best.ir);usedA.add(ia);paired.push({px:best.r.px,v:best.a.v});}});
+ const rL=Rs.filter((_,i)=>!usedR.has(i)),aL=As.filter((_,i)=>!usedA.has(i)),m=Math.min(rL.length,aL.length);
+ for(let i=0;i<m;i++)paired.push({px:rL[i].px,v:aL[i].v});
+ const cands=paired.map(q=>({p:Math.sqrt(q.px/q.v),v:q.v})).filter(c=>c.p>=20&&c.p<=250&&(!prior||(c.p/prior<2.5&&prior/c.p<2.5)));
+ if(!cands.length)return null;let best=null;
+ for(const c of cands){const cl=cands.filter(d=>Math.abs(d.p/c.p-1)<.08),area=cl.reduce((s,d)=>s+d.v,0);if(!best||area>best.a||(area===best.a&&cl.length>best.n))best={a:area,n:cl.length,ppm:median(cl.map(d=>d.p))};}
+ if(!best||(best.n<2&&best.a<8))return null;return{ppm:best.ppm,n:best.n,src:'areas'};}
+
 export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)return null;const s=Math.min(1,1000/Math.max(W0,H0)),W=Math.max(8,Math.round(W0*s)),H=Math.max(8,Math.round(H0*s));
  const c=mk(W,H),x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.imageSmoothingQuality='high';x.drawImage(img,0,0,W,H);const g=grayOf(c),N=W*H;
  let nl=0;for(let i=0;i<N;i++)if(g[i]>215)nl++;const light=nl/N,asp=Math.max(W,H)/Math.min(W,H);const info={light:+light.toFixed(2),asp:+asp.toFixed(2)};uploadRegion.info=info;if(light<.6)return null;
@@ -306,12 +416,22 @@ export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)r
  if(!(share>=.6&&(x1-x0)>=.25*W&&(y1-y0)>=.2*H&&((asp>=1.6&&area<=.5)||area<=.2)))return null;
  const pad=.05*Math.max(x1-x0,y1-y0),X0=Math.max(0,Math.floor((x0-pad)/s)),Y0=Math.max(0,Math.floor((y0-pad)/s)),X1=Math.min(W0,Math.ceil((x1+pad)/s)),Y1=Math.min(H0,Math.ceil((y1+pad)/s));
  const o=mk(X1-X0,Y1-Y0),ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(img,X0,Y0,X1-X0,Y1-Y0,0,0,o.width,o.height);info.crop=[X0,Y0,X1,Y1];return o;}
-export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);let cr=null;try{cr=uploadRegion(img);}catch(e){cr=null;}const ci=uploadRegion.info;
- if(!cr)return readPlanX(img,o);const R=readPlanX(cr,o);if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}/* cropped reading failed: fall back to the full image */const F=readPlanX(img,o);if(F&&F.dbg)F.dbg.cropFail=ci;return F||R;}
+export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);
+ let src=img,ch=null;try{if(!(globalThis.__PF||{}).noChrome){ch=cropChrome(img);if(ch){src=ch;o=Object.assign({},o);o._chrome=cropChrome.info;}}}catch(e){}
+ const run=im=>{let cr=null;try{cr=uploadRegion(im);}catch(e){cr=null;}const ci=uploadRegion.info;
+  if(!cr)return readPlanX(im,o);
+  const R=readPlanX(cr,o);if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}
+  const F=readPlanX(im,o);if(F&&F.dbg)F.dbg.cropFail=ci;return F||R;};
+ const qual=R=>{if(!R||!R.dbg)return -1e9;const d=R.dbg;return (d.Q||0)+1.2*(d.nR||0)+(/^(room)?dims|scalebar|areas$/.test(d.scale||'')?.6:0);};
+ const A=run(src);if(A&&A.dbg&&o._chrome)A.dbg.chrome=o._chrome;
+ if(!ch)return A;
+ const B=run(img);if(!B)return A;if(!A)return B;
+ if(qual(B)>qual(A)+.05){if(B.dbg){B.dbg.chromeSkip=o._chrome;B.dbg.chromeQ=[+qual(A).toFixed(2),+qual(B).toFixed(2)];}return B;}
+ if(A.dbg)A.dbg.chromeQ=[+qual(A).toFixed(2),+qual(B).toFixed(2)];return A;}
 function readPlanX(img,o={}){if(o._cm)return readPlan1(img,o);const R=readPlan0(img,o);if(R&&R.dbg&&!(R.dbg.nR>0)&&!o._cyan&&!(globalThis.__PF||{}).noCyan){/* outline open: retry with coloured window symbols as wall body */let C=null;try{C=readPlan1(img,{...o,_cm:R.dbg.cm||'new',_cyan:1,noPaper:!R.dbg.paper});}catch(e){C=null;}if(C&&C.dbg&&(C.dbg.nR||0)>0){C.dbg.cyanRetry=1;return C;}}return R;}
 function readPlan0(img,o){const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&(A.dbg.paper||((globalThis.__PF||{}).skip&&(A.dbg.Q||0)>=4.5)))return A;/* photo, or a confident first reading -> no second pass (speed) */
  let B=null;try{B=readPlan1(img,A?{...o,_cm:'old',noPaper:1,noSketch:1}:{...o,_cm:'old'});/* first reading failed completely -> full second reading (paper + sketch) */}catch(e){B=null;}if(!B)return A;if(!A){B.dbg.aNull=1;return B;}
- const qa=(A.dbg.Q||0)+(/^(room)?dims$/.test(A.dbg.scale)?.6:0),qb=(B.dbg.Q||0)+(/^(room)?dims$/.test(B.dbg.scale)?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.tA=A.dbg.t;R.dbg.tB=B.dbg.t;R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
+ const qa=(A.dbg.Q||0)+(/^(roomdims|dims|scalebar|areas)$/.test(A.dbg.scale)?.6:0),qb=(B.dbg.Q||0)+(/^(roomdims|dims|scalebar|areas)$/.test(B.dbg.scale)?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.tA=A.dbg.t;R.dbg.tB=B.dbg.t;R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
 function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.t||{};dbg.t[k]=Math.round(performance.now()-T0);};let c=imgCanvas(img,MAXD);const CG=o._cm==='old'?cleanGrayOld:cleanGray;inkMask.off=o._cm==='old';
  if(!o.rect&&!o.noPaper){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
  focus.nearE=!!o._cyan;tm('paper');let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
@@ -365,7 +485,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  /* v12j near-tie stability: a reading that closes more rooms wins when its quality is within 0.3 (tiny resize/aliasing differences between browsers used to flip ink<->pair) */if(!o.forceHatch&&!dbg.paper&&!(globalThis.__PF||{}).noTie){const b0=best;if(!pen(b0))for(const v of V)if(v.q.nR>best.q.nR&&v.q.Q>=b0.q.Q-.25)best=v;dbg.tie=best!==b0?b0.name+'>'+best.name:0;}/* v13d: wide-pair readings exist only when no other reading closed 2+ rooms; one that closes 3+ rooms beats a near-equal non-closing reading */if(!o.forceHatch){const b1=best;for(const v of V)if(/^pairW/.test(v.name)&&v.q.nR>=3&&v.q.nR>=b1.q.nR+2&&v.q.Q>=b1.q.Q-1&&(best===b1||v.q.nR>best.q.nR||(v.q.nR===best.q.nR&&v.q.Q>best.q.Q)))best=v;if(best!==b1)dbg.tie=b1.name+'>'+best.name;}dbg.cands=V.map(v=>[v.name,+v.q.Q.toFixed(2),v.q.nR,v.S.length]);dbg.pick=best.name;dbg.nR=best.q.nR;dbg.Q=best.q.Q;let S=pruneLoose(best.S);dbg.pruned=best.S.length-S.length;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
  dbg.nS=S.length;
- let bb=best.bb;
+ let bb=best.bb;{const n0=S.length;if(!(globalThis.__PF||{}).noSat)S=dropSatellites(S);dbg.sat=n0-S.length;if(S.length!==n0&&S.length>=4)bb=bbox(S);}
  let ops=(classifyGap.paper=!!dbg.paper,findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
  tm('pick');let sc=estimateScale(S,ops,bb);dbg.est=estimateScale.last.map(v=>+v.toFixed(1));
  try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];dimScale.split=!!dbg.paper;
@@ -386,7 +506,14 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
     (dbg.roomDimL=dbg.roomDimL||[]).push([t.txt,t.rot,Math.round(cx),Math.round(cy),Math.round(lo),Math.round(hi),t.vals.join('/')]);if(lo<-1e8||hi>1e8)return;const span=hi-lo,tl=t.rot?t.b[3]-t.b[1]:t.b[2]-t.b[0];if(span<2*tl)return;for(const v of t.vals){if(v<.6||v>15)continue;const p=span/v;if(!(sc.ppm>0)||(p/sc.ppm<2&&sc.ppm/p<2))cand.push({p,k});}});
    let bR=null;for(const c of cand){const m=cand.filter(d=>Math.abs(d.p/c.p-1)<.04),n=new Set(m.map(d=>d.k)).size;if(!bR||n>bR.n)bR={n,ppm:median(m.map(d=>d.p))};}
    dbg.roomDim=[TX.length,cand.length,bR&&bR.n,bR&&+bR.ppm.toFixed(1)];if(bR&&bR.n>=3){sc={ppm:bR.ppm,src:'roomdims'};dbg.scale0='roomdims';}}
-  if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1)sc={ppm:D.ppm,src:'dims'};
+  const PT=mapPdfText(o,img,W,H,dbg);if(PT)dbg.pdfN=PT.length;const TX2=(PT&&PT.length)?TX.concat(PT):TX;
+  const B=barScale(TX2,W,H);if(B){dbg.bar=+B.ppm.toFixed(1);}
+  const areas=[...(dbg.areasPx||[]),...textAreas(PT||[])];if(PT&&areas.length)dbg.areasPx=areas;
+  const Rpx=roomPixels(S,W,H,ops),A=!(globalThis.__PF||{}).noArea?areaScale(Rpx,areas,sc.ppm):null;
+  dbg.areaSc=[Rpx.length,areas.length,A&&A.n,A&&+A.ppm.toFixed(1)];
+  if(PT&&B){sc={ppm:B.ppm,src:'scalebar'};dbg.scale0='scalebar';}
+  else if(PT&&A&&A.n>=2){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}
+  if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1&&sc.src!=='scalebar'&&sc.src!=='areas')sc={ppm:D.ppm,src:'dims'};
    // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
    if(D.lines&&D.lines.length){const n0=S.length,cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2;
     const outer=q=>{const ctr=q.hz?cy:cx,out=Math.sign(q.c-ctr);return !S.some(o=>o!==q&&!!o.hz===!!q.hz&&Math.sign(o.c-q.c)===out&&Math.abs(o.c-q.c)>q.t&&Math.min(o.b,q.b)-Math.max(o.a,q.a)>.3*(q.b-q.a));};
