@@ -1,6 +1,66 @@
 // Low-poly modern-Scandi kit (procedural, 1:1 FUR sizes). Prem5: rounded edges, AO, dollhouse contrast.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+/* v20261117h GENERATOR RULE (Poly Haven CC0 furniture): every generated house swaps suitable procedural pieces for scanned CC0 models picked per interior style.
+   - models: assets/ph/<id>.glb (gltf-transform: 512 px WebP textures, meshopt, simplified) - same files on desktop and mobile
+   - lazy: a model is fetched only when a piece of that type+style is placed; one fetch per id, every instance is a clone sharing geometry + materials
+   - fit: uniformly scaled to the piece's FUR footprint (w x d), sofas/beds may stretch <=15 % in width, sit on the floor, centred - so placement/overlap rules still hold
+   - fallback: the procedural piece stays visible until the model arrives and remains if loading fails or ?noph=1 */
+const PH_BASE = new URL('./assets/ph/', import.meta.url).href;
+const PHS = {
+  // style groups: m = moderny/minimal/futur, s = skandi/rodinny(''), i = indus, k = klasik
+  plant: { m: 'potted_plant_04', s: 'potted_plant_02', i: 'potted_plant_04', k: 'potted_plant_02' },
+  armch: { m: 'modern_arm_chair_01', s: 'modern_arm_chair_01', i: 'mid_century_lounge_chair', k: 'GreenChair_01' },
+  ctable: { m: 'coffee_table_round_01', s: 'modern_coffee_table_01', i: 'industrial_coffee_table', k: 'modern_coffee_table_01' },
+  side: { m: 'side_table_01', s: 'side_table_01', i: 'side_table_01', k: 'side_table_01' },
+  chair: { s: 'painted_wooden_chair_01', i: 'dining_chair_02', k: 'dining_chair_02' },
+  nstand: { s: 'painted_wooden_nightstand', i: 'painted_wooden_nightstand', k: 'ClassicNightstand_01' },
+  sofa: { i: 'sofa_02', k: 'Sofa_01' },
+};
+const PH_STRETCH = { sofa: 1.15 };
+const phGroup = sty => (sty === 'moderny' || sty === 'minimal' || sty === 'futur') ? 'm' : sty === 'indus' ? 'i' : sty === 'klasik' ? 'k' : 's';
+export function phPick(type, sty) { const t = PHS[type]; return t ? t[phGroup(sty || '')] || null : null; }
+const phCache = new Map(); let phLoader = null, phSwap = () => {};
+export const PH_STATS = { req: 0, ok: 0, fail: 0, inst: 0, ids: [] };
+export function onPhSwap(fn) { phSwap = fn; }
+export function phPending() { return Promise.all([...phCache.values()]); }
+const PH_OFF = typeof location !== 'undefined' && /[?&]noph=1/.test(location.search);
+function phModel(id) {
+  if (!phCache.has(id)) {
+    PH_STATS.req++; PH_STATS.ids.push(id);
+    phLoader = phLoader || new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    phCache.set(id, new Promise(res => phLoader.load(PH_BASE + id + '.glb', gl => {
+      const sc = gl.scene; sc.updateMatrixWorld(true);
+      let b = new THREE.Box3().setFromObject(sc);
+      // seating faces +z like our kit (backrest at -z): the backrest = vertices in the top 30 % of the height; if they sit at +z, turn the model 180 deg
+      { const yT = b.min.y + 0.7 * (b.max.y - b.min.y), v = new THREE.Vector3(); let zs = 0, n = 0;
+        sc.traverse(o => { if (!o.isMesh) return; const P = o.geometry.attributes.position; for (let i = 0; i < P.count; i += 3) { v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld); if (v.y > yT) { zs += v.z; n++; } } });
+        if (n && zs / n > (b.min.z + b.max.z) / 2 + 0.02 * (b.max.z - b.min.z)) { sc.userData.flip = 1; } }
+      sc.userData.bb = b;
+      sc.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      PH_STATS.ok++; res(sc);
+    }, undefined, () => { PH_STATS.fail++; res(null); })));
+  }
+  return phCache.get(id);
+}
+function phAttach(g, type, F, sty) {
+  const id = PH_OFF ? null : phPick(type, sty); if (!id) return;
+  phModel(id).then(sc => {
+    if (!sc) return; const b = sc.userData.bb, sz = b.getSize(new THREE.Vector3());
+    const W = F.w, D = F.d, k = PH_STRETCH[type] || 1; let s = Math.min(W / sz.x, D / sz.z);
+    if (type === 'plant' && F.h) s = Math.min(F.h / sz.y, 1.8 * s); // plants: true height (leaves may spread past the pot footprint)
+    const sx = type === 'plant' ? s : Math.min(W / sz.x, s * k), sz2 = type === 'plant' ? s : Math.min(D / sz.z, s * k);
+    const m0 = sc.clone(true); m0.scale.set(sx, s, sz2);
+    m0.position.set(-(b.min.x + b.max.x) / 2 * sx, -b.min.y * s, -(b.min.z + b.max.z) / 2 * sz2);
+    const SEAT = type === 'sofa' || type === 'armch' || type === 'chair' || type === 'lounge'; let m = m0;
+    if (SEAT && sc.userData.flip) { m = new THREE.Group(); m.add(m0); m.rotation.y = Math.PI; }
+    g.children.forEach(c => { if (!(c.material && c.material.isMeshBasicMaterial && c.material.transparent)) c.visible = false; });
+    m.userData.ph = id; g.add(m); g.userData.ph = id; PH_STATS.inst++; phSwap();
+  });
+}
 
 const cache = new Map();
 let ready = null;
@@ -482,7 +542,9 @@ function proc(type, F, cols) {
 }
 
 export function makeFurn(type, F, cols = {}) {
-  return metreUV(proc(type, F, cols));
+  const g = metreUV(proc(type, F, cols));
+  phAttach(g, type, F, cols.sty);
+  return g;
 }
 
 export function makeTree(s = 1) {

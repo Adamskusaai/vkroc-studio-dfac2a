@@ -4,7 +4,10 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar} from './kit.js?v=20261117g';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261117h';
+onPhSwap(()=>{DIRTY=Math.max(DIRTY,30);});
+export function phInfo(){return PH_STATS;}
+export function phWait(){return phPending();}
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches;
 let roomKinds={};let H,R,scene,cam,rig,orb,world,loco,body,sun,inited=false,walk=false,roof='flat',intro=null;const clock=new THREE.Clock(),keys={},joy=[0,0];let yaw=0,pitch=0,LK='',DIRTY=60,FT=[],PRMAX=2;export function dirty(n=60){DIRTY=Math.max(DIRTY,n);}
 
@@ -565,7 +568,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   pts.forEach(p=>{if(onLow(p[0],p[1]))return;let d=1e9;lw.forEach(w=>{d=Math.min(d,segD(p[0],p[1],w));});if(d<1.5)return;
    const pm=add(/* v20261117c: designed (parapet) projects get slim anthracite steel columns */new THREE.BoxGeometry(DZ?.16:.24,lt-el,DZ?.16:.24),DZ?M.frame:M.fac,p[0],el+(lt-el)/2,p[1],0);pm.userData.post=1;pm.userData.lvJ=i;window.__posts.push([p[0],p[1],up.name]);});
   /* v20261117c: designed projects - a slim dark flashing band covers the slab edge between storeys on every lower exterior wall (the bare slab edge read as a glowing line at dusk) */
-  if(DZ)lw.filter(w=>w._ext).forEach((w,k)=>{const g=geo(w),T=w.thickness||.3,D=.2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,o=T/2+D/2-.01,fb=add(new THREE.BoxGeometry(g.L+T+2*D-.02,eu-lt+.1+(k%2)*.004,D),M.frame,g.x0+g.u[0]*g.L/2+nx*o,(lt+eu)/2+.03,g.z0+g.u[1]*g.L/2+nz*o,-Math.atan2(g.u[1],g.u[0]),1);fb.userData.lvJ=i;});});
+  if(DZ)lw.filter(w=>w._ext).forEach((w,k)=>{const g=geo(w),T=w.thickness||.3,D=.04,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,o=T/2+D/2-.01,fb=add(new THREE.BoxGeometry(g.L+T+2*D-.02,eu-lt+.1+(k%2)*.004,D),M.frame,g.x0+g.u[0]*g.L/2+nx*o,(lt+eu)/2+.03,g.z0+g.u[1]*g.L/2+nz*o,-Math.atan2(g.u[1],g.u[0]),1);fb.userData.lvJ=i;fb.userData.flash=D;});});
  // prem8: kitchen tile zone inside open-plan living (bbox of kitchen pieces + 0.9 m working aisle)
  H.levels.forEach(l=>{const RK=roomKinds[l.name];if(!RK)return;const grp={};(H.furn||[]).filter(f=>f.level===l.name&&['kitch','fridge','island'].includes(f.t)).forEach(f=>{const L=RK.labelAt(f.p[0],f.p[1]);if(L&&RK.kindOf[L]==='living')(grp[L]=grp[L]||[]).push(f);});
   Object.values(grp).forEach(fs=>{let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;fs.forEach(f=>{const F=FUR[f.t]||{w:1,d:1},rot=(f.r||0)%2,w=rot?F.d:F.w,d=rot?F.w:F.d;x0=Math.min(x0,f.p[0]-w/2);x1=Math.max(x1,f.p[0]+w/2);z0=Math.min(z0,f.p[1]-d/2);z1=Math.max(z1,f.p[1]+d/2);});
@@ -905,6 +908,9 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
   let nc=0;for(let i=0;i<RF.length&&nc<5;i++)for(let j=i+1;j<RF.length&&nc<5;j++){const A=RF[i][0],B=RF[j][0];if(Math.abs(A.max.y-B.max.y)>.0004)continue;
    if(RF[i][1].material===FLATW&&RF[j][1].material===FLATW)continue;const ox=Math.min(A.max.x,B.max.x)-Math.max(A.min.x,B.min.x),oz=Math.min(A.max.z,B.max.z)-Math.max(A.min.z,B.min.z);if(ox>.02&&oz>.02){nc++;P.push({rule:'coplanar-overlap',y:r2(A.max.y),p:[r2(Math.max(A.min.x,B.min.x)),r2(Math.max(A.min.z,B.min.z))]});}}
   {let nh=0;world.traverse(o=>{if(o.userData&&o.userData.hobPlate)nh++;});const kl=new Set((H.furn||[]).filter(f=>f.t==='kitch').map(f=>f.level)).size;if(nh>kl)P.push({rule:'kitchen-multi-hob',hobs:nh,kitchens:kl});}
+  // v20261117h: slab-edge flashing band max 6 cm proud of the wall (was a 20 cm fascia that wrapped past the corners)
+  world.traverse(o=>{const u=o.userData||{};if(u.flash&&u.flash>.06)P.push({rule:'flashing-too-proud',d:u.flash});
+});
   // furniture footprints must not interpenetrate (rugs/wall decor excluded; chairs may tuck under tables/desks)
   const SKIP=new Set(['rug','runner','curtain','art','mirror','towel','tvw','hooks','wshelf','lamp']),TUCK=new Set(['chair','stool']),UND=new Set(['table','desk','island','otable','kitch']);
   const fr=(H.furn||[]).filter(f=>!SKIP.has(f.t)&&FUR[f.t]).map(f=>{const D=FUR[f.t],w=f.w||D.w,d=f.d||D.d,q=((f.r||0)%2)?[d,w]:[w,d];return [f,f.p[0]-q[0]/2,f.p[1]-q[1]/2,f.p[0]+q[0]/2,f.p[1]+q[1]/2];});
