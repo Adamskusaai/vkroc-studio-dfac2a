@@ -98,18 +98,53 @@ function ptex(kind) {
   const T = new THREE.CanvasTexture(c); T.wrapS = T.wrapT = THREE.RepeatWrapping; T.colorSpace = THREE.SRGBColorSpace; T.repeat.set(kind === 'fabric' ? 3 : 2, kind === 'fabric' ? 3 : 1); T.anisotropy = 4;
   return (TX[kind] = T);
 }
+// v20261117a: real Poly Haven CC0 PBR maps (assets/cc0/tex/ph, greyscale albedo normalised to the procedural mean so the
+// style colour still tints it) - lazy-loaded the first time a material of that kind is built; the procedural map stays until
+// the JPG arrives (never a black flash). Tile size = real-world size of the scan in metres; UVs are metric (metreUV below).
+const PHK = { fabric: ['linen', 0.27, '512'], velvet: ['velvet', 0.28, '512'], leather: ['leather', 0.5, '512'], wood: ['veneer', 1.83, '1k'], stone: ['terrazzo', 2.0, '512'] };
+const PHT = {}; let TLK = null;
+function phLoad(kind, cb) {
+  const P = PHK[kind]; if (!P || typeof document === 'undefined') return;
+  let e = PHT[kind]; if (!e) {
+    e = PHT[kind] = { t: null, q: [] }; TLK = TLK || new THREE.TextureLoader(); const out = {}; let n = 0;
+    const ld = (k, sz, srgb) => TLK.load(`assets/cc0/tex/ph/${P[0]}_${k}_${sz}.jpg`, t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / P[1], 1 / P[1]); t.anisotropy = 4; if (srgb) t.colorSpace = THREE.SRGBColorSpace; out[k] = t; if (++n === 3) { e.t = out; e.q.forEach(f => f(out)); e.q = []; } }, undefined, () => { /* keep procedural */ });
+    ld('diff', P[2], 1); ld('nor', '512'); ld('rough', '512');
+  }
+  if (e.t) cb(e.t); else e.q.push(cb);
+}
 const MC = new Map();
 function stdT(c, kind, rough, metal = 0) {
   const k = c + '|' + kind + '|' + rough + '|' + metal; if (MC.has(k)) return MC.get(k);
-  let map = null; try { if (typeof document !== 'undefined') map = ptex(kind); } catch (e) { map = null; }
+  let map = null; try { if (typeof document !== 'undefined') map = ptex(kind === 'velvet' ? 'fabric' : kind === 'stone' ? 'leather' : kind); } catch (e) { map = null; }
   const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: rough, metalness: metal, map });
+  if (PHK[kind]) {
+    m.userData.muv = 1;
+    if (map) { map = map.clone(); const T = PHK[kind][1] * 3; map.repeat.set(1 / T, 1 / T); m.map = map; }
+    phLoad(kind, t => { m.map = t.diff; m.normalMap = t.nor; const ns = kind === 'stone' ? 0.25 : kind === 'wood' ? 0.35 : 0.6; m.normalScale.set(ns, ns); m.roughnessMap = t.rough; m.roughness = Math.min(1, rough * 1.1); m.needsUpdate = true; try { if (typeof window !== 'undefined' && window.__vkDirty) window.__vkDirty(); } catch (x) {} });
+  }
   MC.set(k, m); return m;
+}
+// metric box-projected UVs (1 UV unit = 1 m) for every mesh whose material carries a Poly Haven map
+const _v = new THREE.Vector3();
+function metreUV(g) {
+  g.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.userData || !o.material.userData.muv) return;
+    const G = o.geometry; if (!G || G.userData.muv || !G.attributes.uv || !G.attributes.normal) return;
+    const P = G.attributes.position, N = G.attributes.normal, U = G.attributes.uv, sc = o.scale;
+    for (let i = 0; i < P.count; i++) {
+      const nx = Math.abs(N.getX(i)), ny = Math.abs(N.getY(i)), nz = Math.abs(N.getZ(i));
+      const x = P.getX(i) * sc.x + o.position.x, y = P.getY(i) * sc.y + o.position.y, z = P.getZ(i) * sc.z + o.position.z;
+      if (ny >= nx && ny >= nz) U.setXY(i, x, z); else if (nx >= nz) U.setXY(i, z, y); else U.setXY(i, x, y);
+    }
+    U.needsUpdate = true; G.userData.muv = 1;
+  });
+  return g;
 }
 function proc(type, F, cols) {
   const g = new THREE.Group();
   const wood = stdT(cols.wood || '#c4a07a', 'wood', 0.55);
   const LTH = cols.leather && (type === 'sofa' || type === 'armch' || type === 'lounge' || type === 'chair');
-  const fab = LTH ? stdT(cols.fab || F.c || '#7a4a2e', 'leather', 0.5, 0.05) : stdT(cols.fab || F.c || '#7a6854', 'fabric', 0.9);
+  const fab = LTH ? stdT(cols.fab || F.c || '#7a4a2e', 'leather', 0.5, 0.05) : stdT(cols.fab || F.c || '#7a6854', cols.sty === 'klasik' ? 'velvet' : 'fabric', 0.9);
   const white = std('#f4f1ec', 0.7);
   const dark = std(cols.metal || '#2a2c2e', 0.45, 0.2);
   const metal = std(cols.metal || '#b8bcc0', cols.metal ? 0.4 : 0.35, cols.metal ? 0.7 : 0.55);
@@ -209,7 +244,7 @@ function proc(type, F, cols) {
     // light base + dark worktop + upper cabinets (reads from dollhouse top-down)
     box(g, std('#efe8de', 0.75), 0, 0.42, 0, w, 0.84, d, 0.02);
     box(g, dark, 0, 0.05, 0, w - 0.04, 0.1, d - 0.04, 0);
-    box(g, std('#2a2c2e', 0.35, 0.2), 0, 0.92, 0, w + 0.12, 0.08, d + 0.14, 0.01);
+    box(g, cols.sty === 'skandi' ? stdT(cols.wood || '#c4a07a', 'wood', 0.5) : stdT(cols.sty === 'klasik' ? '#d9d3c8' : cols.sty === 'futur' ? '#e8e8e6' : '#4a4c4e', 'stone', 0.3, 0.05), 0, 0.92, 0, w + 0.12, 0.08, d + 0.14, 0.01);
     if (!F.nu) { // no wall cabinets when the run sits under a window
     box(g, std('#ebe4da', 0.75), 0, 2.1, -d * 0.06, w * 0.98, 0.78, d * 0.7, 0.02);
     // upper cabinet underside shadow band
@@ -433,7 +468,7 @@ function proc(type, F, cols) {
 }
 
 export function makeFurn(type, F, cols = {}) {
-  return proc(type, F, cols);
+  return metreUV(proc(type, F, cols));
 }
 
 export function makeTree(s = 1) {

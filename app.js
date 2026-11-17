@@ -119,7 +119,7 @@ const DEMO={name:'Ukážkový dom',units:'m',style:'skandi',mat:{wall:'#f2ebe3',
   (w.openings||[]).forEach(o=>{o.offset=+(L-o.offset-o.width).toFixed(3);if(o.type==='door')o.hinge=o.hinge==='R'?'L':'R';});});
  DEMO.furn.forEach(f=>{f.p=[+(MX-f.p[0]).toFixed(3),f.p[1]];f.r=(f.r||0)%2?((f.r||0)+2)%4:(f.r||0);});
 })();
-let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;window.__rooms=()=>rooms().map(r=>({n:r.n,a:+r.a.toFixed(1),p:r.p}));
+let H,undo=[],tool='wall',bg=null,bgW=12,view={x:-1,y:-1,s:50},drag=null,PID=null,obl=false;window.__getH=()=>H;window.__view=()=>view;window.__rooms=()=>rooms().map(r=>({n:r.n,a:+r.a.toFixed(1),p:r.p}));
 const IDX='vks_idx',idx=()=>{try{return JSON.parse(localStorage.getItem(IDX))||[]}catch(e){return[]}};
 function thumb(h){const ws=h.walls.filter(w=>w.level===h.levels[0].name),pp=h.plot?h.plot.pts:[];const P=[...ws.flatMap(w=>[w.start,w.end]),...pp];if(!P.length)return'';const xs=P.map(p=>p[0]),zs=P.map(p=>p[1]),x0=Math.min(...xs),z0=Math.min(...zs),S=Math.max(Math.max(...xs)-x0,Math.max(...zs)-z0,1),k=100/S,f=v=>(v*k).toFixed(1);
  return '<svg viewBox="-6 -6 112 112" preserveAspectRatio="xMidYMid meet">'+(pp.length?'<path d="M'+pp.map(p=>f(p[0]-x0)+' '+f(p[1]-z0)).join('L')+'Z" fill="#E4EED9" stroke="#7a9a5a" stroke-dasharray="3 2"/>':'')+'<path d="'+ws.map(w=>'M'+f(w.start[0]-x0)+' '+f(w.start[1]-z0)+'L'+f(w.end[0]-x0)+' '+f(w.end[1]-z0)).join('')+'" stroke="#0B0B0B" stroke-width="'+Math.max(1.5,.3*k).toFixed(1)+'" stroke-linecap="square" fill="none"/></svg>';}
@@ -137,10 +137,10 @@ const cv=$('cv'),cx=cv.getContext('2d');
 const TCH=matchMedia('(pointer:coarse)').matches;
 const HINT0={meas:'Ťahaj myšou = zmeria vzdialenosť (prichytáva sa ku koncom stien).',furn:'Klikni = vložiť nábytok. Klik na kus nábytku = otočenie. Posun ho presunie, Zmazať zmaže.',wall:'Ťahaj myšou = nová stena (prichytáva sa ku koncom stien). Koliesko/2 prsty = zoom a posun.',move:'Ťahaj koniec steny (bodku) alebo celú stenu. Dvere/okno ťahaj po stene.',door:'Klikni na stenu = vložia sa dvere.',window:'Klikni na stenu = vloží sa okno.',del:'Klikni na stenu, dvere alebo okno = zmaže sa.'};
 const HINT=Object.fromEntries(Object.entries(HINT0).map(([k,v])=>[k,TCH?v.replace('Ťahaj myšou','Ťahaj prstom').replace('Koliesko/2 prsty','2 prsty').replace(/Klikni/g,'Ťukni'):v]));HINT.stair=(TCH?'Ťukni':'Klikni')+' = schody z tohto podlažia na vyššie. Ťuknutím na existujúce schody ich otočíš o 90°.';HINT.cal='Ťukni/klikni na začiatok a koniec známej dĺžky (napr. kótovaná stena).';
-function fit(){const r=cv.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;
+function fit(){const r=cv.getBoundingClientRect();view.u=0;cv.width=Math.round(r.width*devicePixelRatio);cv.height=Math.round(r.height*devicePixelRatio);
  let xs=[0,10],zs=[0,8];if(bg&&bg.width){xs.push(0,bgW);zs.push(0,bgW*bg.height/bg.width);}H.walls.forEach(w=>{xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);});if(H.plot)H.plot.pts.forEach(p=>{xs.push(p[0]);zs.push(p[1]);});
  const pd=1.2,x0=Math.min(...xs)-pd,x1=Math.max(...xs)+pd,z0=Math.min(...zs)-pd,z1=Math.max(...zs)+pd;view.s=Math.min(cv.width/(x1-x0),cv.height/(z1-z0));view.x=x0-(cv.width/view.s-(x1-x0))/2;view.y=z0-(cv.height/view.s-(z1-z0))/2;draw();}
-const toS=p=>[(p[0]-view.x)*view.s,(p[1]-view.y)*view.s],toW=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*devicePixelRatio/view.s+view.x,(e.clientY-r.top)*devicePixelRatio/view.s+view.y];};
+const toS=p=>[(p[0]-view.x)*view.s,(p[1]-view.y)*view.s],toW=e=>{const r=cv.getBoundingClientRect(),kx=r.width?cv.width/r.width:devicePixelRatio,ky=r.height?cv.height/r.height:devicePixelRatio;return[(e.clientX-r.left)*kx/view.s+view.x,(e.clientY-r.top)*ky/view.s+view.y];};
 const r2=v=>Math.round(v*20)/20;
 function geo(w){const[x0,z0]=w.start,[x1,z1]=w.end,L=Math.hypot(x1-x0,z1-z0)||1e-9;return{x0,z0,L,u:[(x1-x0)/L,(z1-z0)/L]};}
 function proj(w,p){const g=geo(w),s=(p[0]-g.x0)*g.u[0]+(p[1]-g.z0)*g.u[1],t=-(p[0]-g.x0)*g.u[1]+(p[1]-g.z0)*g.u[0];return{s,t,g};}
@@ -258,7 +258,7 @@ function draw(){WLB=[];cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#FAF9F6';cx.fi
  if(cornerPts&&cornerPts.length){const d=devicePixelRatio;cornerPts.forEach((p,i)=>{const s=toS(p);cx.fillStyle='#E85D04';cx.beginPath();cx.arc(s[0],s[1],7*d,0,6.3);cx.fill();cx.strokeStyle='#fff';cx.lineWidth=2*d;cx.stroke();cx.fillStyle='#fff';cx.font=`700 ${11*d}px Inter,system-ui`;cx.textAlign='center';cx.fillText(String(i+1),s[0],s[1]+4*d);});if(cornerPts.length>1){cx.strokeStyle='#E85D0488';cx.lineWidth=2*d;cx.setLineDash([6*d,4*d]);cx.beginPath();cornerPts.forEach((p,i)=>{const s=toS(p);i?cx.lineTo(s[0],s[1]):cx.moveTo(s[0],s[1]);});if(cornerPts.length===4){const s=toS(cornerPts[0]);cx.lineTo(s[0],s[1]);}cx.stroke();cx.setLineDash([]);}cx.textAlign='left';}
  $('empE').hidden=!!(H.walls.length||bg||H.plot);}
 cv.addEventListener('contextmenu',e=>e.preventDefault());
-cv.addEventListener('wheel',e=>{e.preventDefault();const p=toW(e),f=e.deltaY<0?1.15:1/1.15;view.s*=f;view.x=p[0]-(p[0]-view.x)/f;view.y=p[1]-(p[1]-view.y)/f;draw();},{passive:false});
+cv.addEventListener('wheel',e=>{e.preventDefault();view.u=1;const p=toW(e),f=e.deltaY<0?1.15:1/1.15;view.s*=f;view.x=p[0]-(p[0]-view.x)/f;view.y=p[1]-(p[1]-view.y)/f;draw();},{passive:false});
 const ptrs=new Map();let pinch=null,lastAct=0;
 const two=()=>{const [a,b]=[...ptrs.values()];return{c:[(a.clientX+b.clientX)/2,(a.clientY+b.clientY)/2],d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)||1};};
 cv.addEventListener('pointerdown',e=>{if(cv._cornerMode){e.preventDefault();const p=toW(e);cornerPts.push(p);$('hint').textContent='Označovanie rohov: '+cornerPts.length+'/4';draw();if(cornerPts.length>=4)finishCorners();return;}cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,e);TOUCH=e.pointerType==='touch';
@@ -277,9 +277,9 @@ cv.addEventListener('pointerdown',e=>{if(cv._cornerMode){e.preventDefault();cons
  else if(tool==='stair'){const ex=(H.stairs||[]).find(st=>{const r=stairRect(st);return st.level===lvl&&p[0]>r[0]&&p[0]<r[2]&&p[1]>r[1]&&p[1]<r[3];});if(ex){snap();ex.dir=((ex.dir||0)+Math.PI/2)%(2*Math.PI);if(ex.dir<1e-6)ex.dir=0;save();draw();toast('Schody otočené o 90°.','ok',1800);return;}snap();(H.stairs=H.stairs||[]).push({level:lvl,pos:[r2(p[0]),r2(p[1])],dir:0,width:1,length:3.6});save();draw();}
  else if(tool==='del'){const ff=hitFurn(p);if(ff&&!hitWall(p)){snap();H.furn.splice(H.furn.indexOf(ff),1);save();draw();return;}const si=(H.stairs||[]).findIndex(st=>{const r=stairRect(st);return (st.level===lvl||H.levels[H.levels.indexOf(LV())-1]?.name===st.level)&&p[0]>r[0]&&p[0]<r[2]&&p[1]>r[1]&&p[1]<r[3];});if(si>=0){snap();H.stairs.splice(si,1);save();draw();return;}const op=hitOp(p);if(op){snap();op.w.openings.splice(op.w.openings.indexOf(op.o),1);}else{const h=hitWall(p);if(!h)return;snap();H.walls.splice(H.walls.indexOf(h.w),1);}save();draw();}});
 cv.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,e);
- if(pinch&&ptrs.size>=2){const t=two(),k=t.d/pinch.d,r=cv.getBoundingClientRect();view.s=pinch.v0.s*k;view.x=pinch.w0[0]-(t.c[0]-r.left)*devicePixelRatio/view.s;view.y=pinch.w0[1]-(t.c[1]-r.top)*devicePixelRatio/view.s;draw();return;}
+ if(pinch&&ptrs.size>=2){view.u=1;const t=two(),k=t.d/pinch.d,r=cv.getBoundingClientRect();view.s=pinch.v0.s*k;view.x=pinch.w0[0]-(t.c[0]-r.left)*devicePixelRatio/view.s;view.y=pinch.w0[1]-(t.c[1]-r.top)*devicePixelRatio/view.s;draw();return;}
  if(!drag)return;const p=toW(e);
- if(drag.k==='pan'){view.x=drag.v0.x-(e.clientX-drag.e0[0])*devicePixelRatio/view.s;view.y=drag.v0.y-(e.clientY-drag.e0[1])*devicePixelRatio/view.s;}
+ if(drag.k==='pan'){view.u=1;view.x=drag.v0.x-(e.clientX-drag.e0[0])*devicePixelRatio/view.s;view.y=drag.v0.y-(e.clientY-drag.e0[1])*devicePixelRatio/view.s;}
  else if(drag.k==='new'){const s=snapPt(p);drag.b=ortho(drag.a,s);if(s[0]===r2(p[0])&&s[1]===r2(p[1]))drag.b=align(drag.b,obl?null:drag.a);else GUIDES=[];}
  else if(drag.k==='meas'){MEAS.b=snapPt(p);}
 draw();});
@@ -393,7 +393,7 @@ $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=awa
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
 const DEMO_V='20261112j';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
-async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261111s.json?v=20261112j')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
+async function demo2(){try{const j=await(await fetch('assets/ukazka2_20261117a.json?v=20261117a')).json();openP('p'+Date.now(),j);try{rulesFix();save();draw();}catch(e){}toast('Ukážka 2 – poschodový dom. Kliknite Vygenerovať 3D.','ok');}catch(e){toast('Ukážku 2 sa nepodarilo načítať.','err');}}
 if(/[?&]demo=2/.test(location.search))setTimeout(()=>demo2(),400);
 function demoNew(){const D=JSON.parse(JSON.stringify(DEMO));window.__demoB=1;try{newP(D.name,D.walls,null,D.plot);}finally{window.__demoB=0;}H.style=D.style;H.mat=D.mat||H.mat;H.dv=DEMO_V;if(D.roof){roof=D.roof;const rs=$('roof');if(rs)rs.value=D.roof;}
  H.rn=[[3.4,2.1,'Spálňa'],[3.4,5.8,'Detská izba 1'],[3.4,9,'Detská izba 2'],[12.4,1.8,'Predsieň'],[8.7,.95,'WC'],[8.7,2.75,'Kúpeľňa'],[11,6,'Obývačka s kuchyňou']].map(([x,z,n])=>({level:H.levels[0].name,p:[x,z],n}));
@@ -436,8 +436,10 @@ $('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.loc
  goLvl(H.levels[0].name);lvUI();save();toast(srcs.length+' podlažia, '+H.walls.length+' stien. Prepínajte podlažia vľavo hore.','ok',5000);};
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
+/* v20261117a: keep the canvas bitmap in sync with its CSS box. The header grows when the editor toolbar appears (main = 100% - --hh), which shrank the canvas without a refit, so the bitmap was squeezed vertically and every click landed lower than the cursor. */
+new ResizeObserver(()=>{if(!H||!$('ed').classList.contains('on'))return;const r=cv.getBoundingClientRect();if(!r.width||!r.height)return;const W=Math.round(r.width*devicePixelRatio),Hh=Math.round(r.height*devicePixelRatio);if(Math.abs(cv.width-W)<2&&Math.abs(cv.height-Hh)<2)return;if(!view.u){fit();return;}const cx0=view.x+cv.width/2/view.s,cy0=view.y+cv.height/2/view.s;cv.width=W;cv.height=Hh;view.x=cx0-W/2/view.s;view.y=cy0-Hh/2/view.s;draw();}).observe(cv);
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261113c');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261117a');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 // prem10 storey picker (Bez strechy): Všetko / 1NP / 2NP …; only for multi-storey houses. Picking a storey = it becomes the top cut (upper storeys hidden, lower ones ghosted).
 let LVSEL=-1;function lvPickUI(md){const P=$('lvpick');if(!P)return;const ok=md==='doll'&&H&&H.levels&&H.levels.length>1;P.hidden=!ok;if(!ok)return;
  P.innerHTML='';[['Všetko',-1],...H.levels.map((l,i)=>[l.name,i])].forEach(([t,i])=>{const b=document.createElement('button');b.textContent=t;b.dataset.l=t;b.setAttribute('aria-pressed',LVSEL===i?'true':'false');if(LVSEL===i)b.classList.add('on');
@@ -727,11 +729,17 @@ const RULES=[
  ['kitchen-short','soft','a kitchen counter should be at least 1.8 m long (hard below 1.2 m)'],
  ['scale-guess','soft','scale was estimated (no readable dimensions): ask for one known length'],
  ['too-many-exterior-doors','soft','a family house has 1-3 exterior doors on the ground floor (auto-fix: >3 -> keep the 2 most plausible: hall/entrance, wide living/kitchen terrace door, utility; the rest become windows)'],
+ ['door-stair-clear','hard','no stair run or stair opening within 1 m of either face of a door (auto-fix: slide the door ≤1.5 m; else exterior door → French window, interior door removed, only if every room stays reachable)'],
  ['furniture-on-stairs','hard','no furniture on the stair run or in the stair opening above it (auto-fix: remove the item)'],
  ['scale-implausible','hard','with an estimated scale, ≥2 rooms are too small/narrow for their type: propose the enlargement (one click), never apply silently'],
 ];window.__RULES=RULES;
 // prem9: furniture standing on the stair run (its level) or floating in the stair opening (level above)
 function stairFurn(){const out=[];(H.stairs||[]).forEach(st=>{const li=H.levels.findIndex(l=>l.name===st.level);const lv=[st.level,(H.levels[li+1]||{}).name];const r=stairRect(st);(H.furn||[]).forEach((f,q)=>{if(!lv.includes(f.level)||!f.p)return;if(f.p[0]>r[0]-.05&&f.p[0]<r[2]+.05&&f.p[1]>r[1]-.05&&f.p[1]<r[3]+.05&&!out.includes(q))out.push(q);});});return out;}
+// door clearance zone: door width + 10 cm each side, 1 m deep on both faces of the wall; overlaps the stair run on its level and the stair opening on the level above
+function doorStairHit(w,o,L,off){const G=geo(w),n=[-G.u[1],G.u[0]],t=(w.thickness||.3)/2+1,s0=(off??o.offset)-.1,s1=(off??o.offset)+o.width+.1,P=[[s0,-t],[s1,-t],[s1,t],[s0,t]].map(([a,b])=>[G.x0+G.u[0]*a+n[0]*b,G.z0+G.u[1]*a+n[1]*b]);const zx=[Math.min(...P.map(p=>p[0])),Math.min(...P.map(p=>p[1])),Math.max(...P.map(p=>p[0])),Math.max(...P.map(p=>p[1]))];const li=H.levels.findIndex(l=>l.name===L);
+ return (H.stairs||[]).some(st=>{const sl=H.levels.findIndex(l=>l.name===st.level);if(sl!==li&&sl!==li-1)return false;const r=stairRect(st),m=.02;if(!(zx[0]<r[2]-m&&zx[2]>r[0]+m&&zx[1]<r[3]-m&&zx[3]>r[1]+m))return false;
+  /* exact test in the wall frame (walls may be oblique) */const C=[[r[0],r[1]],[r[2],r[1]],[r[2],r[3]],[r[0],r[3]]].map(p=>[(p[0]-G.x0)*G.u[0]+(p[1]-G.z0)*G.u[1],(p[0]-G.x0)*n[0]+(p[1]-G.z0)*n[1]]);const a0=Math.min(...C.map(c=>c[0])),a1=Math.max(...C.map(c=>c[0])),b0=Math.min(...C.map(c=>c[1])),b1=Math.max(...C.map(c=>c[1]));return a0<s1-m&&a1>s0+m&&b0<t-m&&b1>-t+m;});}
+function doorStairHits(){const out=[];(H.levels||[]).forEach(l=>{rooms(l.name);H.walls.filter(w=>w.level===l.name).forEach(w=>(w.openings||[]).forEach(o=>{if(o.type==='door'&&doorStairHit(w,o,l.name))out.push({w,o,L:l.name});}));});return out;}
 function rulesFix(op){op=op||{};const log=[];H.walls.forEach(w=>{const wh=w.height||((H.levels||[]).find(l=>l.name===w.level)||{}).height||2.8;(w.openings||[]).forEach(o=>{if((o.sill||0)<0){o.sill=0;log.push('opening-height');}
  if((o.sill||0)+(o.height||0)>wh-.05){o.height=Math.max(.4,r2(wh-.05-(o.sill||0)));if((o.sill||0)+o.height>wh-.05)o.sill=Math.max(0,r2(wh-.05-o.height));log.push('opening-height');}});});
  // door-into-wall auto-fix: slide the door along its wall (≤ 0.6 m) to the nearest spot where both sides are walkable and it overlaps no other opening
@@ -753,6 +761,13 @@ function rulesFix(op){op=op||{};const log=[];H.walls.forEach(w=>{const wh=w.heig
   if(ex.length>3){const r0=reach0(),undo=[];ex.sort((x,y)=>y.sc-x.sc);ex.slice(2).forEach(({w,o,rid})=>{if((dc[rid]||0)<2)return;dc[rid]--;undo.push([o,JSON.stringify(o)]);o.type='window';o.sill=o.width>=2?0:.9;o.height=o.width>=2?2.1:1.4;delete o.out;delete o.kind;delete o.hinge;log.push('too-many-exterior-doors');});if(undo.length&&reach0()>r0)undo.forEach(([o,j])=>{for(const k of Object.keys(o))delete o[k];Object.assign(o,JSON.parse(j));});}}}
  // prem9 LOGIC RULE (door into a wall): a door that cannot be slid ≤1.2 m off a wall right behind it opens onto nothing usable - it is removed, unless that would leave a room unreachable or the house without an entrance
  if(blocked.length&&!op.noDoors){const reach=()=>rulesCheck().filter(x=>x.id==='room-unreachable'||x.id==='no-entrance').length+H.levels.reduce((k,l)=>k+validateAll(l.name).filter(v=>v.rule==='room-without-door').length,0);const r0=reach();blocked.forEach(([w,o])=>{const k=w.openings.indexOf(o);if(k<0)return;w.openings.splice(k,1);if(reach()>r0)w.openings.splice(k,0,o);else log.push('door-into-wall:removed');});}
+ // v20261117a LOGIC RULE (door-stair-clear): no stair run (nor the stair opening on the floor above) within 1 m of either face of a door - you must never walk through a door straight into steps or a stairwell.
+ // auto-fix: slide the door along its wall (≤1.5 m) to a clear spot with the same rooms on both sides; else an exterior door becomes a French window and an interior one is removed (both only if every room stays reachable and the house keeps an entrance)
+ if(!op.noDoors&&(H.stairs||[]).length){const reach=()=>rulesCheck().filter(x=>x.id==='room-unreachable'||x.id==='no-entrance').length;let r0=null;
+  doorStairHits().forEach(({w,o,L})=>{const G=geo(w),os=w.openings||[],R=RC[L],n=[-G.u[1],G.u[0]],e=(w.thickness||.3)/2+.25;const sides=off=>{const c=[G.x0+G.u[0]*(off+o.width/2),G.z0+G.u[1]*(off+o.width/2)];return roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e])+'|'+roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);};const s0=sides(o.offset);
+   for(let k=1;k<=15;k++)for(const d of[k/10,-k/10]){const off=o.offset+d;if(off<.1||off+o.width>G.L-.1)continue;if(os.some(q=>q!==o&&off<q.offset+q.width+.05&&off+o.width>q.offset-.05))continue;if(sides(off)!==s0||doorStairHit(w,o,L,off))continue;o.offset=r2(off);log.push('door-stair-clear');return;}
+   if(r0===null)r0=reach();const j=JSON.stringify(o),i=os.indexOf(o);if(o.out||o.kind){o.type='window';o.sill=0;o.height=Math.min(o.height||2.1,2.1);delete o.out;delete o.kind;delete o.hinge;}else os.splice(i,1);
+   if(reach()>r0){if(os.indexOf(o)<0)os.splice(i,0,o);for(const k of Object.keys(o))delete o[k];Object.assign(o,JSON.parse(j));}else log.push('door-stair-clear:'+(os.includes(o)?'window':'removed'));});}
  // prem9 LOGIC RULE (every room reachable): a room no door leads to gets one 0.8 m door in the wall it shares with a reachable room (the reader missed it)
  if(!op.noDoors&&!window.__noReachFix)for(let it=0;it<4;it++){window.__reachSeen=null;const un=rulesCheck().filter(x=>x.id==='room-unreachable');const seen=window.__reachSeen;if(!un.length||!seen)break;let added=0;
   (H.levels||[]).forEach(l=>{const L=l.name,RS=rooms(L),R=RC[L];if(!R||!R.g)return;RS.forEach(r=>{if(added||seen.has(L+':'+r.id))return;let best=null;
@@ -800,6 +815,7 @@ function rulesCheck(){const out=[],P=(id,where,extra)=>{const R0=RULES.find(r=>r
   const ks=ends.map(([L,p,which])=>{rooms(L);const R=RC[L];const v=roomAt(R,p),k=L+':'+v,n=nm[k];if(!n){P('stair-landing',{level:L,end:which,p:p.map(r2)});return null;}
    if(/^WC|Kúpeľ|Šatn|Komora|Technick/.test(n))P('stair-landing',{level:L,end:which,room:n});else if(/Spálň/.test(n))P('stair-landing-bedroom',{level:L,end:which,room:n});return k;});
   if(ks[0]&&ks[1]){graph[ks[0]].add(ks[1]);graph[ks[1]].add(ks[0]);}});
+ doorStairHits().forEach(({w,o,L})=>P('door-stair-clear',{level:L,wall:w.id,at:r2(o.offset)}));
  // reachability from entrance rooms
  if(ext.size){const seen=new Set(ext),q=[...ext];while(q.length){const k=q.pop();(graph[k]||[]).forEach(j=>{if(!seen.has(j)){seen.add(j);q.push(j);}});}
   window.__reachSeen=seen;Object.keys(nm).forEach(k=>{if(!seen.has(k))P('room-unreachable',{level:k.split(':')[0],room:nm[k]});});}
