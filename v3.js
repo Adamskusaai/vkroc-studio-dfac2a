@@ -635,11 +635,26 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   const lh=(l.elevation||0)+Math.max(...lw.map(w=>w.height||l.height||2.8));
   // LOGIC RULE: a lower roof that an upper door opens onto is a walkable deck: wood decking on top + 1 m glass railing on its parapets
   const DK=(H.decks||[]).filter(d=>d.level===l.name),dc=[];
-  lc.forEach(r=>{const qx=(r[0]+r[2])/2,qz=(r[1]+r[3])/2;if(uc.some(u=>qx>u[0]&&qx<u[2]&&qz>u[1]&&qz<u[3]))return;/* v20261117c: a cell mostly covered by upper rooms (walls grown in) is not a lower roof - stops slab+deck strips sticking out of the facade between storeys */{const cov=uc.reduce((s,u)=>s+Math.max(0,Math.min(r[2],u[2]+.3)-Math.max(r[0],u[0]-.3))*Math.max(0,Math.min(r[3],u[3]+.3)-Math.max(r[1],u[1]-.3)),0);if(cov>.5*(r[2]-r[0])*(r[3]-r[1]))return;}
-   add(new THREE.BoxGeometry(r[2]-r[0]+.32,.2,r[3]-r[1]+.32),FLATM,qx,lh+.1,qz,0,1).userData.roof=1;
-   if(DK.length){dc.push(r);add(new THREE.BoxGeometry(r[2]-r[0],.04,r[3]-r[1]),M.deck,qx,lh+.22,qz,0,1);}});
-  lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;const T=w.thickness||.3,mg=T/2+.2;/* v20261117c: margin includes the wall's own half-thickness - a thick (48 cm) outer wall under the upper floor got a stray parapet ledge */if(uc.some(u=>mx>u[0]-mg&&mx<u[2]+mg&&mz>u[1]-mg&&mz<u[3]+mg))return;const ang=-Math.atan2(g.u[1],g.u[0]);
-   const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;if(dc.length&&dc.some(r=>mx>r[0]-.6&&mx<r[2]+.6&&mz>r[1]-.6&&mz<r[3]+.6)){add(new THREE.BoxGeometry(g.L,.62,.02),M.glass,mx,lh+.4+.31,mz,ang,1);add(new THREE.BoxGeometry(g.L+.04,.05,.06),M.frame,mx,lh+1.05,mz,ang,1);}});});
+  /* v20261117e LOGIC RULE (closed lower roof): every part of a lower room cell that is not under an upper room gets roof slab - the cell is cut along the
+     upper cells' edges (grown by .3 m = under the upper walls) and each free piece is slabbed, so a terrace over part of a room is never an open hole.
+     Pieces grow by .16 m only on the cell's own outer edges (cover the wall tops), never into the upper floor; a walkable deck gets decking on top. */
+  const ucg=uc.map(u=>[u[0]-.3,u[1]-.3,u[2]+.3,u[3]+.3]);
+  lc.forEach(r=>{const xs=[r[0],r[2]],zs=[r[1],r[3]];ucg.forEach(u=>{[u[0],u[2]].forEach(x=>{if(x>r[0]+.01&&x<r[2]-.01)xs.push(x);});[u[1],u[3]].forEach(z=>{if(z>r[1]+.01&&z<r[3]-.01)zs.push(z);});});
+   xs.sort((a,b)=>a-b);zs.sort((a,b)=>a-b);
+   for(let a=0;a<xs.length-1;a++)for(let b=0;b<zs.length-1;b++){let x0=xs[a],x1=xs[a+1],z0=zs[b],z1=zs[b+1];if(x1-x0<.02||z1-z0<.02)continue;const cx=(x0+x1)/2,cz=(z0+z1)/2;
+    if(ucg.some(u=>cx>u[0]&&cx<u[2]&&cz>u[1]&&cz<u[3]))continue;const d0=x0,d1=x1,e0=z0,e1=z1;
+    if(x0<=r[0]+.001)x0-=.16;if(x1>=r[2]-.001)x1+=.16;if(z0<=r[1]+.001)z0-=.16;if(z1>=r[3]-.001)z1+=.16;
+    const sl=add(new THREE.BoxGeometry(x1-x0,.2,z1-z0),FLATM,(x0+x1)/2,lh+.1,(z0+z1)/2,0,1);sl.userData.roof=1;sl.userData.lroof=1;LROOF.push([l.name,x0,z0,x1,z1]);
+    if(DK.length){dc.push([d0,e0,d1,e1]);const dk=add(new THREE.BoxGeometry(d1-d0,.04,e1-e0),M.deck,(d0+d1)/2,lh+.22,(e0+e1)/2,0,1);dk.userData.lroof=1;DECKS.push([H.levels[i+1].name,d0,e0,d1,e1]);}}});
+  lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;const T=w.thickness||.3,mg=T/2+.2;/* v20261117c: margin includes the wall's own half-thickness - a thick (48 cm) outer wall under the upper floor got a stray parapet ledge */if(uc.some(u=>mx>u[0]-mg&&mx<u[2]+mg&&mz>u[1]-mg&&mz<u[3]+mg))return;if(dc.length&&dc.some(r=>mx>r[0]-.6&&mx<r[2]+.6&&mz>r[1]-.6&&mz<r[3]+.6))return;/* v20261117e: deck walls get their parapet+railing per open deck edge below */const ang=-Math.atan2(g.u[1],g.u[0]);
+   const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;});
+  /* v20261117e LOGIC RULE (deck edge): every open edge of a walkable deck (on the building outline, not against an upper room or another lower room) gets a
+     parapet upstand with dark coping (waterproof edge) and a 1 m glass railing with a steel top rail, centred on the outer wall below */
+  const xT=Math.max(.3,...lw.filter(w=>w._ext).map(w=>w.thickness||.3));
+  dc.forEach(d=>{[[d[0],d[1],d[2],d[1],0,-1],[d[2],d[1],d[2],d[3],1,0],[d[2],d[3],d[0],d[3],0,1],[d[0],d[3],d[0],d[1],-1,0]].forEach(([x0,z0,x1,z1,nx,nz])=>{const ln=Math.hypot(x1-x0,z1-z0);if(ln<.2)return;
+    const mx=(x0+x1)/2,mz=(z0+z1)/2,o=[mx+nx*.35,mz+nz*.35];if(dc.some(q=>q!==d&&o[0]>q[0]&&o[0]<q[2]&&o[1]>q[1]&&o[1]<q[3]))return;if(lc.some(q=>o[0]>q[0]&&o[0]<q[2]&&o[1]>q[1]&&o[1]<q[3]))return;if(ucg.some(u=>o[0]>u[0]&&o[0]<u[2]&&o[1]>u[1]&&o[1]<u[3]))return;
+    const cx=mx+nx*xT/2,cz=mz+nz*xT/2,L=ln+xT,an=nx?Math.PI/2:0;const pp=add(new THREE.BoxGeometry(L,.35,xT),M.fac,cx,lh+.175,cz,an,1);pp.userData.roof=1;pp.castShadow=true;
+    add(new THREE.BoxGeometry(L+.06,.05,xT+.06),M.frame,cx,lh+.375,cz,an,1).userData.roof=1;add(new THREE.BoxGeometry(L,.62,.02),M.glass,cx,lh+.4+.31,cz,an,1);add(new THREE.BoxGeometry(L+.04,.05,.06),M.frame,cx,lh+1.05,cz,an,1);});});});
  if(roof!=='none'&&IRR){const ah=.5,tc=CELLS[top.name]||[];
   /* v13c: ONE continuous roof - each room cell grows by the outer-wall thickness so the slab also covers every wall top (no gaps / dark wall lines above the roof); clipped to the building outline */
   {const gT=Math.max(.3,...tw.filter(w=>w._ext).map(w=>w.thickness||.3)),eo2=Math.max(.15,...tw.filter(w=>w._ext).map(w=>(w.thickness||.3)/2)),B=[fp[0]-eo2,fp[1]-eo2,fp[2]+eo2,fp[3]+eo2],ca=tc.reduce((a,r)=>a+(r[2]-r[0])*(r[3]-r[1]),0),fa=(fp[2]-fp[0])*(fp[3]-fp[1]);
@@ -818,7 +833,7 @@ export function setWalk(v,xr){DIRTY=Math.max(DIRTY,90);walk=v;orb.enabled=!v;$('
  place(v||xr);return walk;}
 export function setRoof(r,smooth){DIRTY=Math.max(DIRTY,90);const prev=roof;roof=r;if(smooth&&world){if(r==='none'||DOLL){roofTgt=0;}else{roofTgt=1;world.traverse(o=>{if(o.userData.roof)o.visible=true;});} }else{roofTgt=(r==='none'||DOLL)?0:1;roofVis=roofTgt;}}
 export const isWalk=()=>walk;
-export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;interiorFinish(world);backsplash(world);world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
+export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}DECKS=[];LROOF=[];world=build();doGrow=false;if(!world)return false;interiorFinish(world);backsplash(world);world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  walk=walk&&!anim;setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;lmHook();return true;}
@@ -826,6 +841,16 @@ export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if
    get a sky-light bake (direct sky + all bounces + AO) from headless Blender/Cycles in ONE atlas on uv1. The live sun + its shadows stay real-time, so the
    time-of-day slider keeps working: the bake replaces the hemisphere/fill/IBL ambient by day and fades out towards dusk/night (live lights take over).
    Candidates are picked by the same deterministic rule on export and on load; per-mesh vertex counts are checked, any mismatch = no lightmap (live fallback). */
+/* v20261117e AUDIT (window.__vk.m.audit()): (1) every upper-floor furniture item stands in an upper room or on a real deck slab, (2) every part of a lower room
+   cell is either under an upper room (+walls) or covered by lower-roof slab - no holes to look down through. Returns a list of problems ([] = clean). */
+let DECKS=[],LROOF=[];
+export function decks(){return DECKS;}
+export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]>r[1]-m&&p[1]<r[3]+m;if(!H||!H.levels)return P;
+ (H.furn||[]).forEach(f=>{const li=H.levels.findIndex(l=>l.name===f.level);if(li<1)return;const cs=CELLS[f.level]||[];if(cs.some(r=>inR(f.p,r,.05)))return;
+  if(!DECKS.some(d=>d[0]===f.level&&inR(f.p,[d[1],d[2],d[3],d[4]],.05)))P.push({rule:'furniture-on-slab',t:f.t,level:f.level,p:f.p});});
+ H.levels.forEach((l,i)=>{const up=H.levels[i+1];if(!up)return;const uc=(CELLS[up.name]||[]).map(u=>[u[0]-.31,u[1]-.31,u[2]+.31,u[3]+.31]),lr=LROOF.filter(q=>q[0]===l.name).map(q=>q.slice(1));
+  (CELLS[l.name]||[]).forEach(r=>{for(let x=r[0]+.25;x<r[2];x+=.5)for(let z=r[1]+.25;z<r[3];z+=.5){const p=[x,z];if(uc.some(u=>inR(p,u))||lr.some(q=>inR(p,q)))continue;P.push({rule:'roof-gap',level:l.name,p:[+x.toFixed(2),+z.toFixed(2)]});return;}});});
+ return P;}
 let LMS=null;const _lmv=new THREE.Vector3();
 function lmCands(w){const use=new Map();w.traverse(o=>{if(o.isMesh)use.set(o.geometry,(use.get(o.geometry)||0)+1);});const out=[];
  w.traverse(o=>{if(!o.isMesh||Array.isArray(o.material))return;for(let p=o;p&&p!==w;p=p.parent){const u=p.userData||{};if(u.furn||u.doorLeaf||u.lamp||u.door||u.ceil)return;}
