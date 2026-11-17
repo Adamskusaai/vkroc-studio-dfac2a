@@ -420,7 +420,7 @@ function roomPixels(S,W,H,ops){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/f)+2
  return rooms;}
 function areaScale(rooms,areas,prior){if(!rooms||!rooms.length||!areas||!areas.length)return null;
  const vs=areas.map(a=>a.v).sort((a,b)=>a-b);
- const isTot=v=>{const rest=vs.filter(u=>u<v-0.01);if(rest.length<2)return 0;const s=rest.reduce((a,b)=>a+b,0);if(Math.abs(s-v)/v<.05)return 1;for(let i=0;i<rest.length;i++)if(Math.abs(s-rest[i]-v)/v<.05)return 1;return 0;};
+ const isTot=v=>{const rest=vs.filter(u=>u<v-0.01);if(rest.length<2)return 0;const s=rest.reduce((a,b)=>a+b,0);if(Math.abs(s-v)/v<.05&&rest.length>=3)return 1;for(let i=0;i<rest.length;i++)if(Math.abs(s-rest[i]-v)/v<.05&&rest.length>=4)return 1;return 0;};
  const A=areas.filter(a=>a.v>=1.2&&a.v<=80&&!isTot(a.v));if(!A.length)return null;
  const Rs=rooms.slice().sort((a,b)=>b.px-a.px),As=A.slice().sort((a,b)=>b.v-a.v);
  const paired=[],usedR=new Set(),usedA=new Set();
@@ -463,7 +463,7 @@ export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF|
   if(!cr)return readPlanX(im,o);
   const R=readPlanX(cr,o);if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}
   const F=readPlanX(im,o);if(F&&F.dbg)F.dbg.cropFail=ci;return F||R;};
- const qual=R=>{if(!R||!R.dbg)return -1e9;const d=R.dbg;return (d.Q||0)+1.2*(d.nR||0)+(/^(room)?dims|scalebar|areas$/.test(d.scale||'')?.6:0);};
+ const qual=R=>{if(!R||!R.dbg)return -1e9;const d=R.dbg;return (d.Q||0)+1.2*(d.nR||0)+(/^(room)?dims|scalebar$/.test(d.scale||'')?.6:0);};
  const A=run(src);if(A&&A.dbg&&o._chrome)A.dbg.chrome=o._chrome;
  if(!ch)return A;
  const B=run(img);if(!B)return A;if(!A)return B;
@@ -558,7 +558,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   dbg.areaSc=[Rpx.length,areas.length,A&&A.n,A&&+A.ppm.toFixed(1)];
   const sheet=!!(PT||o._chrome);
   if(sheet&&B){sc={ppm:B.ppm,src:'scalebar'};dbg.scale0='scalebar';}
-  else if(sheet&&A&&A.n>=2){const agr=!sc.ppm||(A.ppm/sc.ppm<1.25&&sc.ppm/A.ppm<1.25);if(PT||agr){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}}
+  else if(sheet&&A&&A.n>=2){const agr=!sc.ppm||(A.ppm/sc.ppm<1.25&&sc.ppm/A.ppm<1.30);if(PT||agr){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}}
   if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1&&sc.src!=='scalebar'&&sc.src!=='areas'){const agree=!sc.ppm||(D.ppm/sc.ppm<1.2&&sc.ppm/D.ppm<1.2);if(D.n>=2||agree||!o._chrome)sc={ppm:D.ppm,src:'dims'};}
    // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
    if(D.lines&&D.lines.length){const n0=S.length,cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2;
