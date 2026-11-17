@@ -539,7 +539,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
  // LOGIC RULE: the floor above is a real slab. (1) lower walls under the upper floor continue up to it (slab edge in the facade), (2) a structural slab fills the
  // upper rooms' footprint between the lower wall tops and the upper floor, (3) upper walls with no wall below get a beam down to the lower wall top,
  // (4) an upper part that hangs >1.5 m past the walls below is a covered terrace: a post goes under each such free corner. Everything is tagged with its storey (lvJ) for the storey picker.
- window.__posts=[];if(!/[?&]nojoint=1/.test(location.search))H.levels.forEach((l,i)=>{const up=H.levels[i+1];if(!up)return;const uc=CELLS[up.name]||[],lw=H.walls.filter(w=>w.level===l.name),uw=H.walls.filter(w=>w.level===up.name);if(!uc.length||!lw.length||!uw.length)return;
+ window.__posts=[];const DZ=H.roofEdge==='parapet';if(!/[?&]nojoint=1/.test(location.search))H.levels.forEach((l,i)=>{const up=H.levels[i+1];if(!up)return;const uc=CELLS[up.name]||[],lw=H.walls.filter(w=>w.level===l.name),uw=H.walls.filter(w=>w.level===up.name);if(!uc.length||!lw.length||!uw.length)return;
   const eu=up.elevation||0,el=l.elevation||0,lt=el+Math.max(...lw.map(w=>(w.base||0)+(w.height||l.height||2.8)));if(eu-lt<.01)return;
   const tag=(n0,k)=>{for(let j=n0;j<root.children.length;j++)root.children[j].userData.lvJ=k;};
   const inUp=(x,z,m)=>uc.some(u=>x>u[0]-m&&x<u[2]+m&&z>u[1]-m&&z<u[3]+m);
@@ -557,7 +557,9 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   const lc=CELLS[l.name]||[],onLow=(x,z)=>lowWallAt(x,z,.05)||lc.some(u=>x>u[0]-.05&&x<u[2]+.05&&z>u[1]-.05&&z<u[3]+.05);
   const pts=[];uw.filter(w=>w._ext).forEach(w=>[w.start,w.end].forEach(p=>{if(!pts.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<.05))pts.push(p);}));
   pts.forEach(p=>{if(onLow(p[0],p[1]))return;let d=1e9;lw.forEach(w=>{d=Math.min(d,segD(p[0],p[1],w));});if(d<1.5)return;
-   const pm=add(new THREE.BoxGeometry(.24,lt-el,.24),M.fac,p[0],el+(lt-el)/2,p[1],0);pm.userData.post=1;pm.userData.lvJ=i;window.__posts.push([p[0],p[1],up.name]);});});
+   const pm=add(/* v20261117c: designed (parapet) projects get slim anthracite steel columns */new THREE.BoxGeometry(DZ?.16:.24,lt-el,DZ?.16:.24),DZ?M.frame:M.fac,p[0],el+(lt-el)/2,p[1],0);pm.userData.post=1;pm.userData.lvJ=i;window.__posts.push([p[0],p[1],up.name]);});
+  /* v20261117c: designed projects - a slim dark flashing band covers the slab edge between storeys on every lower exterior wall (the bare slab edge read as a glowing line at dusk) */
+  if(DZ)lw.filter(w=>w._ext).forEach((w,k)=>{const g=geo(w),T=w.thickness||.3,D=.2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,o=T/2+D/2-.01,fb=add(new THREE.BoxGeometry(g.L+T+2*D-.02,eu-lt+.1+(k%2)*.004,D),M.frame,g.x0+g.u[0]*g.L/2+nx*o,(lt+eu)/2+.03,g.z0+g.u[1]*g.L/2+nz*o,-Math.atan2(g.u[1],g.u[0]),1);fb.userData.lvJ=i;});});
  // prem8: kitchen tile zone inside open-plan living (bbox of kitchen pieces + 0.9 m working aisle)
  H.levels.forEach(l=>{const RK=roomKinds[l.name];if(!RK)return;const grp={};(H.furn||[]).filter(f=>f.level===l.name&&['kitch','fridge','island'].includes(f.t)).forEach(f=>{const L=RK.labelAt(f.p[0],f.p[1]);if(L&&RK.kindOf[L]==='living')(grp[L]=grp[L]||[]).push(f);});
   Object.values(grp).forEach(fs=>{let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;fs.forEach(f=>{const F=FUR[f.t]||{w:1,d:1},rot=(f.r||0)%2,w=rot?F.d:F.w,d=rot?F.w:F.d;x0=Math.min(x0,f.p[0]-w/2);x1=Math.max(x1,f.p[0]+w/2);z0=Math.min(z0,f.p[1]-d/2);z1=Math.max(z1,f.p[1]+d/2);});
@@ -633,10 +635,10 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   const lh=(l.elevation||0)+Math.max(...lw.map(w=>w.height||l.height||2.8));
   // LOGIC RULE: a lower roof that an upper door opens onto is a walkable deck: wood decking on top + 1 m glass railing on its parapets
   const DK=(H.decks||[]).filter(d=>d.level===l.name),dc=[];
-  lc.forEach(r=>{const qx=(r[0]+r[2])/2,qz=(r[1]+r[3])/2;if(uc.some(u=>qx>u[0]&&qx<u[2]&&qz>u[1]&&qz<u[3]))return;
+  lc.forEach(r=>{const qx=(r[0]+r[2])/2,qz=(r[1]+r[3])/2;if(uc.some(u=>qx>u[0]&&qx<u[2]&&qz>u[1]&&qz<u[3]))return;/* v20261117c: a cell mostly covered by upper rooms (walls grown in) is not a lower roof - stops slab+deck strips sticking out of the facade between storeys */{const cov=uc.reduce((s,u)=>s+Math.max(0,Math.min(r[2],u[2]+.3)-Math.max(r[0],u[0]-.3))*Math.max(0,Math.min(r[3],u[3]+.3)-Math.max(r[1],u[1]-.3)),0);if(cov>.5*(r[2]-r[0])*(r[3]-r[1]))return;}
    add(new THREE.BoxGeometry(r[2]-r[0]+.32,.2,r[3]-r[1]+.32),FLATM,qx,lh+.1,qz,0,1).userData.roof=1;
    if(DK.length){dc.push(r);add(new THREE.BoxGeometry(r[2]-r[0],.04,r[3]-r[1]),M.deck,qx,lh+.22,qz,0,1);}});
-  lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;if(uc.some(u=>mx>u[0]-.2&&mx<u[2]+.2&&mz>u[1]-.2&&mz<u[3]+.2))return;const T=w.thickness||.3,ang=-Math.atan2(g.u[1],g.u[0]);
+  lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;const T=w.thickness||.3,mg=T/2+.2;/* v20261117c: margin includes the wall's own half-thickness - a thick (48 cm) outer wall under the upper floor got a stray parapet ledge */if(uc.some(u=>mx>u[0]-mg&&mx<u[2]+mg&&mz>u[1]-mg&&mz<u[3]+mg))return;const ang=-Math.atan2(g.u[1],g.u[0]);
    const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;if(dc.length&&dc.some(r=>mx>r[0]-.6&&mx<r[2]+.6&&mz>r[1]-.6&&mz<r[3]+.6)){add(new THREE.BoxGeometry(g.L,.62,.02),M.glass,mx,lh+.4+.31,mz,ang,1);add(new THREE.BoxGeometry(g.L+.04,.05,.06),M.frame,mx,lh+1.05,mz,ang,1);}});});
  if(roof!=='none'&&IRR){const ah=.5,tc=CELLS[top.name]||[];
   /* v13c: ONE continuous roof - each room cell grows by the outer-wall thickness so the slab also covers every wall top (no gaps / dark wall lines above the roof); clipped to the building outline */
@@ -767,7 +769,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
    // prem8 h5: neighbour houses = rendered body + gable or flat/parapet roof + dark windows (+ wood panel on flat ones); shared materials, ~12 meshes each.
    // Houses that would sit on the street move across it.
    const NB={w:std({color:0xece8e0,map:plaster,roughness:.92}),r:std({color:0x4b5057,roughness:.8}),g:std({color:0x2b3238,roughness:.25,metalness:.35}),c:M.frame};
-   [[-14,6,8,3.0,7,0],[-12,-10,6,3.0,9,1],[-26,18,9,3.2,8,1],[34,20,7,3.0,10,0]].forEach(([x,z,ww,hh,dd,fl],ni)=>{
+   [[-14,6,8,3.0,7,0],[-12,-10,6,3.0,9,1],[-26,18,9,3.2,8,1],[34,20,7,3.0,10,0]].forEach(([x,z,ww,hh,dd,fl],ni)=>{/* v20261117c: designed flat-roof villa - neighbours get pitched roofs so nothing flat-topped reads as a box on our roof */if(H.roofEdge==='parapet')fl=0;
     if(P.fence!==false&&z+dd/2>zMin-9.5&&z-dd/2<zMin+.5)z=zMin-9.5-dd/2;
     const m=add(new THREE.BoxGeometry(ww,hh,dd),NB.w,x,hh/2,z,0,1);m.castShadow=false;
     if(fl){add(new THREE.BoxGeometry(ww+.06,.5,dd+.06),NB.w,x,hh+.25,z,0,1).castShadow=false;add(new THREE.BoxGeometry(ww+.12,.06,dd+.12),NB.c,x,hh+.53,z,0,1).castShadow=false;
