@@ -361,6 +361,25 @@ function mapPdfText(o,img,W,H,dbg){const raw=o&&o.pdfText;if(!raw||!raw.length)r
  const sx=W/img.width,sy=H/img.height;
  return raw.map(t=>{const b=t.b||[t.x0,t.y0,t.x1,t.y1];if(!b||b.length<4)return null;
   return{txt:t.txt||t.t||'',b:[(b[0]-xOff)*sx,(b[1]-yOff)*sy,(b[2]-xOff)*sx,(b[3]-yOff)*sy]};}).filter(Boolean);}
+function mapPdfVec(o,img,W,H,dbg){const raw=o&&(o.pdfVec||o.pdfPolys);if(!raw||!raw.length)return null;
+ if(dbg&&(dbg.paper||Math.abs(dbg.skew||0)>.5)){dbg.pdfVecSkip='warp';return null;}
+ const ch=o._chrome&&o._chrome.box,xOff=ch?ch[0]:0,yOff=ch?ch[1]:0;
+ const sx=W/img.width,sy=H/img.height;
+ const polys=raw.map(p=>p.map(q=>[(q[0]-xOff)*sx,(q[1]-yOff)*sy])).filter(p=>p.length>=3);
+ if(!polys.length)return null;
+ // keep the largest connected cluster so key-plan / elevation poche does not join the unit
+ const n=polys.length,bb=polys.map(p=>{const xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);return[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];});
+ const gap=Math.max(24,0.03*Math.max(W,H)),parent=polys.map((_,i)=>i),find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
+ for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const a=bb[i],b=bb[j];if(a[0]-gap<=b[2]&&b[0]-gap<=a[2]&&a[1]-gap<=b[3]&&b[1]-gap<=a[3])parent[find(j)]=find(i);}
+ const groups={};polys.forEach((_,i)=>{(groups[find(i)]=groups[find(i)]||[]).push(i);});
+ const len=i=>Math.max(bb[i][2]-bb[i][0],bb[i][3]-bb[i][1]);
+ let best=null,bs=-1;for(const g of Object.values(groups)){const s=g.reduce((a,i)=>a+len(i),0);if(s>bs){bs=s;best=g;}}
+ return best.map(i=>polys[i]);}
+function rasterVec(polys,W,H){if(!polys||!polys.length)return null;const c=mk(W,H),x=c.getContext('2d');
+ x.clearRect(0,0,W,H);x.fillStyle='#000';x.strokeStyle='#000';x.lineWidth=2;x.lineJoin='miter';x.lineCap='square';
+ for(const p of polys){x.beginPath();x.moveTo(p[0][0],p[0][1]);for(let i=1;i<p.length;i++)x.lineTo(p[i][0],p[i][1]);x.closePath();x.fill();x.stroke();}
+ const d=x.getImageData(0,0,W,H).data,m=new Uint8Array(W*H);let n=0;for(let i=0;i<W*H;i++)if(d[i*4+3]>20){m[i]=1;n++;}
+ return n>50?m:null;}
 function textAreas(txts){if(!txts)return[];const out=[];
  for(const t of txts){const s=String(t.txt||'').trim().replace(/\s+/g,' ');
   const u=/^(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:m(?:2|²)|\u00b2)/i.exec(s);
@@ -456,9 +475,11 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
    if(o.debug)(dbg.thin=dbg.thin||[]).push([mL2,S2.filter(q=>q.hz).map(q=>[q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]),add2.length]);S=S.concat(add2);}
   S=mergeColinear(S,2);if(dbg.paper&&!(globalThis.__PF||{}).noIso)S=dropIsolated(S,W,H);S=snap(S);S=mergeColinear(S,1);return S;};
  const V=[];const add=(name,mask,wk,kOpen,kInt)=>{let S=run(mask,wk,/^t?h\d/.test(name),kInt||wk);if(o.debug)dbg["raw_"+name]=S.map(q=>[q.hz,q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]);if(S.length<3)return;S=focus(S);if(S.length<3)return;S=o._cyan?closeCorners(S):S;void(S);const bb=bbox(S);
-  const ops=(classifyGap.paper=!!dbg.paper,findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
+  const ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec),findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
   V.push({name,S,mask,wk,kOpen,kInt,bb,q});dbg['q_'+name]=[S.length,+q.Q.toFixed(2),q.nR];};
  add('ink',base.wm,base.wk,base.kOpen,base.kInt);
+ /* vector poche from a native PDF (filled dark wall polygons); quality-picked against raster candidates so a weak extract cannot regress */
+ if(!(globalThis.__PF||{}).noVec){try{const PV=mapPdfVec(o,img,W,H,dbg);if(PV){dbg.vecN=PV.length;const vm=rasterVec(PV,W,H);if(vm){const cl=close1(close1(vm,W,H,5,1),W,H,5,0),{h}=strokeWidths(cl,W,H);let wk=0,wv=0;for(let k=2;k<64;k++){const v=h[k]*k;if(v>wv){wv=v;wk=k;}}if(!wk)wk=4;const kInt=wk,kOpen=Math.max(2,Math.round(wk*.5)),nV=V.length;add('vec',cl,wk,kOpen,kInt);const v=V[V.length-1];if(V.length>nV&&(v.q.nR||0)<2){dbg.vecDrop=[v.q.nR,+v.q.Q.toFixed(2)];V.pop();}}}}catch(e){dbg.vecErr=String(e);}}
  if(nTone>W*H*.0008){const B=wallMask(body,W,H);add('tone',B.wm,B.wk,B.kOpen,B.kInt);}
  {const km=Math.max(6,Math.round(.022*Math.max(W,H))),pfS=compsFilter(nTone>W*H*.0008?body:ink,W,H,k=>{const a=k.x1-k.x0+1,b=k.y1-k.y0+1;return Math.max(a,b)>=.025*Math.max(W,H)||Math.min(a,b)<.3*Math.max(a,b);}),pf0=pairFill(pfS,W,H,km,lw*2+2),pf=close1(close1(pf0,W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-pfS[i];dbg.pairD=+(d*7/(W*H)).toFixed(4);if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('pair',B.wm,B.wk,B.kOpen,B.kInt);}}
  /* v12b light poché: CAD exports draw partitions as a dark outline pair with a LIGHT grey fill (≈ #cdcdcd) next to dark hatched outer walls;
@@ -482,11 +503,11 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
    if(nb){B=wallMask(pf,W,H);dbg['bridge'+Math.round(kf*1000)]=nb;}const n0=V.length;axisSegs.dense=1;try{add('pairW'+Math.round(kf*1000),B.wm,B.wk,B.kOpen,B.kInt);}finally{axisSegs.dense=0;}/* a wide-pair reading only counts when it closes rooms (non-plans: no junk) */if(V.length>n0&&V[V.length-1].q.nR<2)V.pop();}}}
  tm('var');if(!V.length)return null;
  const pen=v=>v.name==='pair'||v.name==='lp'?.35:0;let best=V[0];for(const v of V){if(o.forceHatch&&v.name==='h'+o.forceHatch){best=v;break;}if(v.q.Q-pen(v)>best.q.Q-pen(best)+.05)best=v;}
- /* v12j near-tie stability: a reading that closes more rooms wins when its quality is within 0.3 (tiny resize/aliasing differences between browsers used to flip ink<->pair) */if(!o.forceHatch&&!dbg.paper&&!(globalThis.__PF||{}).noTie){const b0=best;if(!pen(b0))for(const v of V)if(v.q.nR>best.q.nR&&v.q.Q>=b0.q.Q-.25)best=v;dbg.tie=best!==b0?b0.name+'>'+best.name:0;}/* v13d: wide-pair readings exist only when no other reading closed 2+ rooms; one that closes 3+ rooms beats a near-equal non-closing reading */if(!o.forceHatch){const b1=best;for(const v of V)if(/^pairW/.test(v.name)&&v.q.nR>=3&&v.q.nR>=b1.q.nR+2&&v.q.Q>=b1.q.Q-1&&(best===b1||v.q.nR>best.q.nR||(v.q.nR===best.q.nR&&v.q.Q>best.q.Q)))best=v;if(best!==b1)dbg.tie=b1.name+'>'+best.name;}dbg.cands=V.map(v=>[v.name,+v.q.Q.toFixed(2),v.q.nR,v.S.length]);dbg.pick=best.name;dbg.nR=best.q.nR;dbg.Q=best.q.Q;let S=pruneLoose(best.S);dbg.pruned=best.S.length-S.length;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
+ /* v12j near-tie stability: a reading that closes more rooms wins when its quality is within 0.3 (tiny resize/aliasing differences between browsers used to flip ink<->pair) */if(!o.forceHatch&&!dbg.paper&&!(globalThis.__PF||{}).noTie){const b0=best;if(!pen(b0))for(const v of V)if(v.q.nR>best.q.nR&&v.q.Q>=b0.q.Q-.25)best=v;dbg.tie=best!==b0?b0.name+'>'+best.name:0;}/* v13d: wide-pair readings exist only when no other reading closed 2+ rooms; one that closes 3+ rooms beats a near-equal non-closing reading */if(!o.forceHatch){const b1=best;for(const v of V)if(/^pairW/.test(v.name)&&v.q.nR>=3&&v.q.nR>=b1.q.nR+2&&v.q.Q>=b1.q.Q-1&&(best===b1||v.q.nR>best.q.nR||(v.q.nR===best.q.nR&&v.q.Q>best.q.Q)))best=v;if(best!==b1)dbg.tie=b1.name+'>'+best.name;}if((globalThis.__PF||{}).forceVec){const fv=V.find(v=>v.name==='vec');if(fv)best=fv;}dbg.cands=V.map(v=>[v.name,+v.q.Q.toFixed(2),v.q.nR,v.S.length]);dbg.pick=best.name;dbg.nR=best.q.nR;dbg.Q=best.q.Q;let S=pruneLoose(best.S);dbg.pruned=best.S.length-S.length;const dbgMask=best.mask,wk=best.wk,kInt=best.kInt,kOpen=best.kOpen;dbg.lw=lw;dbg.wk=wk;dbg.kInt=kInt;dbg.kOpen=kOpen;
  if(o.debug){const dc=mk(W,H),x=dc.getContext('2d'),id=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=dbgMask[i]?0:ink[i]?170:255;id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}x.putImageData(id,0,0);x.strokeStyle='red';x.lineWidth=2;S.forEach(q=>{x.beginPath();if(q.hz){x.moveTo(q.a,q.c);x.lineTo(q.b,q.c);}else{x.moveTo(q.c,q.a);x.lineTo(q.c,q.b);}x.stroke();});dbg.img=dc.toDataURL('image/png');}
  dbg.nS=S.length;
  let bb=best.bb;{const n0=S.length;if(!(globalThis.__PF||{}).noSat)S=dropSatellites(S);dbg.sat=n0-S.length;if(S.length!==n0&&S.length>=4)bb=bbox(S);}
- let ops=(classifyGap.paper=!!dbg.paper,findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
+ let ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec),findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
  tm('pick');let sc=estimateScale(S,ops,bb);dbg.est=estimateScale.last.map(v=>+v.toFixed(1));
  try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];dimScale.split=!!dbg.paper;
   // prem8 photo stage: dimension text may be upside down (plan shot at 180°) or too small/blurred for the 1x ink mask ->
@@ -522,7 +543,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
      const V=S.filter(q=>!q.hz),Hz=S.filter(q=>q.hz);if(V.length>=2&&Hz.length>=2){const xr=[Math.min(...V.map(q=>q.c-q.t/2)),Math.max(...V.map(q=>q.c+q.t/2))],yr=[Math.min(...Hz.map(q=>q.c-q.t/2)),Math.max(...Hz.map(q=>q.c+q.t/2))];
       S=S.map(q=>{const r=q.hz?xr:yr;return(q.a<r[0]-2||q.b>r[1]+2)?{...q,a:Math.max(q.a,r[0]),b:Math.min(q.b,r[1])}:q;}).filter(q=>q.b-q.a>q.t*2);}}}}}catch(e){dbg.dimErr=String(e);}
  tm('dims');if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
- ops=(classifyGap.paper=!!dbg.paper,findOpenings)(S,ink,W,H,sc.ppm,bb);
+ ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec),findOpenings)(S,ink,W,H,sc.ppm,bb);
  {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
  if(cyan){let nw=0;S.forEach((A,i)=>{const L=A.b-A.a;let run=-1;const h=Math.max(2,A.t/2+2);const isC=u=>{for(let v=-h;v<=h;v+=1){const x=Math.round(A.hz?u:A.c+v),y=Math.round(A.hz?A.c+v:u);if(x>=0&&y>=0&&x<W&&y<H&&cyan[y*W+x])return true;}return false;};
   for(let u=A.a;u<=A.b+1;u++){const on=u<=A.b&&isC(u);if(on&&run<0)run=u;if(!on&&run>=0){const lo=run,hi=u-1;run=-1;if(hi-lo>=.4*sc.ppm&&!ops.some(p=>p.i===i&&p.lo<hi&&p.hi>lo)){ops.push({i,j:null,end:'x',to:null,type:'window',lo,hi,inside:1,ext:true,g:hi-lo});nw++;}}}});dbg.cyanWin=nw;}

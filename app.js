@@ -1,5 +1,5 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
-import {readPlan} from './plan.js?v=20261117i';
+import {readPlan} from './plan.js?v=20261117k';
 import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261112j';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
@@ -312,6 +312,82 @@ var esc=t=>String(t).replace(/[<>&"]/g,c=>'&#'+c.charCodeAt(0)+';');
 async function askName(def,ti,ok){const r=await dlg(ti||'Názov projektu','<input type="text" value="'+esc(def)+'" placeholder="napr. Rodinný dom Kováč">',[['Zrušiť',null],[ok||'Vytvoriť',1,'go']]);return r?(r.name||def):null;}
 const shrink=(im,M=2000,jp)=>{const D=Math.max(im.width,im.height),k=D<=2400?1:Math.min(1,M/D),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return k===1&&D>2000?(jp?c.toDataURL('image/jpeg',.92):c.toDataURL('image/png')):c.toDataURL('image/jpeg',.85);};/* v12i: no downscale -> lossless PNG (browser JPEG encoders differ, so the read differed per device) *//* v12g: big sheets (2000-2400 px) are neither downscaled nor heavily compressed; sheets up to 2400 px are not downscaled (keeps 10 px captions readable) */
 let pdfjs=null;
+function mul(a,b){return[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];}
+function apply(m,x,y){return[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];}
+function rgbOf(a){
+  if(a==null)return null;
+  const n=a.length;
+  if(n>=3 && (a instanceof Uint8ClampedArray || (typeof a[0]==='number' && a[0]>1))) return [a[0]/255,a[1]/255,a[2]/255];
+  if(n>=3) return [+a[0],+a[1],+a[3]===undefined?+a[2]:+a[2]];
+  if(n===1 || typeof a==='number'){const v=typeof a==='number'?a:a[0]; return [v>1?v/255:v, v>1?v/255:v, v>1?v/255:v];}
+  if(n===4){const c=1-a[0],m=1-a[1],y=1-a[2],k=1-a[3];return [c*(1-k),m*(1-k),y*(1-k)];}
+  return null;
+}
+function isDark(c,thr){return c && (c[0]+c[1]+c[2])/3<(thr||.35);}
+function wallish(poly,W,H,sc){
+  if(!poly||poly.length<3)return false;
+  const xs=poly.map(p=>p[0]),ys=poly.map(p=>p[1]);
+  const w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);
+  if(w*h<20*sc*sc)return false;
+  if(w>0.85*W&&h>0.85*H)return false;
+  const a=Math.max(w,h),b=Math.min(w,h);
+  if(b>80*sc&&a/b<3)return false;
+  if(b>40*sc&&a/b<2)return false;
+  return a>=15*sc;
+}
+function seglen(poly){const xs=poly.map(p=>p[0]),ys=poly.map(p=>p[1]);return Math.max(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys));}
+function clusterMain(polys,gap){
+  const n=polys.length;if(n<=1)return polys;
+  const parent=polys.map((_,i)=>i),find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
+  const bb=polys.map(p=>{const xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);return[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];});
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const a=bb[i],b=bb[j];if(a[0]-gap<=b[2]&&b[0]-gap<=a[2]&&a[1]-gap<=b[3]&&b[1]-gap<=a[3])parent[find(j)]=find(i);}
+  const groups={};for(let i=0;i<n;i++)(groups[find(i)]=groups[find(i)]||[]).push(i);
+  let best=null,bs=-1;for(const g of Object.values(groups)){const s=g.reduce((a,i)=>a+seglen(polys[i]),0);if(s>bs){bs=s;best=g;}}
+  return best.map(i=>polys[i]);
+}
+function pathsFrom(ops,coords,ctm){
+  const polys=[],cur=[];let i=0;
+  const take=n=>{const o=[];for(let k=0;k<n;k++)o.push(coords[i++]);return o;};
+  const P=(x,y)=>apply(ctm,x,y);
+  const flush=()=>{if(cur.length>=3)polys.push(cur.slice());cur.length=0;};
+  for(const op of ops){
+    if(op===19){flush();const[x,y,w,h]=take(4);polys.push([P(x,y),P(x+w,y),P(x+w,y+h),P(x,y+h)]);}
+    else if(op===13){flush();const[x,y]=take(2);cur.push(P(x,y));}
+    else if(op===14){const[x,y]=take(2);cur.push(P(x,y));}
+    else if(op===15){const[x1,y1,x2,y2,x3,y3]=take(6);cur.push(P(x1,y1),P(x2,y2),P(x3,y3));}
+    else if(op===16){const[x2,y2,x3,y3]=take(4);cur.push(P(x2,y2),P(x3,y3));}
+    else if(op===17){const[x1,y1,x3,y3]=take(4);cur.push(P(x1,y1),P(x3,y3));}
+    else if(op===18){if(cur.length)cur.push(cur[0]);flush();}
+  }
+  flush();return polys;
+}
+async function extractPdfVec(pg,vp){
+  const ol=await pg.getOperatorList();
+  const fn=ol.fnArray,args=ol.argsArray;
+  let ctm=vp.transform.slice(),stack=[],fill=[0,0,0],stroke=[0,0,0],lw=1,path=[],pathBbox=null;
+  const W=vp.width,H=vp.height,sc=Math.hypot(vp.transform[0],vp.transform[1])||1;
+  const raw=[];
+  const emit=(polys,ok)=>{if(!ok)return;const one=pathBbox||((polys&&polys.length===1)?polys[0]:null);const list=one?[one]:(polys||[]);for(const p of list){if(wallish(p,W,H,sc))raw.push(p.map(q=>[+q[0].toFixed(2),+q[1].toFixed(2)]));}};
+  for(let i=0;i<fn.length;i++){
+    const op=fn[i],a=args[i];
+    if(op===10)stack.push({ctm:ctm.slice(),fill:fill&&fill.slice(),stroke:stroke&&stroke.slice(),lw});
+    else if(op===11){const s=stack.pop();if(s){ctm=s.ctm;fill=s.fill;stroke=s.stroke;lw=s.lw;}}
+    else if(op===12&&a)ctm=mul(ctm,a);
+    else if(op===2&&a)lw=a[0]??a;
+    else if(op===57||op===56){const c=rgbOf(a);if(op===57)fill=c;else stroke=c;}
+    else if(op===59||op===54||op===55){const c=rgbOf(a);if(c)fill=c;}
+    else if(op===58||op===52||op===53){const c=rgbOf(a);if(c)stroke=c;}
+    else if(op===61){const c=rgbOf(a);if(c)fill=c;}
+    else if(op===60){const c=rgbOf(a);if(c)stroke=c;}
+    else if(op===91&&a){path=pathsFrom(a[0]||[],a[1]||[],ctm);const bb=a[2];if(bb&&bb.length>=4){const[x0,y0,x1,y1]=bb;pathBbox=[apply(ctm,x0,y0),apply(ctm,x1,y0),apply(ctm,x1,y1),apply(ctm,x0,y1)];}else pathBbox=null;}
+    else if(op===13||op===14||op===15||op===18||op===19){ /* loose path ops: ignore, pdf.js 4 bundles them */ }
+    else if(op===22||op===23||op===26||op===27)emit(path,isDark(fill));
+    else if(op===24||op===25){emit(path,isDark(fill)); if(isDark(stroke)&&lw>=2)emit(path,true);}
+    else if(op===20||op===21){if(isDark(stroke)&&lw>=2)emit(path,true);}
+  }
+  const polys=raw.length?clusterMain(raw,Math.max(40,0.03*Math.max(W,H))):[];
+  return {w:Math.round(W),h:Math.round(H),n:polys.length,nRaw:raw.length,sc,polys};
+}
 async function readPdf(f){busy('Načítavam PDF…');try{if(!pdfjs){pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs');pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';}
  const doc=await pdfjs.getDocument({data:await f.arrayBuffer()}).promise;let n=1;busy(0);
  if(doc.numPages>1){const r=await dlg('PDF má '+doc.numPages+' strán','<p>Ktorú stranu použiť ako výkres?</p>',[['Zrušiť',null],...Array.from({length:Math.min(doc.numPages,12)},(_,i)=>['Strana '+(i+1),i+1,i?'':'go'])]);if(!r||!r.v)return null;n=r.v;}
@@ -326,7 +402,7 @@ async function readPdf(f){busy('Načítavam PDF…');try{if(!pdfjs){pdfjs=await 
     x0=Math.min(p[0],q[0]);y0=Math.min(p[1],q[1]);x1=Math.max(p[0],q[0]);y1=Math.max(p[1],q[1]);}
    txts.push({txt:s,b:[+x0.toFixed(1),+y0.toFixed(1),+x1.toFixed(1),+y1.toFixed(1)]});}
  }catch(e){txts=[];}
- window.__vkPdfText=txts.length?{txts,w:c.width,h:c.height}:null;busy(0);return shrink(c);}catch(e){busy(0);console.warn(e);dlg('PDF sa nepodarilo otvoriť','<p>Skúste výkres uložiť ako obrázok (JPG/PNG) alebo urobiť snímku obrazovky.</p>',[['OK',1,'go']]);return null;}}
+ window.__vkPdfText=txts.length?{txts,w:c.width,h:c.height}:null;let vec=null;try{vec=await extractPdfVec(pg,vp);}catch(e){vec=null;}window.__vkPdfVec=vec&&vec.polys&&vec.polys.length?{polys:vec.polys,w:c.width,h:c.height}:null;busy(0);return shrink(c);}catch(e){busy(0);console.warn(e);dlg('PDF sa nepodarilo otvoriť','<p>Skúste výkres uložiť ako obrázok (JPG/PNG) alebo urobiť snímku obrazovky.</p>',[['OK',1,'go']]);return null;}}
 function readImg(f){try{window.vkA&&window.vkA('upload_start')}catch(e){};if(/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name))return readPdf(f);
  return new Promise(res=>{const u=URL.createObjectURL(f),im=new Image();im.onload=()=>{res(shrink(im,2000,/jpe?g/i.test(f.type)||/\.jpe?g$/i.test(f.name)));URL.revokeObjectURL(u);};
   im.onerror=()=>{res(null);dlg('Obrázok sa nedá otvoriť',/hei[cf]/i.test(f.type+f.name)?'<p>Formát HEIC (fotky z iPhonu) tento prehliadač nevie zobraziť. Na iPhone: Nastavenia → Fotoaparát → Formáty → <b>Najkompatibilnejšie</b>, alebo pošlite fotku ako JPG / urobte snímku obrazovky.</p>':'<p>Podporované sú JPG, PNG, WebP a PDF.</p>',[['OK',1,'go']]);};im.src=u;});}
@@ -360,10 +436,10 @@ function finishCorners(){if(cornerPts.length<4)return;cv._cornerMode=0;snap();co
 async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)toast('Najprv nahrajte výkres pre toto podlažie.','warn');return;}if(recBusy)return;recBusy=1;busy('Rozpoznávam steny…');await new Promise(r=>setTimeout(r,40));
  let R=null;const man=H.walls.some(w=>!w.auto);
  // new reader first (perspective, deskew, hatch, dimension text); old pipeline for site plans and as fallback
- if(!(H.underlay.site&&!man)&&!/[?&]cv=old/.test(location.search)){try{const PO={rect:H.underlay.rect||man,mW:(H.underlay.cal||man)?bgW:null,pdfText:H.underlay.pdfText,pdfW:H.underlay.pdfW,pdfH:H.underlay.pdfH},P=readPlan(bg,PO);window.__lastP={o:PO,bgw:bg.width,bgh:bg.height,labels:P&&P.labels,words:P&&P.dbg&&P.dbg.words,nw:P&&P.walls.length,ppm:P&&P.dbg&&P.dbg.ppm,t:P&&P.dbg&&P.dbg.t,paper:P&&P.dbg&&P.dbg.paper,dk:P&&P.dbg&&Object.fromEntries(['cands','pick','Q','Qs','scale','dimVia','dimN','nS','nR','cm','thin','lw','kOpen','kInt','tone','wk','est','solidOK','lpF','skew','frame','crop','cropFail','bridge35','bridge50','tie','roomDim'].map(k=>[k,P.dbg[k]]))};if(P&&P.walls.length>=4&&(P.conf>=.45||(P.dbg&&P.dbg.nR>=2))){R=P;if(man)R.guess=false;const lvn=LV().name;H.rlab=(H.rlab||[]).filter(l=>l.level!==lvn).concat((P.labels||[]).map(l=>({level:lvn,p:l.p,n:l.n})));H.rarea=(H.rarea||[]).filter(l=>l.level!==lvn).concat(((P.dbg&&P.dbg.areas)||[]).map(l=>({level:lvn,p:l.p,v:l.v})));}window.__plan=P?{n:P.walls.length,conf:+P.conf.toFixed(2),scale:P.scaleSrc,dims:P.dbg&&P.dbg.dims,log:P.dbg&&P.dbg.dimLog,pick:P.dbg&&P.dbg.pick,nR:P.dbg&&P.dbg.nR,sw:P.dbg&&P.dbg.stackWin,ops:P.dbg&&P.dbg.ops,lab:P.dbg&&P.dbg.labels,wlog:P.dbg&&P.dbg.wlog}:null;}catch(e){console.warn(e);}}
+ if(!(H.underlay.site&&!man)&&!/[?&]cv=old/.test(location.search)){try{const PO={rect:H.underlay.rect||man,mW:(H.underlay.cal||man)?bgW:null,pdfText:H.underlay.pdfText,pdfVec:H.underlay.pdfVec,pdfW:H.underlay.pdfW,pdfH:H.underlay.pdfH},P=readPlan(bg,PO);window.__lastP={o:PO,bgw:bg.width,bgh:bg.height,labels:P&&P.labels,words:P&&P.dbg&&P.dbg.words,nw:P&&P.walls.length,ppm:P&&P.dbg&&P.dbg.ppm,t:P&&P.dbg&&P.dbg.t,paper:P&&P.dbg&&P.dbg.paper,dk:P&&P.dbg&&Object.fromEntries(['cands','pick','Q','Qs','scale','dimVia','dimN','nS','nR','cm','thin','lw','kOpen','kInt','tone','wk','est','solidOK','lpF','skew','frame','crop','cropFail','bridge35','bridge50','tie','roomDim'].map(k=>[k,P.dbg[k]]))};if(P&&P.walls.length>=4&&(P.conf>=.45||(P.dbg&&P.dbg.nR>=2))){R=P;if(man)R.guess=false;const lvn=LV().name;H.rlab=(H.rlab||[]).filter(l=>l.level!==lvn).concat((P.labels||[]).map(l=>({level:lvn,p:l.p,n:l.n})));H.rarea=(H.rarea||[]).filter(l=>l.level!==lvn).concat(((P.dbg&&P.dbg.areas)||[]).map(l=>({level:lvn,p:l.p,v:l.v})));}window.__plan=P?{n:P.walls.length,conf:+P.conf.toFixed(2),scale:P.scaleSrc,dims:P.dbg&&P.dbg.dims,log:P.dbg&&P.dbg.dimLog,pick:P.dbg&&P.dbg.pick,nR:P.dbg&&P.dbg.nR,sw:P.dbg&&P.dbg.stackWin,ops:P.dbg&&P.dbg.ops,lab:P.dbg&&P.dbg.labels,wlog:P.dbg&&P.dbg.wlog}:null;}catch(e){console.warn(e);}}
  if(!R)try{R=detectWalls(bg,{sens:+$('sens').value,mW:H.underlay.cal||man?bgW:null,rect:H.underlay.rect||man,site:H.underlay.site&&!man,w:bgW});if(man)R.guess=false;}catch(e){console.warn(e);}
  const ws=R?R.walls:[];busy(0);recBusy=0;if(!nosnap)snap();const lv=LV();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lv.name));
- if(R&&!H.underlay.rect&&!man){H.underlay={src:R.mode==='plan'?R.canvas.toDataURL('image/jpeg',.85):H.underlay.src,w:R.w,rect:1,guess:R.guess,site:R.mode==='site'?1:0,pdfText:H.underlay.pdfText,pdfW:H.underlay.pdfW,pdfH:H.underlay.pdfH};}else if(R&&R.guess&&!H.underlay.cal){H.underlay.w=R.w;H.underlay.guess=true;}
+ if(R&&!H.underlay.rect&&!man){H.underlay={src:R.mode==='plan'?R.canvas.toDataURL('image/jpeg',.85):H.underlay.src,w:R.w,rect:1,guess:R.guess,site:R.mode==='site'?1:0,pdfText:H.underlay.pdfText,pdfVec:H.underlay.pdfVec,pdfW:H.underlay.pdfW,pdfH:H.underlay.pdfH};}else if(R&&R.guess&&!H.underlay.cal){H.underlay.w=R.w;H.underlay.guess=true;}
  H.walls=H.walls.concat(gapMerge(ws,R&&R.mode==='plan').map((w,i)=>({id:'a'+Date.now()+i,auto:1,level:lv.name,start:w.start,end:w.end,thickness:w.thickness,base:0,height:lv.height,openings:w.op||[]})));
  if(R&&R.mode==='plan'&&R.dbg&&R.dbg.wordsP&&R.dbg.wordsP.length)dropFurnBoxes(R.dbg.wordsP,lv.name);
  if(R&&R.mode==='plan')inkFilter(R,lv.name);
@@ -399,7 +475,7 @@ $('upl').onclick=()=>pickImg('ask');
 $('img').onchange=async e=>{const f=e.target.files[0];if(!f)return;const src=await readImg(f);if(!src)return;let m=imgMode;
  if(m==='ask'&&H.walls.length){const r=await dlg('Nahrali ste výkres','<p>Tento projekt už má nakreslené steny. Čo chcete urobiť?</p>',[['Zrušiť',null],['Vymeniť podklad v tomto projekte','swap'],['Nový projekt z tohto výkresu','new','go']]);if(!r||!r.v)return;m=r.v;}
  if(m==='new'||m==='site'){const n=await askName(f.name.replace(/\.[^.]+$/,''));if(n){newP(n,[],{src,w:20,site:m==='site'?1:0});afterImg();}}
- else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20,...((()=>{const t=window.__vkPdfText;window.__vkPdfText=null;return t?{pdfText:t.txts,pdfW:t.w,pdfH:t.h}:{};})())};H.ulv=lvl;setBg();save();afterImg(2);}};
+ else{snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));H.underlay={src,w:20,...((()=>{const t=window.__vkPdfText,v=window.__vkPdfVec;window.__vkPdfText=null;window.__vkPdfVec=null;return {...(t?{pdfText:t.txts,pdfW:t.w,pdfH:t.h}:{}),...(v?{pdfVec:v.polys,pdfW:v.w,pdfH:v.h}:{})};})())};H.ulv=lvl;setBg();save();afterImg(2);}};
 // prem8: the demo house is furnished by the same rule engine (0 rule violations), named rooms, unique kids rooms, garden set kept
 const DEMO_V='20261112j';
 // ukážka 2: operator-traced two-storey plan (Schmidt-Lademann House 1958 plan from the benchmark set), auto-furnished + QA-curated; ?demo=2 opens it
