@@ -24,7 +24,7 @@ export function debugViz(){let grow=0,short=0,roof=0,wallish=0,maxH=0,worldMaxY=
  });
  let wallCuts=0;if(world)world.traverse(o=>{if(o.userData&&o.userData.wallCut)wallCuts++;});
  return{ok:true,grow,short,roof,wallish,wallCuts,DOLL,maxH:+maxH.toFixed(2),worldMinY:+worldMinY.toFixed(2),worldMaxY:+worldMaxY.toFixed(2),samples,DOLL,roofVis,camY:cam?+cam.position.y.toFixed(2):null,camPos:cam?cam.position.toArray().map(n=>+n.toFixed(1)):null};}
-export function qaCam(px,py,pz,tx,ty,tz){camPath=null;if(walk)setWalk(false);orb.enabled=true;cam.position.set(px,py,pz);orb.target.set(tx,ty,tz);orb.update();DIRTY=Math.max(DIRTY,90);}
+export function qaCam(px,py,pz,tx,ty,tz){camPath=null;intro=null;if(walk)setWalk(false);orb.enabled=true;cam.position.set(px,py,pz);orb.target.set(tx,ty,tz);orb.update();DIRTY=Math.max(DIRTY,90);}
 // prem10 QA: vertical gaps between storeys. Under every upper wall (sampled each 0.25 m) and every upper room cell there must be solid geometry within 6 cm
 // below the upper floor level; otherwise sky/air shows between storeys. Returns {gaps,samples,where}.
 export function storeyQA(){if(!world||!H||!H.levels||H.levels.length<2)return{gaps:0,samples:0,where:[]};const rc=new THREE.Raycaster(),ms=[];world.traverse(o=>{if(o.isMesh&&o.material!==M.glass&&!o.userData.roof)ms.push(o);});
@@ -484,6 +484,8 @@ function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.nam
   if(FS.ent||FS.ter)[...E].sort((p,q)=>((FZ.get(q)||[]).some(z=>z[2]===FS.ent))-((FZ.get(p)||[]).some(z=>z[2]===FS.ent))).forEach(w=>{const Z=FZ.get(w);if(!Z||FGE)return;const alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,c=lx?w.start[0]:w.start[1];if(!alg)return;const neg=Math.abs(c-(lx?x0:z0))<.3,pos=Math.abs(c-(lx?x1:z1))<.3;if(neg||pos)FGE={k:Z.some(z=>z[2]==='dark')&&!Z.some(z=>z[2]==='wood')?'dark':'wood',neg};});
   // fallback "one volume": clad the longest wall on a short end of the footprint (the gable end on a gable roof)
   if(noTer){let bw=null,bl=0;E.forEach(w=>{if(FZ.has(w))return;const L=geo(w).L,c=lx?w.start[0]:w.start[1],alg=lx?Math.abs(w.start[0]-w.end[0])<.05:Math.abs(w.start[1]-w.end[1])<.05,lo=lx?x0:z0,hi=lx?x1:z1;if(alg&&(Math.abs(c-lo)<.3||Math.abs(c-hi)<.3)&&L>=2.5&&L>bl){bl=L;bw=w;}});if(bw){FZ.set(bw,[[0,bl,"wood"]]);const c=lx?bw.start[0]:bw.start[1];FGE={k:"wood",neg:Math.abs(c-(lx?x0:z0))<.3};}}}}
+ /* v20261117b: explicit per-wall cladding from the project (w.clad = 'wood'|'stone'|'dark'|'none' or [[a,b,k],...]) overrides the automatic accent zones - lets a designed house keep one facade concept */
+ H.walls.forEach(w=>{if(!w._ext||!w.clad)return;const L=geo(w).L;if(w.clad==='none'){FZ.delete(w);return;}const Z=Array.isArray(w.clad)?w.clad.filter(z=>FCM[z[2]]).map(z=>[Math.max(0,z[0]),Math.min(L,z[1]),z[2]]):(FCM[w.clad]?[[0,L,w.clad]]:null);if(Z&&Z.length)FZ.set(w,Z);});
  FZW=[...FZ.entries()];window.__fz=[...FZ.entries()].map(([w,Z])=>[w.start,w.end,w._ext,Z]);
  const box=(w,s0,s1,y0,y1,mat,t,tOff=0,nc)=>{const Z=mat===M.wall&&w._ext&&FZ.get(w);if(!Z)return box0(w,s0,s1,y0,y1,mat,t,tOff,nc);const cuts=[s0,s1];Z.forEach(z=>{for(const v of[z[0],z[1]])if(v>s0&&v<s1)cuts.push(v);});cuts.sort((a,b)=>a-b);let last;
   for(let i=0;i+1<cuts.length;i++){const a=cuts[i],b=cuts[i+1];if(b-a<.005)continue;const md=(a+b)/2,z=Z.find(z=>md>=z[0]&&md<=z[1]);if(!z){last=box0(w,a,b,y0,y1,mat,t,tOff,nc);continue;}const m=box0(w,a,b,y0,y1,facMats(z[2],w._ext),t,tOff,nc);if(m)boxUV(m.geometry,(a+b)/2,(y0+y1)/2);last=m;}return last;};
@@ -577,6 +579,22 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
  // plinth strip around footprint for grounding
  stairs.forEach(st=>{const l=lv[st.level],up=H.levels[H.levels.indexOf(l)+1];if(!l)return;const rise=up?up.elevation-l.elevation:l.height,n=Math.max(2,Math.round(rise/.18)),L=st.length||3.6,W=st.width||1,d=st.dir||0;
   for(let k=0;k<n;k++){const sx=(k+.5)*L/n;add(new THREE.BoxGeometry(L/n,(k+1)*rise/n,W),M.stair,st.pos[0]+Math.cos(d)*sx-Math.sin(d)*W/2,l.elevation+(k+1)*rise/n/2,st.pos[1]+Math.sin(d)*sx+Math.cos(d)*W/2,-d);}});
+ /* v20261117b LOGIC RULE (stair-guard): every stair opening gets a 1 m glass balustrade with a steel cap on its free edges on the floor above (not on the arrival edge,
+    not where a wall already closes it), and every open side of the stair run gets a sloped glass guard + handrail. Tagged per storey for the storey picker / dollhouse. */
+ stairs.forEach(st=>{const l=lv[st.level],li=H.levels.indexOf(l),up=H.levels[li+1];if(!l||!up)return;const r=stairRect(st),d=st.dir||0,c=Math.cos(d),sn=Math.sin(d),L=st.length||3.6,W=st.width||1,eu=up.elevation||0,el=l.elevation||0;
+  const near=(lvN,x,z,m)=>H.walls.some(w=>{if(w.level!==lvN)return false;const g=geo(w),px=x-g.x0,pz=z-g.z0,q=Math.max(0,Math.min(g.L,px*g.u[0]+pz*g.u[1]));return Math.hypot(px-g.u[0]*q,pz-g.u[1]*q)<(w.thickness||.3)/2+m;});
+  const topE=[st.pos[0]+c*L,st.pos[1]+sn*L];
+  [[r[0],r[1],r[2],r[1]],[r[2],r[1],r[2],r[3]],[r[2],r[3],r[0],r[3]],[r[0],r[3],r[0],r[1]]].forEach(([x0,z0,x1,z1])=>{const mx=(x0+x1)/2,mz=(z0+z1)/2,ln=Math.hypot(x1-x0,z1-z0);if(ln<.2)return;
+   const ex=x1-x0,ez=z1-z0;if(Math.abs((topE[0]-mx)*ez-(topE[1]-mz)*ex)/ln<.05&&Math.abs(ex*c+ez*sn)/ln<.2)return; // arrival edge stays open
+   if(near(up.name,mx,mz,.08)&&near(up.name,x0+ex*.15,z0+ez*.15,.08)&&near(up.name,x0+ex*.85,z0+ez*.85,.08))return; // a wall closes this edge
+   const an=-Math.atan2(ez,ex);add(new THREE.BoxGeometry(ln,.92,.02),M.glass,mx,eu+.1+.46,mz,an);add(new THREE.BoxGeometry(ln+.04,.05,.06),M.frame,mx,eu+1.02,mz,an);});
+  // sloped guard on the open long sides of the run (lower floor)
+  for(const sd of[0,1]){const ox=-sn*W*sd,oz=c*W*sd,ax=st.pos[0]+ox,az=st.pos[1]+oz,mx=ax+c*L/2,mz=az+sn*L/2,nx=-sn*(sd?1:-1),nz=c*(sd?1:-1);
+   if(near(st.level,mx+nx*.12,mz+nz*.12,.06)&&near(st.level,ax+c*L*.2+nx*.12,az+sn*L*.2+nz*.12,.06))continue;
+   const rise=eu-el,ang=Math.atan2(rise,L),hyp=Math.hypot(L,rise),gx=ax-nx*.03,gz=az-nz*.03,cy=el+rise/2;
+   const gm=new THREE.Mesh(new THREE.BoxGeometry(hyp,.8,.02),M.glass);gm.position.set(gx+c*L/2,cy+.5,gz+sn*L/2);gm.rotation.set(0,-d,ang,'YXZ');root.add(gm);gm.userData.lvJ=li;
+   const hr=new THREE.Mesh(new THREE.BoxGeometry(hyp+.05,.05,.06),M.frame);hr.position.set(gx+c*L/2,cy+.93,gz+sn*L/2);hr.rotation.set(0,-d,ang,'YXZ');root.add(hr);hr.userData.lvJ=li;}
+ });
  const top=H.levels[H.levels.length-1],tw=H.walls.filter(w=>w.level===top.name),th=top.elevation+Math.max(...(tw.length?tw:H.walls).map(w=>w.height||2.8));
  // prem8 h8: footprint fill (room cells area / centre-line bbox). Below .8 the house is L/U-shaped or notched: plinth follows the exterior
  // walls and the roof becomes an outline-following flat roof (a bbox gable would hang over empty yard and hide the walls).
@@ -624,6 +642,13 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   /* v13c: ONE continuous roof - each room cell grows by the outer-wall thickness so the slab also covers every wall top (no gaps / dark wall lines above the roof); clipped to the building outline */
   {const gT=Math.max(.3,...tw.filter(w=>w._ext).map(w=>w.thickness||.3)),eo2=Math.max(.15,...tw.filter(w=>w._ext).map(w=>(w.thickness||.3)/2)),B=[fp[0]-eo2,fp[1]-eo2,fp[2]+eo2,fp[3]+eo2],ca=tc.reduce((a,r)=>a+(r[2]-r[0])*(r[3]-r[1]),0),fa=(fp[2]-fp[0])*(fp[3]-fp[1]);
    const cs=ca<.6*fa?[[fp[0],fp[1],fp[2],fp[3]]]:tc;cs.forEach(r=>{const x0=Math.max(B[0],r[0]-gT),x1=Math.min(B[2],r[2]+gT),z0=Math.max(B[1],r[1]-gT),z1=Math.min(B[3],r[3]+gT);if(x1-x0<.05||z1-z0<.05)return;add(new THREE.BoxGeometry(x1-x0,.2,z1-z0),FLATM,(x0+x1)/2,th+.1,(z0+z1)/2,0,1).userData.roof=1;});}
+  /* v20261117b: designed projects (H.roofEdge==='parapet', clean drawn walls) get a real attic parapet along the top-floor outline: render (or the wall's own cladding) + dark coping,
+     one box per exterior wall; neighbouring boxes differ by 2-3 mm in height so the corner overlap never z-fights. Rain-water downpipes come from H.downpipes [[x,z,topY?],..]. */
+  if(H.roofEdge==='parapet'){tw.filter(w=>w._ext).forEach((w,i)=>{const g=geo(w),T=w.thickness||.3,ang=-Math.atan2(g.u[1],g.u[0]),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2,L=g.L+T-.004,dy=(i%2)*.003;
+    const k=typeof w.clad==='string'&&FCM[w.clad]?w.clad:null,bg=new THREE.BoxGeometry(L,ah+.1,T);if(k)boxUV(bg,mx+mz,th+ah/2);const p=add(bg,k?FCM[k].m:M.fac,mx,th+ah/2-.05+dy,mz,ang,1);p.userData.roof=1;p.castShadow=true;
+    add(new THREE.BoxGeometry(L+.06,.05,T+.06),M.frame,mx,th+ah+.025+dy,mz,ang,1).userData.roof=1;});
+   (H.downpipes||[]).forEach(d=>{const top=d[2]!=null?d[2]:th+ah-.15,pm=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,top,12),M.frame);pm.position.set(d[0],top/2,d[1]);pm.castShadow=true;pm.userData.roof=1;pm.userData.noCol=true;root.add(pm);
+    const hd=new THREE.Mesh(new THREE.BoxGeometry(.22,.26,.22),M.frame);hd.position.set(d[0],top+.05,d[1]);hd.userData.roof=1;hd.userData.noCol=true;root.add(hd);});}
   /* v13c: no per-wall parapets on irregular footprints - jogs/inner walls flagged exterior drew dark lines across the roof; the roof stays one flat slab */
   if(0)tw.forEach(w=>{if(!w._ext)return;const g=geo(w),T=w.thickness||.3,L=g.L+T,ang=-Math.atan2(g.u[1],g.u[0]),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;
    const p=add(new THREE.BoxGeometry(L,ah+.1,T),M.fac,mx,th+ah/2-.05,mz,ang,1);p.userData.roof=1;p.castShadow=true;
@@ -906,6 +931,8 @@ function interiorFinish(root){const P=[];root.traverse(o=>{if(o.isMesh&&o.userDa
   for(const sd of[1,-1]){const nx=-g.u[1]*sd,nz=g.u[0]*sd,lab=RK.labelAt(cxm+nx*(t/2+.15),czm+nz*(t/2+.15));if(!lab)continue;const kind=RK.kindOf[lab]||'other';
    if(kind==='wet'){const a=Math.max(y0,e0),b=Math.min(y1,e0+2.05);if(b-a<.04)continue;const gg=new THREE.BoxGeometry(L,b-a,.012);boxUV(gg,sm,(a+b)/2-e0);const m=new THREE.Mesh(gg,M.wtile);m.position.set(0,(a+b)/2-yc,sd*(t/2+.006));m.receiveShadow=true;m.userData.noCol=true;o.add(m);}
    else if(y0<e0+.03){const m=new THREE.Mesh(new THREE.BoxGeometry(L,.07,.014),M.skirt);m.position.set(0,e0+.035-yc,sd*(t/2+.007));m.userData.noCol=true;o.add(m);}}});}
+/* v20261117b QA helper: walk-mode camera at (x,z) on floor e looking at (tx,tz), pitch in degrees (screenshots / presentations) */
+export function qaWalk(x,z,e,tx,tz,pt){jump(x,z,e);rig.position.set(x,e,z);if(body&&body.resolve)body.resolve(rig.position);yaw=Math.atan2(tx-x,-(tz-z));pitch=-(pt||0)*Math.PI/180;if(cam){cam.fov=62;cam.updateProjectionMatrix();cam.position.set(0,1.6,0);}DIRTY=Math.max(DIRTY,90);}
 export function jump(x,z,e){DIRTY=Math.max(DIRTY,90);if(!walk)setWalk(true);const V=viewFrom(x,z);if(V){x=V.x;z=V.z;if(!(R.xr&&R.xr.isPresenting)){yaw=V.yaw;pitch=V.p||0;}}if(cam&&!(R.xr&&R.xr.isPresenting)){const fv=(V&&V.fov)||58;if(cam.fov!==fv){cam.fov=fv;cam.updateProjectionMatrix();}}rig.position.set(x,e,z);if(body&&body.resolve)body.resolve(rig.position);cam.position.set(0,V&&V.h&&!(R.xr&&R.xr.isPresenting)?V.h:1.6,0);}
 
 const WP=[M.wall,M.wall,M.wall,M.wall,M.fac,M.wall],WN=[M.wall,M.wall,M.wall,M.wall,M.wall,M.fac];
