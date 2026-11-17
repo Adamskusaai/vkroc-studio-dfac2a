@@ -22,4 +22,3 @@ Resized/recompressed; furniture albedos converted to greyscale and normalised so
 - **oak_veneer_01** → `veneer_*` (furniture wood, Škandi worktop; 1.83 m tile)
 - **terrazzo_tiles** → `terrazzo_*` (stone kitchen worktops; 2 m tile)
 - **long_white_tiles** → `wtile_*` (bathroom/kitchen wall tiles; 1.27 m tile)
-- **oak_wood_planks**, **herringbone_parquet** → `floor_oak_diff_2k`, `floor_herring_diff_2k` (desktop-only 2k floors, colour-matched to the 1k set)

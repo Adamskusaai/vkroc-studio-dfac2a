@@ -458,7 +458,7 @@ const ROOMFLOOR={living:[0xd2bea0,'oak',1.8],bed:[0xffffff,'herring',2.2],kids:[
 const REALFLOOR={living:['floor_oak_diff_1k',1.2,0xffffff],other:['floor_oak_diff_1k',1.2,0xffffff],kids:['floor_oak_diff_1k',1.2,0xfff4e6],bed:['floor_herring_diff_1k',3.4,0xffffff],
  wet:['floor_tile_light_diff_1k',2.2,0xffffff],kitchen:['floor_tile_light_diff_1k',2.2,0xffffff],hall:['floor_tile_mid_diff_1k',2.2,0xffffff]};
 if(typeof window!=='undefined')window.__vkDirty=()=>{DIRTY=Math.max(DIRTY,30);};
-const FTX={};function floorTexLoad(id,cb){let e=FTX[id];if(!e){e=FTX[id]={t:null,q:[]};new THREE.TextureLoader().load(!TCH&&/^floor_(oak|herring)_diff_1k$/.test(id)?`assets/cc0/tex/ph/${id.replace('_1k','_2k')}.jpg`:`assets/cc0/tex/${id}.jpg`,t=>{t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=TCH?2:8;e.t=t;e.q.forEach(f=>f(t));e.q=[];});}
+const FTX={};function floorTexLoad(id,cb){let e=FTX[id];if(!e){e=FTX[id]={t:null,q:[]};new THREE.TextureLoader().load(`assets/cc0/tex/${id}.jpg`,t=>{t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=TCH?2:8;e.t=t;e.q.forEach(f=>f(t));e.q=[];});}
  if(e.t)cb(e.t);else e.q.push(cb);}
 const RUGC={living:'#5d6872',bed:'#b08a7c',kids:'#8fa3b4'};
 function roomKind(types){const has=t=>types.has(t);
