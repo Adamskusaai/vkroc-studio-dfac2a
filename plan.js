@@ -232,13 +232,16 @@ function findOpenings(S,ink,W,H,ppm,bb){const out=[];const used=new Set();
  return out;}
 // ---------- scale ----------
 function median(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);return s[s.length>>1];}
-function estimateScale(S,ops,bb){const bw=Math.max(bb[2]-bb[0],bb[3]-bb[1]);const ok=p=>p>0&&bw/p>=4&&bw/p<=40;
+function estimateScale(S,ops,bb,robust){const bw=Math.max(bb[2]-bb[0],bb[3]-bb[1]);const ok=p=>p>0&&bw/p>=4&&bw/p<=40;
  const outer=S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t);
  const tE=median(outer),pT=tE/.37;// prem8: SK brick houses 0.44–0.50, timber/synthetic ~0.30 -> middle value, and doors weigh more below
 // exterior wall typ. 0.30–0.45 m
- const doors=ops.filter(o=>o.type==='door'&&!o.ext).map(o=>o.g),pD=doors.length?median(doors)/.85:0;
- let ppm,src;if(ok(pD)&&ok(pT)&&doors.length>=2){ppm=Math.pow(pD,.7)*Math.pow(pT,.3);src='doors+walls';}else if(ok(pD)&&doors.length>=2){ppm=pD;src='doors';}else if(ok(pT)){ppm=pT;src='walls';}else{ppm=bw/12;src='size';}
- estimateScale.last=[pD,pT,doors.length,outer.length];return{ppm,src};}
+ let doorGs=ops.filter(o=>o.type==='door'&&!o.ext).map(o=>o.g);
+ // 2 disagreeing interior 'doors' (wide terrace + door) make median = the larger one and inflate ppm; only then drop outliers vs wall-implied 0.85 m. Leave 3+ door sets alone (not-to-scale / unusual poche).
+ if(robust!==false&&ok(pT)&&doorGs.length===2){const exp=pT*.85,typ=doorGs.filter(g=>g>exp*.6&&g<exp*1.35);if(typ.length)doorGs=typ;}
+ const pD=doorGs.length?median(doorGs)/.85:0;
+ let ppm,src;if(ok(pD)&&ok(pT)&&doorGs.length>=2){ppm=Math.pow(pD,.7)*Math.pow(pT,.3);src='doors+walls';}else if(ok(pD)&&doorGs.length>=2){ppm=pD;src='doors';}else if(ok(pT)){ppm=pT;src='walls';}else{ppm=bw/12;src='size';}
+ estimateScale.last=[pD,pT,doorGs.length,outer.length];return{ppm,src};}
 // outline walls: two thin parallel lines with nothing between (white or grey) -> fill the band.
 // Stacks of 3+ lines (windows) and hatch are left alone.
 function pairFill(ink,W,H,kmax,lwm,strict){const o=new Uint8Array(ink);
@@ -475,7 +478,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
    if(o.debug)(dbg.thin=dbg.thin||[]).push([mL2,S2.filter(q=>q.hz).map(q=>[q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]),add2.length]);S=S.concat(add2);}
   S=mergeColinear(S,2);if(dbg.paper&&!(globalThis.__PF||{}).noIso)S=dropIsolated(S,W,H);S=snap(S);S=mergeColinear(S,1);return S;};
  const V=[];const add=(name,mask,wk,kOpen,kInt)=>{let S=run(mask,wk,/^t?h\d/.test(name),kInt||wk);if(o.debug)dbg["raw_"+name]=S.map(q=>[q.hz,q.a|0,q.b|0,q.c|0,+q.t.toFixed(1)]);if(S.length<3)return;S=focus(S);if(S.length<3)return;S=o._cyan?closeCorners(S):S;void(S);const bb=bbox(S);
-  const ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec),findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb);const q=quality(S,ops,bb,sc.ppm,W,H);
+  const ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec),findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);const sc=estimateScale(S,ops,bb,false);const q=quality(S,ops,bb,sc.ppm,W,H);
   V.push({name,S,mask,wk,kOpen,kInt,bb,q});dbg['q_'+name]=[S.length,+q.Q.toFixed(2),q.nR];};
  add('ink',base.wm,base.wk,base.kOpen,base.kInt);
  /* vector poche from a native PDF (filled dark wall polygons); quality-picked against raster candidates so a weak extract cannot regress */
@@ -509,7 +512,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  let bb=best.bb;{const n0=S.length;if(!(globalThis.__PF||{}).noSat)S=dropSatellites(S);dbg.sat=n0-S.length;if(S.length!==n0&&S.length>=4)bb=bbox(S);}
  let ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec),findOpenings)(S,ink,W,H,Math.max(wk*2.5,(bb[2]-bb[0])/15),bb);
  tm('pick');let sc=estimateScale(S,ops,bb);dbg.est=estimateScale.last.map(v=>+v.toFixed(1));
- try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];dimScale.split=!!dbg.paper;
+ try{const tE=median(S.filter(s=>s.hz?Math.min(Math.abs(s.c-bb[1]),Math.abs(s.c-bb[3]))<2*s.t:Math.min(Math.abs(s.c-bb[0]),Math.abs(s.c-bb[2]))<2*s.t).map(s=>s.t))||wk;dimScale.log=[];dimScale.split=!!dbg.paper;dimScale.loose=!!o._chrome;
   // prem8 photo stage: dimension text may be upside down (plan shot at 180°) or too small/blurred for the 1x ink mask ->
   // retry on the 180°-rotated mask and on a 2x bilinear upscale of the cleaned page (own threshold), lengths scaled back
   const r180=(m,w,h)=>{const o=new Uint8Array(w*h);for(let i=0;i<w*h;i++)o[i]=m[w*h-1-i];return o;};
@@ -532,8 +535,9 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   const areas=[...(dbg.areasPx||[]),...textAreas(PT||[])];if(PT&&areas.length)dbg.areasPx=areas;
   const Rpx=roomPixels(S,W,H,ops),A=!(globalThis.__PF||{}).noArea?areaScale(Rpx,areas,sc.ppm):null;
   dbg.areaSc=[Rpx.length,areas.length,A&&A.n,A&&+A.ppm.toFixed(1)];
-  if(PT&&B){sc={ppm:B.ppm,src:'scalebar'};dbg.scale0='scalebar';}
-  else if(PT&&A&&A.n>=2){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}
+  const sheet=!!(PT||o._chrome);
+  if(sheet&&B){sc={ppm:B.ppm,src:'scalebar'};dbg.scale0='scalebar';}
+  else if(sheet&&A&&A.n>=2){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}
   if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1&&sc.src!=='scalebar'&&sc.src!=='areas')sc={ppm:D.ppm,src:'dims'};
    // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
    if(D.lines&&D.lines.length){const n0=S.length,cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2;
@@ -543,7 +547,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
      const V=S.filter(q=>!q.hz),Hz=S.filter(q=>q.hz);if(V.length>=2&&Hz.length>=2){const xr=[Math.min(...V.map(q=>q.c-q.t/2)),Math.max(...V.map(q=>q.c+q.t/2))],yr=[Math.min(...Hz.map(q=>q.c-q.t/2)),Math.max(...Hz.map(q=>q.c+q.t/2))];
       S=S.map(q=>{const r=q.hz?xr:yr;return(q.a<r[0]-2||q.b>r[1]+2)?{...q,a:Math.max(q.a,r[0]),b:Math.min(q.b,r[1])}:q;}).filter(q=>q.b-q.a>q.t*2);}}}}}catch(e){dbg.dimErr=String(e);}
  tm('dims');if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
- ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec),findOpenings)(S,ink,W,H,sc.ppm,bb);
+ ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec||o._chrome),findOpenings)(S,ink,W,H,sc.ppm,bb);
  {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
  if(cyan){let nw=0;S.forEach((A,i)=>{const L=A.b-A.a;let run=-1;const h=Math.max(2,A.t/2+2);const isC=u=>{for(let v=-h;v<=h;v+=1){const x=Math.round(A.hz?u:A.c+v),y=Math.round(A.hz?A.c+v:u);if(x>=0&&y>=0&&x<W&&y<H&&cyan[y*W+x])return true;}return false;};
   for(let u=A.a;u<=A.b+1;u++){const on=u<=A.b&&isC(u);if(on&&run<0)run=u;if(!on&&run>=0){const lo=run,hi=u-1;run=-1;if(hi-lo>=.4*sc.ppm&&!ops.some(p=>p.i===i&&p.lo<hi&&p.hi>lo)){ops.push({i,j:null,end:'x',to:null,type:'window',lo,hi,inside:1,ext:true,g:hi-lo});nw++;}}}});dbg.cyanWin=nw;}
@@ -702,7 +706,7 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
    if(g.length>=2&&g.length<=8)strings.push({rot,g});}}
  for(const S of strings){const ord=S.rot?[...S.g].sort((a,b)=>b.y0-a.y0):S.g;// vertical text reads bottom->top
   let best=null;for(const dir of S.rot?[1,-1]:[0]){const chars=S.rot?(dir>0?ord:[...ord].reverse()):ord;const r=readString(chars,ink,W,dir);if(!best||r.s>best.s)best={...r,dir};}
-  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);if(m&&m[3]){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length,v=+(m[1]+'.'+m[2]);if(v>=1&&v<=150&&cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3])dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;if(dimScale.txts){const xs0=Math.min(...S.g.map(c=>c.x0)),xs1=Math.max(...S.g.map(c=>c.x1)),ys0=Math.min(...S.g.map(c=>c.y0)),ys1=Math.max(...S.g.map(c=>c.y1));dimScale.txts.push({txt:best.txt,vals,rot:S.rot,b:[xs0,ys0,xs1,ys1]});}
+  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=dimScale.loose?best.txt.match(/^(\d{1,3})[,.](\d{1,2})(?:(\d{1,3}|m\d?))?,?$/):best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);if(m&&(dimScale.loose||m[3])){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length,v=+(m[1]+'.'+m[2]);if(v>=1&&v<=150&&cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3])dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;if(dimScale.txts){const xs0=Math.min(...S.g.map(c=>c.x0)),xs1=Math.max(...S.g.map(c=>c.x1)),ys0=Math.min(...S.g.map(c=>c.y0)),ys1=Math.max(...S.g.map(c=>c.y1));dimScale.txts.push({txt:best.txt,vals,rot:S.rot,b:[xs0,ys0,xs1,ys1]});}
   // dimension line next to the text, then the nearest perpendicular marks (ticks / extension lines) on each side
   const x0=Math.min(...S.g.map(c=>c.x0)),x1=Math.max(...S.g.map(c=>c.x1)),y0=Math.min(...S.g.map(c=>c.y0)),y1=Math.max(...S.g.map(c=>c.y1)),th=S.rot?x1-x0:y1-y0;
   // work in (u along line, v across) coordinates
