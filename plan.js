@@ -429,8 +429,8 @@ function areaScale(rooms,areas,prior){if(!rooms||!rooms.length||!areas||!areas.l
  for(let i=0;i<m;i++)paired.push({px:rL[i].px,v:aL[i].v});
  const cands=paired.map(q=>({p:Math.sqrt(q.px/q.v),v:q.v})).filter(c=>c.p>=20&&c.p<=250&&(!prior||(c.p/prior<2.5&&prior/c.p<2.5)));
  if(!cands.length)return null;let best=null;
- for(const c of cands){const cl=cands.filter(d=>Math.abs(d.p/c.p-1)<.08),area=cl.reduce((s,d)=>s+d.v,0);if(!best||area>best.a||(area===best.a&&cl.length>best.n))best={a:area,n:cl.length,ppm:median(cl.map(d=>d.p))};}
- if(!best||(best.n<2&&best.a<8))return null;return{ppm:best.ppm,n:best.n,src:'areas'};}
+ for(const c of cands){const cl=cands.filter(d=>Math.abs(d.p/c.p-1)<.08),area=cl.reduce((s,d)=>s+d.v,0);if(!best||cl.length>best.n||(cl.length===best.n&&area>best.a))best={a:area,n:cl.length,ppm:median(cl.map(d=>d.p))};}
+ if(!best||best.n<2)return null;return{ppm:best.ppm,n:best.n,src:'areas'};}
 
 export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)return null;const s=Math.min(1,1000/Math.max(W0,H0)),W=Math.max(8,Math.round(W0*s)),H=Math.max(8,Math.round(H0*s));
  const c=mk(W,H),x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.imageSmoothingQuality='high';x.drawImage(img,0,0,W,H);const g=grayOf(c),N=W*H;
@@ -558,7 +558,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   dbg.areaSc=[Rpx.length,areas.length,A&&A.n,A&&+A.ppm.toFixed(1)];
   const sheet=!!(PT||o._chrome);
   if(sheet&&B){sc={ppm:B.ppm,src:'scalebar'};dbg.scale0='scalebar';}
-  else if(sheet&&A&&A.n>=2){const agr=!sc.ppm||(A.ppm/sc.ppm<1.2&&sc.ppm/A.ppm<1.2);if(PT||agr){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}}
+  else if(sheet&&A&&A.n>=2){const agr=!sc.ppm||(A.ppm/sc.ppm<1.25&&sc.ppm/A.ppm<1.25);if(PT||agr){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}}
   if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1&&sc.src!=='scalebar'&&sc.src!=='areas'){const agree=!sc.ppm||(D.ppm/sc.ppm<1.2&&sc.ppm/D.ppm<1.2);if(D.n>=2||agree||!o._chrome)sc={ppm:D.ppm,src:'dims'};}
    // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
    if(D.lines&&D.lines.length){const n0=S.length,cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2;
@@ -567,7 +567,8 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
      // walls that ran on to the removed dimension line overshoot the house: clip them to the span of the perpendicular walls
      const V=S.filter(q=>!q.hz),Hz=S.filter(q=>q.hz);if(V.length>=2&&Hz.length>=2){const xr=[Math.min(...V.map(q=>q.c-q.t/2)),Math.max(...V.map(q=>q.c+q.t/2))],yr=[Math.min(...Hz.map(q=>q.c-q.t/2)),Math.max(...Hz.map(q=>q.c+q.t/2))];
       S=S.map(q=>{const r=q.hz?xr:yr;return(q.a<r[0]-2||q.b>r[1]+2)?{...q,a:Math.max(q.a,r[0]),b:Math.min(q.b,r[1])}:q;}).filter(q=>q.b-q.a>q.t*2);}}}}}catch(e){dbg.dimErr=String(e);}
- tm('dims');if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
+ tm('dims');if(o._chrome&&sc.src==='doors+walls'){const pD=estimateScale.last[0],pT=estimateScale.last[1],lo=Math.min(pD,pT),hi=Math.max(pD,pT);if(lo>0&&hi/lo>1.22&&hi/lo<1.7)sc={ppm:lo,src:pD<=pT?'doors':'walls'};}
+ if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
  ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec||o._chrome),findOpenings)(S,ink,W,H,sc.ppm,bb);
  {const sw=stackWindows(S,ink,null,W,H,sc.ppm,lw*2+2);let nw=0;for(const w of sw){if(ops.some(p=>p.i===w.i&&p.type!=='wall'&&p.lo<w.hi&&p.hi>w.lo))continue;if(ops.some(p=>p.j!=null&&p.j===w.i&&p.lo<w.hi&&p.hi>w.lo))continue;ops.push({i:w.i,j:null,end:'x',to:null,type:'window',lo:w.lo,hi:w.hi,inside:1,ext:true,g:w.hi-w.lo});nw++;}dbg.stackWin=nw;}
  if(cyan){let nw=0;S.forEach((A,i)=>{const L=A.b-A.a;let run=-1;const h=Math.max(2,A.t/2+2);const isC=u=>{for(let v=-h;v<=h;v+=1){const x=Math.round(A.hz?u:A.c+v),y=Math.round(A.hz?A.c+v:u);if(x>=0&&y>=0&&x<W&&y<H&&cyan[y*W+x])return true;}return false;};
