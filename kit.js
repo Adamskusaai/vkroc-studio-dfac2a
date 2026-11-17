@@ -250,10 +250,24 @@ function proc(type, F, cols) {
     // upper cabinet underside shadow band
     box(g, std('#3a3c3e', 0.5), 0, 1.72, -d * 0.06, w * 0.96, 0.04, d * 0.68, 0);
     }
-    box(g, metal, -w * 0.28, 0.98, 0, 0.5, 0.04, 0.36, 0);
-    box(g, dark, w * 0.28, 0.98, 0, 0.52, 0.04, 0.44, 0);
-    for (let i = 0; i < 4; i++)
-      cyl(g, dark, w * 0.18 + (i % 2) * 0.2, 1.01, -0.08 + Math.floor(i / 2) * 0.18, 0.07, 0.07, 0.03, 8);
+    // v20261117g RULE (cooktop): flush induction hob — every zone is laid out RELATIVE to the plate and must stay inside it (audit: hob-zone-off-plate)
+    if (!F.run2) {
+    const top = 0.96, PW = 0.6, PD = 0.52, hx = Math.min(w * 0.28, w / 2 - PW / 2 - 0.06), sx = -Math.min(w * 0.28, w / 2 - 0.31);
+    const glass = std('#0c0d10', 0.12, 0.15);
+    box(g, metal, hx, top + 0.002, 0.02, PW + 0.012, 0.004, PD + 0.012, 0);
+    const plate = box(g, glass, hx, top + 0.005, 0.02, PW, 0.006, PD, 0); plate.userData.hobPlate = 1;
+    const ringM = new THREE.MeshBasicMaterial({ color: 0x5a5e66 }), ledM = new THREE.MeshBasicMaterial({ color: 0xc23a2a });
+    [[-0.145, -0.115, 0.1], [0.145, -0.115, 0.08], [-0.145, 0.105, 0.08], [0.145, 0.105, 0.1]].forEach(([zx, zz, r]) => {
+      const rg = new THREE.Mesh(new THREE.RingGeometry(r - 0.006, r, 40), ringM); rg.rotation.x = -Math.PI / 2; rg.position.set(hx + zx, top + 0.0085, 0.02 + zz); rg.userData.hobRing = r; g.add(rg);
+    });
+    const tc = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.03), ringM); tc.rotation.x = -Math.PI / 2; tc.position.set(hx, top + 0.0085, 0.02 + PD / 2 - 0.035); tc.userData.hobRing = 0.001; g.add(tc);
+    for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(new THREE.CircleGeometry(0.006, 10), ledM); l.rotation.x = -Math.PI / 2; l.position.set(hx - 0.075 + i * 0.05, top + 0.009, 0.02 + PD / 2 - 0.035); g.add(l); }
+    // undermount stainless sink + faucet
+    box(g, metal, sx, top + 0.003, 0.0, 0.52, 0.006, 0.42, 0.004);
+    box(g, std('#7e8388', 0.3, 0.6), sx, top + 0.0065, 0.01, 0.44, 0.002, 0.34, 0);
+    cyl(g, metal, sx, top + 0.15, -0.17, 0.016, 0.02, 0.3, 12);
+    box(g, metal, sx, top + 0.3, -0.09, 0.03, 0.025, 0.17, 0.01);
+    }
   } else if (type === 'fridge') {
     ao(g, w + 0.04, d + 0.04);
     box(g, std('#d8dce0', 0.35, 0.4), 0, h / 2, 0, w, h, d, 0.03);
