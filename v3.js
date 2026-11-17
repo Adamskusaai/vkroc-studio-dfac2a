@@ -821,7 +821,38 @@ export const isWalk=()=>walk;
 export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}world=build();doGrow=false;if(!world)return false;interiorFinish(world);backsplash(world);world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
- walk=walk&&!anim;setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;return true;}
+ walk=walk&&!anim;setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;lmHook();return true;}
+/* v20261117d BAKED LIGHTMAPS (pipeline: /workspace/bake/bake_house.sh). Static architecture meshes (walls, floors, ceilings, slabs, roof, facade, plot)
+   get a sky-light bake (direct sky + all bounces + AO) from headless Blender/Cycles in ONE atlas on uv1. The live sun + its shadows stay real-time, so the
+   time-of-day slider keeps working: the bake replaces the hemisphere/fill/IBL ambient by day and fades out towards dusk/night (live lights take over).
+   Candidates are picked by the same deterministic rule on export and on load; per-mesh vertex counts are checked, any mismatch = no lightmap (live fallback). */
+let LMS=null;const _lmv=new THREE.Vector3();
+function lmCands(w){const use=new Map();w.traverse(o=>{if(o.isMesh)use.set(o.geometry,(use.get(o.geometry)||0)+1);});const out=[];
+ w.traverse(o=>{if(!o.isMesh||Array.isArray(o.material))return;for(let p=o;p&&p!==w;p=p.parent){const u=p.userData||{};if(u.furn||u.doorLeaf||u.lamp||u.door||u.ceil)return;}
+  const m=o.material,g=o.geometry;if(!m||m.transparent||m.opacity<1||!(m.isMeshStandardMaterial||m.isMeshLambertMaterial))return; // unlit MeshBasic floors stay live (their clone lost the floor look)if(use.get(g)>1)return;
+  if(!/^(Box|Extrude|Shape|Plane|Buffer)Geometry$/.test(g.type)||!g.attributes.position)return;if(g.attributes.position.count>20000)return;
+  g.computeBoundingBox();const s=g.boundingBox.getSize(_lmv),mx=Math.max(s.x,s.y,s.z);if(mx<.25||mx>80)return;out.push(o);});return out;}
+function lmNorm(){world.traverse(o=>{const u=o.userData||{};if(u.wallCut){o.scale.y=1;o.position.y=u.wallCut.base+u.wallCut.h/2;o.visible=true;}if(u.doorLeaf){o.scale.y=1;o.visible=true;}
+  if(u.grow){o.scale.y=1;if(u.growBase!=null&&u.growH!=null)o.position.y=u.growBase+u.growH/2;o.visible=true;}});world.updateMatrixWorld(true);}
+const _b64=a=>{const u=new Uint8Array(a.buffer,a.byteOffset,a.byteLength);let s='';for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s);};
+function lmMesh(o){const g=o.geometry,P=g.attributes.position,n=P.count,f=new Float32Array(n*3);for(let i=0;i<n;i++){_lmv.fromBufferAttribute(P,i).applyMatrix4(o.matrixWorld);f[i*3]=_lmv.x;f[i*3+1]=_lmv.y;f[i*3+2]=_lmv.z;}
+ const ix=g.index?Uint32Array.from(g.index.array):null,m=o.material,c=m&&m.color?m.color:new THREE.Color(.8,.8,.8),k=m&&m.map?.75:1;return{p:_b64(f),i:ix?_b64(ix):null,n,c:[c.r*k,c.g*k,c.b*k]};}
+export function lmExport(){if(!world)return null;finishGrow();lmNorm();const C=lmCands(world),cs=new Set(C),occ=[];
+ world.traverse(o=>{if(!o.isMesh||cs.has(o)||Array.isArray(o.material)||!o.visible)return;const m=o.material;if(!m||m.transparent&&m.opacity<.9)return;if(!o.geometry.attributes.position||o.geometry.attributes.position.count>60000)return;occ.push(lmMesh(o));});
+ return JSON.stringify({v:1,bake:C.map(o=>Object.assign(lmMesh(o),{off:o.userData.floor?.006:.0015})),occ});}
+async function lmHook(){const src=H&&H.lightmap&&H.lightmap.src;if(LMS&&LMS.w!==world)LMS=null;if(!src||!world||/[?&]nolm=1/.test(location.search))return;const w=world;
+ try{const t0=performance.now(),meta=await(await fetch(src)).json(),base=src.replace(/[^/]*$/,''),mob=Math.min(innerWidth,innerHeight)<700;
+  const [bin,tex]=await Promise.all([fetch(base+meta.uv).then(r=>r.arrayBuffer()),new THREE.TextureLoader().loadAsync(base+(mob&&meta.texMob?meta.texMob:meta.tex))]);if(w!==world)return;
+  const C=lmCands(w),cn=o=>{const g=o.geometry;return g.index?g.index.count-g.index.count%3:g.attributes.position.count;};if(C.length!==meta.counts.length||C.some((o,i)=>cn(o)!==meta.counts[i])){console.warn('lightmap: mesh mismatch, live lighting',C.length,meta.counts.length);return;}
+  tex.colorSpace=THREE.SRGBColorSpace;tex.flipY=false;tex.channel=1;tex.generateMipmaps=true;tex.minFilter=THREE.LinearMipmapLinearFilter;tex.anisotropy=4;
+  const U=new Uint16Array(bin),cl=new Map(),mats=[],bas=[];let q=0;
+  C.forEach((o,i)=>{if(o.geometry.index){const g0=o.geometry;o.geometry=g0.toNonIndexed();g0.dispose();}const n=meta.counts[i],a=new Float32Array(n*2);for(let j=0;j<n*2;j++)a[j]=U[q+j]/65535;q+=n*2;o.geometry.setAttribute('uv1',new THREE.BufferAttribute(a,2));
+   const o0=o.material;let m=cl.get(o0);if(!m){m=o0.clone();m.lightMap=tex;m.userData.lmEnv=m.envMapIntensity!=null?m.envMapIntensity:1;mats.push(m);cl.set(o0,m);}o.material=m;if(m.isMeshBasicMaterial)bas.push([o,o0,m]);});
+  LMS={w,mats,bas,kb:meta.kb||1.6,k:meta.k||1,ms:Math.round(performance.now()-t0)};window.__lmS=LMS;window.__lm={meshes:C.length,mats:mats.length,ms:LMS.ms,tex:mob&&meta.texMob?meta.texMob:meta.tex};applyAtmo(true);DIRTY=Math.max(DIRTY,60);
+ }catch(e){console.warn('lightmap failed, live lighting',e);}}
+function lmAtmo(up){if(!LMS||LMS.w!==world)return;const d=up,cut=.7*d;if(hemiL)hemiL.intensity*=1-cut;if(fillL)fillL.intensity*=1-cut*.8;if(roofFillL)roofFillL.intensity*=1-cut*.8;
+ LMS.mats.forEach(m=>{if(m.isMeshBasicMaterial)m.lightMapIntensity=Math.PI*LMS.kb;else{m.lightMapIntensity=LMS.k*d;m.envMapIntensity=m.userData.lmEnv*(1-.5*d);}});
+ /* unlit (MeshBasic) floors: baked contact shadows by day, their original unlit material from dusk on */LMS.bas.forEach(([o,o0,m])=>{o.material=d>.35?m:o0;});}
 export async function glb(){if(!world)return null;
   // Normalize dollhouse/grow state so Blender does not get ghost window/door meshes below the real ones
   world.traverse(o=>{
@@ -984,7 +1015,7 @@ function applyAtmo(live){const h=ATM.h!=null?+ATM.h:14.5,w=ATM.w||'sun',cl=w!=='
  if(hemiL){hemiL.intensity=A.hemi*cm;hemiL.color.copy(A.hemiC);hemiL.groundColor.copy(A.hemiC).multiplyScalar(up>0?.75:.3);}
  // fill: daylight bounce by day, cool moonlight at night (directional, unshadowed)
  if(fillL){const day=.7*up*(cl?.6:1),moon=.95*A.moon;fillL.intensity=day+moon;fillL.color.setRGB(1,.94,.87).lerp(_c1.setRGB(.55,.66,1),moon/(day+moon+1e-6));}
- if(roofFillL){roofFillL.intensity=.85*(.06+.94*up)*(cl?.6:1)+.12*A.moon;roofFillL.color.setRGB(1,.89,.72).lerp(_c1.setRGB(.5,.6,1),A.moon);}
+ if(roofFillL){roofFillL.intensity=.85*(.06+.94*up)*(cl?.6:1)+.12*A.moon;roofFillL.color.setRGB(1,.89,.72).lerp(_c1.setRGB(.5,.6,1),A.moon);}lmAtmo(up*(cl?.7:1));
  scene.environmentIntensity=A.env*(cl?.75:1)*(wet?.85:1);R.toneMappingExposure=A.exp*(wet?.9:1);
  let sky=A.sky;if(cl){const gc=wet?'#7d858f':'#a4abb2',k=.55*Math.max(.25,up);sky=sky.map(c=>grey(c,k,gc));}
  const useDay=!cl&&skyDay&&h>=9.2&&h<=14.4;scene.background=useDay?skyDay:skyGrad(sky);
