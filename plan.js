@@ -5,7 +5,7 @@ import {LTJ} from './ltpl.js?v=20261112i';
 //        thick-stroke (wall) mask -> axis segments -> junction snapping -> openings (door/window) -> scale -> metres.
 const MAXD=1400;
 function mk(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
-function imgCanvas(img,M){const S=Math.min(2.5,M/Math.max(img.width,img.height)),c=mk(Math.max(1,Math.round(img.width*S)),Math.max(1,Math.round(img.height*S)));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;}
+function imgCanvas(img,M,cap){const S=Math.min(cap||2.5,M/Math.max(img.width,img.height)),c=mk(Math.max(1,Math.round(img.width*S)),Math.max(1,Math.round(img.height*S)));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;}
 function grayOf(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Float32Array(W*H);for(let i=0;i<W*H;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;return g;}
 function otsuF(g,step=1){const h=new Float64Array(256);let n=0;for(let i=0;i<g.length;i+=step){h[Math.max(0,Math.min(255,g[i]|0))]++;n++;}let s=0,sB=0,wB=0,b=0,t=128;for(let i=0;i<256;i++)s+=i*h[i];for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=n-wB;if(!wF)break;sB+=i*h[i];const v=wB*wF*(sB/wB-(s-sB)/wF)**2;if(v>b){b=v;t=i;}}return t;}
 // ---------- paper detection + perspective ----------
@@ -464,7 +464,9 @@ export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF|
   const R=readPlanX(cr,o);if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}
   const F=readPlanX(im,o);if(F&&F.dbg)F.dbg.cropFail=ci;return F||R;};
  const qual=R=>{if(!R||!R.dbg)return -1e9;const d=R.dbg;return (d.Q||0)+1.2*(d.nR||0)+(/^(room)?dims|scalebar$/.test(d.scale||'')?.6:0);};
- const A=run(src);if(A&&A.dbg&&o._chrome)A.dbg.chrome=o._chrome;
+ let A=run(src);if(A&&A.dbg&&o._chrome)A.dbg.chrome=o._chrome;
+ /* v18a: a letterbox page crop of a small phone screenshot gets upsampled ~1.5-2x, which blurs thin strokes into 4-5 px lines; also read it at native resolution and keep the better reading */
+ if(page&&!(globalThis.__PF||{}).noNative&&MAXD/Math.max(src.width,src.height)>1.3){const A0=A,qA=qual(A0),mg=(globalThis.__PF||{}).natM??.5,nq=[+qA.toFixed(2)];for(const cap of (globalThis.__PF||{}).natCaps||[1]){let N=null;try{N=readPlanX(src,{...o,upCap:cap});}catch(e){N=null;}const qN=qual(N);nq.push(+qN.toFixed(2));if(N&&N.dbg&&qN>qA+mg&&qN>qual(A)){N.dbg.native=cap;N.dbg.chrome=o._chrome;A=N;}}if(A&&A.dbg)A.dbg.natQ=nq;}
  if(!ch)return A;
  const B=run(img);if(!B)return A;if(!A)return B;
  /* a letterbox page crop is the higher-res reading; only skip it if the uncropped score is clearly better */
@@ -475,7 +477,7 @@ function readPlanX(img,o={}){if(o._cm)return readPlan1(img,o);const R=readPlan0(
 function readPlan0(img,o){const A=readPlan1(img,{...o,_cm:'new'});if(A&&A.dbg&&(A.dbg.paper||((globalThis.__PF||{}).skip&&(A.dbg.Q||0)>=4.5)))return A;/* photo, or a confident first reading -> no second pass (speed) */
  let B=null;try{B=readPlan1(img,A?{...o,_cm:'old',noPaper:1,noSketch:1}:{...o,_cm:'old'});/* first reading failed completely -> full second reading (paper + sketch) */}catch(e){B=null;}if(!B)return A;if(!A){B.dbg.aNull=1;return B;}
  const qa=(A.dbg.Q||0)+(/^(roomdims|dims|scalebar|areas)$/.test(A.dbg.scale)?.6:0),qb=(B.dbg.Q||0)+(/^(roomdims|dims|scalebar|areas)$/.test(B.dbg.scale)?.6:0);/* a reading whose dimension text parsed is the cleaner one */const R=qb>qa+.05?B:A;R.dbg.cm=R===B?'old':'new';R.dbg.tA=A.dbg.t;R.dbg.tB=B.dbg.t;R.dbg.Qs=[+qa.toFixed(2),+qb.toFixed(2)];return R;}
-function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.t||{};dbg.t[k]=Math.round(performance.now()-T0);};let c=imgCanvas(img,MAXD);const CG=o._cm==='old'?cleanGrayOld:cleanGray;inkMask.off=o._cm==='old';
+function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.t||{};dbg.t[k]=Math.round(performance.now()-T0);};let c=imgCanvas(img,MAXD,o.upCap);const CG=o._cm==='old'?cleanGrayOld:cleanGray;inkMask.off=o._cm==='old';
  if(!o.rect&&!o.noPaper){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
  focus.nearE=!!o._cyan;tm('paper');let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
  if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=CG(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
@@ -511,7 +513,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  if(!dbg.paper&&!(globalThis.__PF||{}).noLP){const m2=inkMask(n,W,H,.86);let lp=0;for(let i=0;i<W*H;i+=5)if(m2[i]&&!ink[i])lp++;dbg.lpF=+(lp*5/(W*H)).toFixed(4);if(lp*5>W*H*.004){const ok=Math.max(4,Math.round(base.kOpen*.7));const hm=openK(m2,W,H,ok);const B=wallMask(hm,W,H);add('lp',B.wm,B.wk,B.kOpen,B.kInt);}}
  // prem8 sketch stage: thin, wobbly, broken hand strokes (pen/pencil photo) -> looser threshold, short axis closings bridge
  // breaks and wobble, then the double-line walls are filled like 'pair'. Only when strokes are thin and no reading closes rooms.
- if(!o.noSketch&&((globalThis.__PF||{}).oldSk?lw<=3:(dbg.paper?lw<=3:lw<=2))&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
+ if(!o.noSketch&&((globalThis.__PF||{}).oldSk?lw<=3:(dbg.paper?lw<=((globalThis.__PF||{}).skW||3):lw<=2))&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
   const km=Math.max(6,Math.round(.022*mx)),pf=close1(close1(pairFill(c2,W,H,km,lw*2+5),W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-c2[i];
   if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('sk'+Math.round(skT*100),B.wm,B.wk,B.kOpen,B.kInt);}}
  const solidOK=V.length&&V[0].S.length>=4&&(base.wk>2.2*lw+2)&&sideCoverage(V[0].S,V[0].bb).n>=2;dbg.solidOK=!!solidOK;

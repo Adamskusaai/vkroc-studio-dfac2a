@@ -1,5 +1,5 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
-import {readPlan} from './plan.js?v=20261117p';
+import {readPlan} from './plan.js?v=20261117v';
 import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261117s';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
@@ -636,6 +636,23 @@ function addMissingDoors(R,L,RS,T,log){const D=roomDoors(R,L);const PR=t=>/^(Pre
     const nb=a===r.id&&b>1?b:b===r.id&&a>1?a:0;const busy=ops.some(o=>s>o.offset-.15&&s<o.offset+o.width+.15);
     if(nb&&!busy&&(!run||run.nb===nb)){if(!run)run={s0:s,s1:s,nb};else run.s1=s;}else{flush();if(nb&&!busy)run={s0:s,s1:s,nb};}}flush();});
   if(best){const wd=.8;(best.w.openings=best.w.openings||[]).push({type:'door',kind:'single',offset:+(best.s-wd/2).toFixed(3),width:wd,height:2.05,sill:0,hinge:'R'});log.push({fix:'door-added',room:r.n,to:best.nb});}});}
+/* v20261118v: every house needs a way in. When the ground floor has no exterior door (plan reading missed it), add a 1 m entrance on the
+   longest free exterior wall run of the best room (hall > living/kitchen > other), keeping 15 cm from other openings; last resort: turn the widest
+   exterior window of that room into the entrance. Same rule for demo, re-generated and uploaded houses. */
+function addEntrance(R,L,RS,log){if(!H.levels||!H.levels.length||L!==H.levels[0].name||!RS.length)return;const ids=new Set(RS.map(q=>q.id)),out=v=>v!==-1&&!ids.has(v),T=assignTypes(R,L);
+ const PR=t=>/^(Predsieň|Chodba|Hala|Zádverie)/.test(t||'')?3:/^Obývačka|^Jedáleň|^Kuchyňa/.test(t||'')?2:/^(Kúpeľňa|WC|Komora|Špajza|Technická)/.test(t||'')?0:1;
+ const W=H.walls.filter(w=>w.level===L);let has=false;
+ W.forEach(w=>{const G=geo(w),n=[-G.u[1],G.u[0]],e=(w.thickness||.3)/2+.25;(w.openings||[]).forEach(o=>{if(o.type!=='door')return;const s=o.offset+o.width/2,c=[G.x0+G.u[0]*s,G.z0+G.u[1]*s];const a=roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),b=roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);if((ids.has(a)&&out(b))||(ids.has(b)&&out(a)))has=true;});});
+ if(has)return;let best=null,bw=null;
+ W.forEach(w=>{const G=geo(w),n=[-G.u[1],G.u[0]],e=(w.thickness||.3)/2+.25,st=.05,ops=w.openings||[];let run=null;
+  const flush=()=>{if(run&&run.s1-run.s0>=1.3){const rr=RS.find(q=>q.id===run.r),sc=PR(T[run.r])*10+Math.min(run.s1-run.s0,4)+Math.min((rr&&rr.a)||0,60)/20;/* bigger room of the same kind wins (main living space, not a side room) */if(!best||sc>best.sc)best={sc,w,s:(run.s0+run.s1)/2,r:run.r};}run=null;};
+  for(let s=.15;s<=G.L-.15;s+=st){const c=[G.x0+G.u[0]*s,G.z0+G.u[1]*s];const a=roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),b=roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);
+   const r=ids.has(a)&&out(b)?a:ids.has(b)&&out(a)?b:0;const busy=ops.some(o=>s>o.offset-.2&&s<o.offset+o.width+.2);
+   if(r&&!busy&&(!run||run.r===r)){if(!run)run={s0:s,s1:s,r};else run.s1=s;}else{flush();if(r&&!busy)run={s0:s,s1:s,r};}}flush();
+  ops.forEach(o=>{if(o.type!=='window'||o.width<.9)return;const s=o.offset+o.width/2,c=[G.x0+G.u[0]*s,G.z0+G.u[1]*s];const a=roomAt(R,[c[0]+n[0]*e,c[1]+n[1]*e]),b=roomAt(R,[c[0]-n[0]*e,c[1]-n[1]*e]);const r=ids.has(a)&&out(b)?a:ids.has(b)&&out(a)?b:0;if(!r)return;const sc=PR(T[r])*10+o.width;if(!bw||sc>bw.sc)bw={sc,w,o,r};});});
+ const wd=1;if(best&&best.sc>=10){(best.w.openings=best.w.openings||[]).push({type:'door',kind:'entrance',offset:+(best.s-wd/2).toFixed(3),width:wd,height:2.1,sill:0,hinge:'R'});log.push({fix:'entrance-added',room:T[best.r]||best.r});return;}
+ if(bw&&(!best||bw.sc>=best.sc)){const o=bw.o,c=o.offset+o.width/2,ww=Math.min(o.width,1.2);Object.assign(o,{type:'door',kind:'entrance',offset:+(c-ww/2).toFixed(3),width:ww,height:2.1,sill:0,hinge:'R'});log.push({fix:'entrance-from-window',room:T[bw.r]||bw.r});return;}
+ if(best){(best.w.openings=best.w.openings||[]).push({type:'door',kind:'entrance',offset:+(best.s-wd/2).toFixed(3),width:wd,height:2.1,sill:0,hinge:'R'});log.push({fix:'entrance-added',room:T[best.r]||best.r});}}
 // small bathroom / WC: the leaf must not swing into the room (it would block the fixtures) -> swing out, or sliding if outside is a tight hall
 function wetDoors(R,L,RS,T,log){const wet=new Set(RS.filter(r=>(/^(Kúpeľňa|WC)/.test(T[r.id]||'')&&r.a<6)||(/^(Komora|Špajza|Šatník|Technická|Predsieň|Zádverie)/.test(T[r.id]||'')&&r.a<3.5)).map(r=>r.id));if(!wet.size)return;
  H.walls.filter(w=>w.level===L).forEach(w=>{const G=geo(w),n=[-G.u[1],G.u[0]],e=w.thickness/2+.25;(w.openings||[]).forEach(o=>{if(o.type!=='door'||o.kind==='sliding'||o.kind==='entrance'||o.kind==='terrace')return;
@@ -732,7 +749,7 @@ function autoFurn(){if(!H||!H.levels)return;H.autoF=H.autoF||{};const L0=lvl;let
 window.__autoFurn=autoFurn;
 function furnish(op){const dm=!!(op&&op.demo===1);const RS=rooms();if(!RS.length){if(!dm)toast('Najprv uzavrite steny miestností.','warn');return;}if(!dm)snap();const had=(H.furn||[]).some(f=>f.level===lvl);H.fv=dm?0:had?((H.fv||0)+1)%4:0;
  const R=RC[lvl],ids=new Set(RS.map(r=>r.id));const fixes=sanitizeOpenings(H.walls.filter(w=>w.level===lvl),p=>{const v=roomAt(R,p);return v===-1?-1:ids.has(v)?v:0;});H.fixLog=fixes;
- const T=assignTypes(R,lvl);addMissingDoors(R,lvl,RS,T,fixes);wetDoors(R,lvl,RS,T,fixes);if(!dm)try{rulesFix({noFix:1});}catch(e){console.warn('rulesFix',e);}/* door/opening fixes BEFORE layout so furniture respects the final door spots */H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
+ const T=assignTypes(R,lvl);addMissingDoors(R,lvl,RS,T,fixes);try{addEntrance(R,lvl,RS,fixes);}catch(e){console.warn('entrance',e);}wetDoors(R,lvl,RS,T,fixes);if(!dm)try{rulesFix({noFix:1});}catch(e){console.warn('rulesFix',e);}/* door/opening fixes BEFORE layout so furniture respects the final door spots */H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
  const OPS=layoutOps(R,lvl),WS=layoutWalls(lvl),hasWC=RS.some(q=>/^WC/.test(T[q.id]||''));const t0=performance.now();
  RS.forEach(r=>{const G=stairNoGo(makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim),lvl);const items=layoutRoom(G,roomType(r,T,R,lvl),{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});
   let its=items;/* v12b fallback: a room whose own template found no valid spot gets the most fitting generic set that does fit */if(!its.length&&r.a>=1.5){const tq=roomType(r,T,R,lvl);for(const alt of r.a>=7?['Izba','Pracovňa','Chodba','Komora']:/^(WC|Kúpeľ)/.test(tq)?['WC','Komora']:['Komora','Chodba']){if(alt===tq)continue;its=layoutRoom(G,alt,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});if(its.length)break;}}
