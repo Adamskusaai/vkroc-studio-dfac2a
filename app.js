@@ -1,6 +1,6 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
 import {readPlan} from './plan.js?v=20261117p';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261117q';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261117r';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -527,7 +527,7 @@ addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 /* v20261117a: keep the canvas bitmap in sync with its CSS box. The header grows when the editor toolbar appears (main = 100% - --hh), which shrank the canvas without a refit, so the bitmap was squeezed vertically and every click landed lower than the cursor. */
 new ResizeObserver(()=>{if(!H||!$('ed').classList.contains('on'))return;const r=cv.getBoundingClientRect();if(!r.width||!r.height)return;const W=Math.round(r.width*devicePixelRatio),Hh=Math.round(r.height*devicePixelRatio);if(Math.abs(cv.width-W)<2&&Math.abs(cv.height-Hh)<2)return;if(!view.u){fit();return;}const cx0=view.x+cv.width/2/view.s,cy0=view.y+cv.height/2/view.s;cv.width=W;cv.height=Hh;view.x=cx0-W/2/view.s;view.y=cy0-Hh/2/view.s;draw();}).observe(cv);
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261117q');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261117r');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 // prem10 storey picker (Bez strechy): Všetko / 1NP / 2NP …; only for multi-storey houses. Picking a storey = it becomes the top cut (upper storeys hidden, lower ones ghosted).
 let LVSEL=-1;function lvPickUI(md){const P=$('lvpick');if(!P)return;const ok=md==='doll'&&H&&H.levels&&H.levels.length>1;P.hidden=!ok;if(!ok)return;
  P.innerHTML='';[['Všetko',-1],...H.levels.map((l,i)=>[l.name,i])].forEach(([t,i])=>{const b=document.createElement('button');b.textContent=t;b.dataset.l=t;b.setAttribute('aria-pressed',LVSEL===i?'true':'false');if(LVSEL===i)b.classList.add('on');
@@ -619,7 +619,7 @@ function layoutOps(R,L){const out=[];H.walls.filter(w=>w.level===L).forEach(w=>{
 const layoutWalls=L=>H.walls.filter(w=>w.level===L).map(w=>{const g=geo(w);return{p0:[g.x0,g.z0],u:g.u,L:g.L,t:w.thickness};});
 function roomType(r,T,R,L){return(r.auto?(T[r.id]||'Izba'):((H.rn||[]).find(e=>e.level===L&&roomAt(R,e.p)===r.id)||{}).n||T[r.id]||'Izba');}
 function validateAll(L=lvl){const RS=rooms(L),R=RC[L];if(!R||!R.g)return[];const TT=assignTypes(R,L);const ids0=new Set(RS.map(q=>q.id));const OPS=layoutOps(R,L),WS=layoutWalls(L),out=[];
- RS.forEach(r=>{const G=makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim);validateRoom(G,(H.furn||[]).filter(f=>f.level===L&&(f.rid&&ids0.has(f.rid)?f.rid:roomAt(R,f.p))===r.id),roomType(r,TT,R,L)).forEach(v=>out.push({room:r.n,...v}));});
+ RS.forEach(r=>{const G=stairNoGo(makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim),L);validateRoom(G,(H.furn||[]).filter(f=>f.level===L&&(f.rid&&ids0.has(f.rid)?f.rid:roomAt(R,f.p))===r.id),roomType(r,TT,R,L)).forEach(v=>out.push({room:r.n,...v}));});
  (H.furn||[]).filter(f=>f.level===L&&!RS.some(r=>r.id===roomAt(R,f.p))&&roomAt(R,f.p)===-1&&!['art','curtain','pendant','mirror','towel'].includes(f.t)).forEach(f=>out.push({room:'-',t:f.t,p:f.p,rule:'in-wall'}));
  // door sanity: one door per room unless it is a hall / living area; never two leaves in (almost) the same opening
  const D=roomDoors(R,L);RS.forEach(r=>{if(!D.some(d=>d.a===r.id||d.b===r.id))out.push({room:r.n,t:'door',rule:'room-without-door'});});
@@ -732,14 +732,14 @@ function furnish(op){const dm=!!(op&&op.demo===1);const RS=rooms();if(!RS.length
  const R=RC[lvl],ids=new Set(RS.map(r=>r.id));const fixes=sanitizeOpenings(H.walls.filter(w=>w.level===lvl),p=>{const v=roomAt(R,p);return v===-1?-1:ids.has(v)?v:0;});H.fixLog=fixes;
  const T=assignTypes(R,lvl);addMissingDoors(R,lvl,RS,T,fixes);wetDoors(R,lvl,RS,T,fixes);if(!dm)try{rulesFix({noFix:1});}catch(e){console.warn('rulesFix',e);}/* door/opening fixes BEFORE layout so furniture respects the final door spots */H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
  const OPS=layoutOps(R,lvl),WS=layoutWalls(lvl),hasWC=RS.some(q=>/^WC/.test(T[q.id]||''));const t0=performance.now();
- RS.forEach(r=>{const G=makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim);const items=layoutRoom(G,roomType(r,T,R,lvl),{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});
+ RS.forEach(r=>{const G=stairNoGo(makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim),lvl);const items=layoutRoom(G,roomType(r,T,R,lvl),{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});
   let its=items;/* v12b fallback: a room whose own template found no valid spot gets the most fitting generic set that does fit */if(!its.length&&r.a>=1.5){const tq=roomType(r,T,R,lvl);for(const alt of r.a>=7?['Izba','Pracovňa','Chodba','Komora']:/^(WC|Kúpeľ)/.test(tq)?['WC','Komora']:['Komora','Chodba']){if(alt===tq)continue;its=layoutRoom(G,alt,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});if(its.length)break;}}
   its.forEach(it=>{H.furn.push({...it,level:lvl,rid:r.id});n++;});if(!its.length)empty.push(r.n);});
  if(!dm&&!window.__rfOff)try{rulesFix({noDoors:1});}catch(e){console.warn("rulesFix",e);}/* plausibility auto-fixes right after furnishing, so Kontrola shows what is really left */
  const V=validateAll();window.__furnMs=Math.round(performance.now()-t0);
  if(dm){window.__furnEmpty=empty;return V;}
  save();draw();toast('Zariadené – variant '+(H.fv+1)+'/4 ('+n+' ks).'+(fixes.filter(f=>!/^suggest/.test(f.fix)).length?' Opravené dvere/okná: '+fixes.filter(f=>!/^suggest/.test(f.fix)).length+'.':'')+(empty.length?' Bez nábytku: '+empty.join(', '):'')+(V.length?' Kontrola: '+V.length+' porušení.':' Kontrola pravidiel: OK.'),V.length?'warn':'ok',5000);window.__furnEmpty=empty;}
-window.__roomFurn=()=>{const RS=rooms(),R=RC[lvl];return RS.map(r=>({n:r.n,a:+r.a.toFixed(1),k:(H.furn||[]).filter(f=>f.level===lvl&&roomAt(R,f.p)===r.id).map(f=>f.t)}));};
+window.__roomsAll=()=>(H.levels||[]).flatMap(l=>{const RS=rooms(l.name),R=RC[l.name];return RS.map(r=>({L:l.name,e:l.elevation||0,n:r.n,bb:r.bb,c:[(r.bb[0]+r.bb[2])/2,(r.bb[1]+r.bb[3])/2],k:(H.furn||[]).filter(f=>f.level===l.name&&roomAt(R,f.p)===r.id).map(f=>f.t+'@'+f.p.map(v=>v.toFixed(2)).join(',')+'r'+(f.r||0))}));});window.__roomFurn=()=>{const RS=rooms(),R=RC[lvl];return RS.map(r=>({n:r.n,a:+r.a.toFixed(1),k:(H.furn||[]).filter(f=>f.level===lvl&&roomAt(R,f.p)===r.id).map(f=>f.t)}));};
 function mirror(){const ws=WL();if(!ws.length)return;snap();let a=1e9,b=-1e9;ws.forEach(w=>{a=Math.min(a,w.start[0],w.end[0]);b=Math.max(b,w.start[0],w.end[0]);});const m=x=>+(a+b-x).toFixed(3);
  ws.forEach(w=>{w.start=[m(w.start[0]),w.start[1]];w.end=[m(w.end[0]),w.end[1]];(w.openings||[]).forEach(o=>{if(o.type==='door')o.hinge=o.hinge==='R'?'L':'R';});});FL().forEach(f=>f.p=[m(f.p[0]),f.p[1]]);(H.rn||[]).forEach(e=>{if(e.level===lvl)e.p=[m(e.p[0]),e.p[1]];});
  (H.stairs||[]).filter(s=>s.level===lvl).forEach(s=>{const r=stairRect(s),t=[m(r[2]),m(r[0])];s.dir=Math.PI-(s.dir||0);const q=stairRect(s);s.pos=[s.pos[0]+t[0]-q[0],s.pos[1]];});save();fit();toast('Podlažie zrkadlené.','ok');}
@@ -822,7 +822,16 @@ const RULES=[
  ['scale-implausible','hard','with an estimated scale, ≥2 rooms are too small/narrow for their type: propose the enlargement (one click), never apply silently'],
 ];window.__RULES=RULES;
 // prem9: furniture standing on the stair run (its level) or floating in the stair opening (level above)
-function stairFurn(){const out=[];(H.stairs||[]).forEach(st=>{const li=H.levels.findIndex(l=>l.name===st.level);const lv=[st.level,(H.levels[li+1]||{}).name];const r=stairRect(st);(H.furn||[]).forEach((f,q)=>{if(!lv.includes(f.level)||!f.p)return;if(f.p[0]>r[0]-.05&&f.p[0]<r[2]+.05&&f.p[1]>r[1]-.05&&f.p[1]<r[3]+.05&&!out.includes(q))out.push(q);});});return out;}
+/* v20261117r RULE: on the floor above a stair, furniture keeps a 60 cm walkway around the stair opening (Adam: kids' desk + chair against the railing).
+   The layout treats the opening + 60 cm as no-go; stairFurn/rulesCheck flag any footprint inside it. audit: furniture-on-stairs (walkway) */
+const WALK_SOFT=new Set(['rug','runner','art','curtain','mirror','towel','tvw','hooks','wshelf','pendant']);
+function stairVoids(L){const li=(H.levels||[]).findIndex(l=>l.name===L);if(li<1)return[];return (H.stairs||[]).filter(st=>st.level===H.levels[li-1].name).map(stairRect);}
+function stairNoGo(G,L){const V=stairVoids(L);if(V.length)G.noGo=V.map(r=>[r[0]-.6,r[1]-.6,r[2]+.6,r[3]+.6]);return G;}
+/* v20261117r: a chair/stool whose table or desk was removed goes too (no lone chair by the railing). audit: lone-chair */
+function lonelySeats(log){const sz=f=>{const D=DIM3[f.t]||[.5,.5],w=f.w||D[0],d=f.d||D[1];return (f.r||0)%2?[d,w]:[w,d];},gp=(a,b)=>{const A=sz(a),B=sz(b);return Math.hypot(Math.max(0,Math.abs(a.p[0]-b.p[0])-(A[0]+B[0])/2),Math.max(0,Math.abs(a.p[1]-b.p[1])-(A[1]+B[1])/2));};
+ const n0=H.furn.length;H.furn=H.furn.filter(f=>!(f.t==='chair'||f.t==='stool')||H.furn.some(o=>o.level===f.level&&['table','desk','otable','island','kitch'].includes(o.t)&&gp(f,o)<.4));if(H.furn.length<n0&&log)log.push('lone-chair');}
+function stairFurn(){const out=[];(H.stairs||[]).forEach(st=>{const li=H.levels.findIndex(l=>l.name===st.level);const lv=[st.level,(H.levels[li+1]||{}).name];const r=stairRect(st);(H.furn||[]).forEach((f,q)=>{if(!lv.includes(f.level)||!f.p)return;if(f.p[0]>r[0]-.05&&f.p[0]<r[2]+.05&&f.p[1]>r[1]-.05&&f.p[1]<r[3]+.05&&!out.includes(q))out.push(q);
+  else if(f.level===lv[1]&&!WALK_SOFT.has(f.t)&&!out.includes(q)){const D=DIM3[f.t]||[.5,.5],w=f.w||D[0],d=f.d||D[1],e=(f.r||0)%2?[d,w]:[w,d];if(f.p[0]+e[0]/2>r[0]-.58&&f.p[0]-e[0]/2<r[2]+.58&&f.p[1]+e[1]/2>r[1]-.58&&f.p[1]-e[1]/2<r[3]+.58)out.push(q);}});});return out;}
 // door clearance zone: door width + 10 cm each side, 1 m deep on both faces of the wall; overlaps the stair run on its level and the stair opening on the level above
 function doorStairHit(w,o,L,off){const G=geo(w),n=[-G.u[1],G.u[0]],t=(w.thickness||.3)/2+1,s0=(off??o.offset)-.1,s1=(off??o.offset)+o.width+.1,P=[[s0,-t],[s1,-t],[s1,t],[s0,t]].map(([a,b])=>[G.x0+G.u[0]*a+n[0]*b,G.z0+G.u[1]*a+n[1]*b]);const zx=[Math.min(...P.map(p=>p[0])),Math.min(...P.map(p=>p[1])),Math.max(...P.map(p=>p[0])),Math.max(...P.map(p=>p[1]))];const li=H.levels.findIndex(l=>l.name===L);
  return (H.stairs||[]).some(st=>{const sl=H.levels.findIndex(l=>l.name===st.level);if(sl!==li&&sl!==li-1)return false;const r=stairRect(st),m=.02;if(!(zx[0]<r[2]-m&&zx[2]>r[0]+m&&zx[1]<r[3]-m&&zx[3]>r[1]+m))return false;
@@ -834,7 +843,17 @@ function rulesFix(op){op=op||{};const log=[];/* v20261117q: the same furniture r
    if(f.t==='side'&&!H.furn.some(o=>o!==f&&o.level===f.level&&['sofa','armch','lounge','bed','bed1','bunk'].includes(o.t)&&gap(f,o)<.35)){log.push('lone-side');continue;}
    if(f.t==='plant'&&same.some(o=>o.t==='plant'&&Math.hypot(o.p[0]-f.p[0],o.p[1]-f.p[1])<.7)){log.push('plant-cluster');continue;}
    if(f.t==='chair'||f.t==='stool'){const T=H.furn.find(o=>o.level===f.level&&['table','desk','otable'].includes(o.t)&&Math.abs(o.p[0]-f.p[0])<sz(o)[0]/2-.02&&Math.abs(o.p[1]-f.p[1])<sz(o)[1]/2-.02);if(T){log.push('chair-in-table');continue;}}
-   keep.push(f);}if(keep.length!==H.furn.length)H.furn=keep;}H.walls.forEach(w=>{const wh=w.height||((H.levels||[]).find(l=>l.name===w.level)||{}).height||2.8;(w.openings||[]).forEach(o=>{if((o.sill||0)<0){o.sill=0;log.push('opening-height');}
+   keep.push(f);}if(keep.length!==H.furn.length)H.furn=keep;
+  {const b=stairFurn();if(b.length){H.furn=H.furn.filter((f,q)=>!b.includes(q));log.push('furniture-on-stairs');}}lonelySeats(log);
+  /* v20261117r: no two pieces may overlap (demo JSON had a shelf inside the bunk bed, a shelf inside the desk) - the lower-priority piece goes; chairs/stools may tuck under tables/desks.
+     WC keeps 20 cm from any neighbour (centre >= 40 cm from side obstacles): it slides along its wall if the room allows, else the WC is dropped. audit: furn-overlap3d, wc-clearance */
+  const SOFTF=new Set(['rug','runner','art','curtain','mirror','towel','tvw','hooks','wshelf','pendant','lamp']),TU=new Set(['chair','stool']),UN=new Set(['table','desk','island','otable','kitch']),PRI=['plant','toy','side','lamp','shelf','armch','dresser','sideb','nstand','bench','coat','shoe','washer','tv','ctable','chair','stool'];
+  const rq=f=>{const e=sz(f);return[f.p[0]-e[0]/2,f.p[1]-e[1]/2,f.p[0]+e[0]/2,f.p[1]+e[1]/2];},ovq=(A,B,m)=>Math.min(A[2],B[2])-Math.max(A[0],B[0])>m&&Math.min(A[3],B[3])-Math.max(A[1],B[1])>m;
+  for(let pass=0;pass<3;pass++){let ch=0;const F=H.furn.filter(f=>!SOFTF.has(f.t));for(let i=0;i<F.length&&!ch;i++)for(let j=i+1;j<F.length&&!ch;j++){const a=F[i],b=F[j];if(a.level!==b.level)continue;if((TU.has(a.t)&&UN.has(b.t))||(TU.has(b.t)&&UN.has(a.t)))continue;if(!ovq(rq(a),rq(b),.03))continue;
+    const pa=PRI.indexOf(a.t),pb=PRI.indexOf(b.t),drop=pa<0&&pb<0?b:pa<0?b:pb<0?a:(pa<=pb?a:b);H.furn=H.furn.filter(f=>f!==drop);log.push('furn-overlap:'+drop.t);ch=1;}if(!ch)break;}
+  H.furn.filter(f=>f.t==='wc').forEach(wc=>{const L=wc.level,RS=rooms(L),R=RC[L];if(!R)return;const rid=roomAt(R,wc.p),nb=()=>H.furn.filter(o=>o!==wc&&o.level===L&&!SOFTF.has(o.t)&&gap(o,wc)<.195);let bad=nb();if(!bad.length)return;
+    const ax=(wc.r||0)%2?[0,1]:[1,0],p0=[...wc.p];for(const dd of[.05,.1,.15,.2,.25,.3,-.05,-.1,-.15,-.2,-.25,-.3]){wc.p=[p0[0]+ax[0]*dd,p0[1]+ax[1]*dd];const q=rq(wc);if([[q[0]+.02,q[1]+.02],[q[2]-.02,q[1]+.02],[q[0]+.02,q[3]-.02],[q[2]-.02,q[3]-.02]].every(c=>roomAt(R,c)===rid)&&!nb().length){wc.p=wc.p.map(v=>Math.round(v*100)/100);log.push('wc-clearance-slide');return;}}
+    wc.p=p0;H.furn=H.furn.filter(f=>f!==wc);log.push('wc-clearance-drop');});}H.walls.forEach(w=>{const wh=w.height||((H.levels||[]).find(l=>l.name===w.level)||{}).height||2.8;(w.openings||[]).forEach(o=>{if((o.sill||0)<0){o.sill=0;log.push('opening-height');}
  if((o.sill||0)+(o.height||0)>wh-.05){o.height=Math.max(.4,r2(wh-.05-(o.sill||0)));if((o.sill||0)+o.height>wh-.05)o.sill=Math.max(0,r2(wh-.05-o.height));log.push('opening-height');}});});
  // door-into-wall auto-fix: slide the door along its wall (≤ 0.6 m) to the nearest spot where both sides are walkable and it overlaps no other opening
  const blocked=[];
@@ -877,7 +896,7 @@ function rulesFix(op){op=op||{};const log=[];/* v20261117q: the same furniture r
  const hv=L=>validateAll(L).filter(v=>!/^read-error/.test(v.rule)).length;/* a fix may never add hard furniture violations: otherwise it is reverted */
  (H.levels||[]).forEach(l=>{const L=l.name;if(!(H.furn||[]).some(f=>f.level===L))return;const RS=rooms(L),R=RC[L];if(!R||!R.g)return;const T=assignTypes(R,L);const v0=hv(L),F0=JSON.stringify(H.furn),N0=JSON.stringify(H.rn||[]),lg0=log.length;let OPS=null,WS=null;const hasWC=RS.some(q=>/^WC/.test(roomType(q,T,R,L)));
   RS.forEach(r=>{const n=roomType(r,T,R,L),K=KEY(n);if(!K)return;const inR=f=>f.level===L&&(f.rid===r.id||roomAt(R,f.p)===r.id);if(H.furn.some(f=>inR(f)&&K.includes(f.t)))return;
-   OPS=OPS||layoutOps(R,L);WS=WS||layoutWalls(L);const G=makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim);const it=layoutRoom(G,n,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});
+   OPS=OPS||layoutOps(R,L);WS=WS||layoutWalls(L);const G=stairNoGo(makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim),L);const it=layoutRoom(G,n,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});
    const opt={fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC},lay=(q,t)=>layoutRoom(makeRoom(R,q,OPS.filter(o=>o.room===q.id),WS,ldim),t,{...opt,fv:(H.fv||0)*13+q.id*7}),okK=(its,t)=>{const k=KEY(t);return!k||its.some(f=>k.includes(f.t));};
    if(!it.some(f=>K.includes(f.t))){
     // LOGIC RULE (type must fit the room): if the room cannot hold its key fixture, swap its type with another auto-named room on the floor
@@ -887,7 +906,7 @@ function rulesFix(op){op=op||{};const log=[];/* v20261117q: the same furniture r
      H.rn=(H.rn||[]).filter(e=>!(e.level===L&&(roomAt(R,e.p)===r.id||roomAt(R,e.p)===q.id)));H.rn.push({level:L,p:[...r.p],n:tq.replace(/ \d+$/,''),auto:1},{level:L,p:[...q.p],n:n.replace(/ \d+$/,''),auto:1});log.push('type-swap:'+L+':'+n+'<->'+tq);nameR(R,L);return;}}
     return;}
    H.furn=H.furn.filter(f=>!inR(f));it.forEach(f=>H.furn.push({...f,level:L,rid:r.id}));log.push('fixture-missing:'+L+':'+n);});if(log.length>lg0&&hv(L)>v0){H.furn=JSON.parse(F0);H.rn=JSON.parse(N0);log.length=lg0;log.push('fix-reverted:'+L);nameR(R,L);}});
- if(!op.noFix){const bad=stairFurn();if(bad.length){H.furn=H.furn.filter((f,q)=>!bad.includes(q));log.push('furniture-on-stairs');}}return log;}
+ if(!op.noFix){const bad=stairFurn();if(bad.length){H.furn=H.furn.filter((f,q)=>!bad.includes(q));log.push('furniture-on-stairs');lonelySeats(log);}}return log;}
 function rulesCheck(){const out=[],P=(id,where,extra)=>{const R0=RULES.find(r=>r[0]===id);out.push({id,sev:R0?R0[1]:'soft',where,...(extra||{})});};
  if(!H.levels||!H.walls.length)return out;extSides();const nm={},graph={},ext=new Set();const L0=H.levels[0].name;
  H.levels.forEach((l,li)=>{const L=l.name,RS=rooms(L),R=RC[L];if(!R||!R.g||!RS.length)return;const ids=new Set(RS.map(q=>q.id)),T=assignTypes(R,L);RS.forEach(r=>{const k=L+':'+r.id;nm[k]=roomType(r,T,R,L);graph[k]=graph[k]||new Set();});
@@ -916,6 +935,7 @@ function rulesCheck(){const out=[],P=(id,where,extra)=>{const R0=RULES.find(r=>r
  doorViol().forEach(v=>P('upper-door-to-nowhere',{wall:v.p[0],at:v.p[1]}));
  // scale: a guessed scale is always flagged; if several rooms are too small/narrow for their type, the needed enlargement is proposed (never applied silently)
  if(H.underlay&&H.underlay.guess&&!H.underlay.cal){const sf=scaleCheck();if(sf&&sf.f>=1.1)P('scale-implausible',{level:L0},{f:sf.f,n:sf.n});else P('scale-guess',{level:L0});}
+ {const SF=new Set(['rug','runner','art','curtain','mirror','towel','tvw','hooks','wshelf','pendant','lamp']),sz=f=>{const D=DIM3[f.t]||[.5,.5],w=f.w||D[0],d=f.d||D[1];return (f.r||0)%2?[d,w]:[w,d];};(H.furn||[]).filter(f=>f.t==='wc').forEach(wc=>{const A=sz(wc);(H.furn||[]).forEach(o=>{if(o===wc||o.level!==wc.level||SF.has(o.t))return;const B=sz(o),g=Math.hypot(Math.max(0,Math.abs(o.p[0]-wc.p[0])-(A[0]+B[0])/2),Math.max(0,Math.abs(o.p[1]-wc.p[1])-(A[1]+B[1])/2));if(g<.19)out.push({id:'wc-clearance',sev:'hard',where:{level:wc.level},t:o.t,gap:r2(g)});});});}
  window.__rulesOut=out;stairFurn().forEach(q=>{const f=H.furn[q];P('furniture-on-stairs',{level:f.level,t:f.t});});return out;}
 // minimum plausible size per room type: [area m², shorter side m]
 const RMIN=[[/^Obýva/,16,3.0],[/^Spálň/,9,2.7],[/^Detsk/,8,2.4],[/^Pracov/,6,2.1],[/^Kuchyň/,5,1.8],[/^Kúpeľ/,3.2,1.5],[/^Jedáleň/,7,2.4]];

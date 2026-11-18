@@ -51,7 +51,7 @@ function phAttach(g, type, F, sty) {
   phModel(id).then(sc => {
     if (!sc) return; const b = sc.userData.bb, sz = b.getSize(new THREE.Vector3());
     const W = F.w, D = F.d, k = PH_STRETCH[type] || 1; let s = Math.min(W / sz.x, D / sz.z);
-    if (type === 'plant' && F.h) s = Math.min(F.h / sz.y, 1.8 * s); // plants: true height (leaves may spread past the pot footprint)
+    if (type === 'plant' && F.h) s = Math.min(F.h / sz.y, 1.3 * s); /* v20261117r: leaves spread at most 1.3x the pot footprint (1.8x reached into walls/columns). audit: furn-out-of-room */ // plants: true height (leaves may spread past the pot footprint)
     const sx = type === 'plant' ? s : Math.min(W / sz.x, s * k), sz2 = type === 'plant' ? s : Math.min(D / sz.z, s * k);
     const m0 = sc.clone(true); m0.scale.set(sx, s, sz2);
     m0.position.set(-(b.min.x + b.max.x) / 2 * sx, -b.min.y * s, -(b.min.z + b.max.z) / 2 * sz2);
@@ -221,9 +221,8 @@ function proc(type, F, cols) {
     const pw = type === 'bed' ? w * 0.34 : w * 0.48;
     box(g, std('#f5eee6', 0.95), type === 'bed' ? -w * 0.2 : 0, 0.56, -d / 2 + 0.3, pw, 0.12, 0.32, 0.05);
     if (type === 'bed') box(g, std('#f5eee6', 0.95), w * 0.2, 0.56, -d / 2 + 0.3, pw, 0.12, 0.32, 0.05);
-    box(g, wood, -w / 2 - 0.28, 0.22, -d / 2 + 0.35, 0.38, 0.44, 0.38, 0.04);
-    if (type === 'bed') box(g, wood, w / 2 + 0.28, 0.22, -d / 2 + 0.35, 0.38, 0.44, 0.38, 0.04);
-    cyl(g, std('#f5e6c8', 0.4), -w / 2 - 0.28, 0.62, -d / 2 + 0.35, 0.055, 0.055, 0.22, 6);
+    // v20261117r: no built-in bedside cubes - the layout places real nightstands (nstand) inside their own footprint; the cubes sat outside the bed footprint and
+    // collided with them (Adam: side table inside a wooden cube by the bed). audit: furn-footprint, furn-overlap3d
   } else if (type === 'bunk') {
     // bunk bed: 4 posts, two decks, guard rail on top, ladder at the foot end
     ao(g, w + 0.1, d + 0.1);
@@ -296,10 +295,10 @@ function proc(type, F, cols) {
   } else if (type === 'ward') {
     ao(g, w + 0.05, d + 0.05);
     box(g, wood, 0, h / 2, 0, w, h, d, 0.03);
-    box(g, std('#f3efe8', 0.75), 0, h / 2, d / 2 - 0.01, w - 0.1, h - 0.14, 0.02, 0);
-    box(g, wood, 0, h / 2, d / 2 + 0.005, 0.025, h - 0.18, 0.015, 0);
-    box(g, metal, -w * 0.18, h * 0.5, d / 2 + 0.02, 0.025, 0.16, 0.02, 0);
-    box(g, metal, w * 0.18, h * 0.5, d / 2 + 0.02, 0.025, 0.16, 0.02, 0);
+    box(g, std('#f3efe8', 0.75), 0, h / 2, d / 2 + 0.006, w - 0.1, h - 0.14, 0.02, 0); // v20261117r: fronts stand 6 mm proud (were coplanar with the carcass = z-fight streaks). audit: furn-zfight
+    box(g, wood, 0, h / 2, d / 2 + 0.019, 0.025, h - 0.18, 0.015, 0);
+    box(g, metal, -w * 0.18, h * 0.5, d / 2 + 0.03, 0.025, 0.16, 0.02, 0);
+    box(g, metal, w * 0.18, h * 0.5, d / 2 + 0.03, 0.025, 0.16, 0.02, 0);
   } else if (type === 'kitch') {
     ao(g, w + 0.08, d + 0.08);
     // light base + dark worktop + upper cabinets (reads from dollhouse top-down)
@@ -356,13 +355,13 @@ function proc(type, F, cols) {
   } else if (type === 'bath') {
     ao(g, w + 0.08, d + 0.08);
     box(g, white, 0, 0.3, 0, w, 0.58, d, 0.05);
-    box(g, std('#9ec0d4', 0.3), 0, 0.55, 0, w - 0.18, 0.08, d - 0.18, 0.02);
+    box(g, std('#9ec0d4', 0.3), 0, 0.535, 0, w - 0.18, 0.08, d - 0.18, 0.02); // v20261117r: water 1.5 cm below the rim (was coplanar). audit: furn-zfight
     box(g, std('#dfeaf0', 0.5), 0, 0.62, 0, w - 0.08, 0.04, d - 0.08, 0.02);
     box(g, metal, w / 2 - 0.12, 0.72, -d / 2 + 0.1, 0.04, 0.32, 0.04, 0);
   } else if (type === 'shower') {
     ao(g, w, d);
     box(g, white, 0, 0.12, 0, w, 0.24, d, 0.03);
-    box(g, std('#c5d8e4', 0.2), 0, 0.22, 0, w - 0.14, 0.04, d - 0.14, 0.01);
+    box(g, std('#c5d8e4', 0.2), 0, 0.208, 0, w - 0.14, 0.04, d - 0.14, 0.01); // v20261117r: tray insert below the rim. audit: furn-zfight
     // prem8 h10: clear glass screens (8 mm) on a slim anthracite profile instead of opaque panels
     const sg = cache.get('showerGlass') || new THREE.MeshPhysicalMaterial({ color: 0xe4f0f4, transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0, envMapIntensity: 1.6, depthWrite: false });
     cache.set('showerGlass', sg); const pf = std('#2f3235', 0.4, 0.3);
@@ -374,9 +373,14 @@ function proc(type, F, cols) {
     cyl(g, metal, w / 2 - 0.1, 1.65, -d / 2 + 0.1, 0.035, 0.035, 0.18, 6);
   } else if (type === 'sink') {
     ao(g, w, d);
-    box(g, white, 0, 0.4, 0, w, 0.8, d, 0.04);
-    box(g, std('#d0e0ea', 0.25), 0, 0.82, 0, w - 0.1, 0.05, d - 0.1, 0.02);
-    cyl(g, metal, 0, 0.95, -d / 2 + 0.1, 0.022, 0.022, 0.18, 6);
+    // v20261117r: wall-hung vanity (oak cabinet, thin stone top, round vessel basin, bent spout) instead of a white box with a pole tap
+    box(g, wood, 0, 0.56, -0.01, w - 0.02, 0.4, d - 0.04, 0.02);
+    box(g, std('#ece9e4', 0.35), 0, 0.775, 0, w, 0.03, d, 0.008);
+    const br = Math.min(w * 0.34, d * 0.38);
+    cyl(g, white, 0, 0.85, 0.02, br, br * 0.78, 0.12, 20);
+    cyl(g, std('#dfe7ec', 0.2), 0, 0.892, 0.02, br - 0.02, br - 0.02, 0.012, 20);
+    cyl(g, metal, 0, 0.905, -d / 2 + 0.06, 0.014, 0.016, 0.21, 10);
+    box(g, metal, 0, 1.0, -d / 2 + 0.06 + 0.06, 0.022, 0.022, 0.12, 0.008);
   } else if (type === 'wc') {
     ao(g, w + 0.05, d + 0.05);
     box(g, white, 0, 0.2, 0.05, w, 0.4, d * 0.7, 0.05);
@@ -389,8 +393,10 @@ function proc(type, F, cols) {
     box(g, wood, w / 2 - 0.025, 0.9, 0, 0.04, 1.7, d, 0.01);
     // books
     const bcols = ['#6a4a3a', '#3a5a6a', '#8a5a3a', '#4a4a5a', '#7a3a3a'];
-    for (let i = 0; i < 5; i++) {
-      box(g, std(bcols[i], 0.85), -w * 0.3 + i * 0.14, 0.55, 0, 0.1, 0.28, d * 0.7, 0.01);
+    // v20261117r: books always fit between the side panels (5 books at a fixed 14 cm pitch stuck 5 cm out of a 70 cm shelf). audit: furn-footprint
+    const nb = Math.max(1, Math.min(5, Math.floor((w - 0.1) / 0.14))), b0 = -((nb - 1) * 0.14) / 2;
+    for (let i = 0; i < nb; i++) {
+      box(g, std(bcols[i], 0.85), b0 + i * 0.14, 0.55, 0, 0.1, 0.28, Math.min(d * 0.7, d - 0.04), 0.01);
     }
   } else if (type === 'plant') {
     ao(g, 0.35, 0.35);
@@ -467,15 +473,15 @@ function proc(type, F, cols) {
     ao(g, w + 0.04, d + 0.04);
     box(g, wood, 0, 0.45, 0, w, 0.9, d, 0.03);
     for (let i = 0; i < 3; i++) {
-      box(g, std('#f0ebe4', 0.75), 0, 0.22 + i * 0.26, d / 2 - 0.01, w - 0.1, 0.2, 0.02, 0);
-      box(g, metal, 0, 0.22 + i * 0.26, d / 2 + 0.01, 0.12, 0.015, 0.015, 0);
+      box(g, std('#f0ebe4', 0.75), 0, 0.22 + i * 0.26, d / 2 + 0.006, w - 0.1, 0.2, 0.02, 0);
+      box(g, metal, 0, 0.22 + i * 0.26, d / 2 + 0.024, 0.12, 0.015, 0.015, 0);
     }
   } else if (type === 'sideb') {
     ao(g, w + 0.04, d + 0.04);
     box(g, wood, 0, 0.4, 0, w, 0.8, d, 0.03);
     box(g, wood, 0, 0.82, 0, w + 0.04, 0.04, d + 0.04, 0.01);
-    box(g, std('#efe8de', 0.7), -w * 0.22, 0.4, d / 2 - 0.01, w * 0.38, 0.55, 0.02, 0);
-    box(g, std('#efe8de', 0.7), w * 0.22, 0.4, d / 2 - 0.01, w * 0.38, 0.55, 0.02, 0);
+    box(g, std('#efe8de', 0.7), -w * 0.22, 0.4, d / 2 + 0.006, w * 0.38, 0.55, 0.02, 0); // v20261117r: proud fronts, no z-fight streaks. audit: furn-zfight
+    box(g, std('#efe8de', 0.7), w * 0.22, 0.4, d / 2 + 0.006, w * 0.38, 0.55, 0.02, 0);
   } else if (type === 'side') {
     ao(g, w, d);
     box(g, wood, 0, 0.45, 0, w, 0.04, d, 0.015);

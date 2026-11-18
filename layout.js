@@ -87,6 +87,8 @@ function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k
  if(t==='side'&&!items.some(o=>o!==it&&COMPAN.has(o.t)&&rGap(o.q,q)<.35))return no('lone-side');
  if(t==='plant'&&items.some(o=>o!==it&&o.t==='plant'&&Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1])<1.1))return no('plant-cluster');
  if(!inRoomR(G,q))return no('outside-room');if(wallHit(G,EPS<.005?[q[0]-.004,q[1]-.004,q[2]+.004,q[3]+.004]:q))return no('wall-overlap');
+ /* v20261117r: stair opening + 60 cm walkway (upper floor) and 20 cm around a WC stay free */if(G.noGo&&!SOFT.has(t)&&!MOUNT.has(t)&&G.noGo.some(z=>ov(z,q,EPS)))return no('stair-walkway');
+ if(t==='wc'||items.some(o=>o.t==='wc')){for(const o of items){if(o===it||SOFT.has(o.t)||MOUNT.has(o.t)||(t!=='wc'&&o.t!=='wc'))continue;if(rGap(o.q,q)<.2)return no('wc-clearance');}}
  if(G.doorZ.some((P,i)=>!(MOUNT.has(t)&&!G.doors[i].swingIn)&&polyOv(P,rP(q),EPS)))return no('door-zone');
  if(MOUNT.has(t)&&t!=='curtain'&&onOpening(G,it,['window','door']))return no('decor-over-opening');
  if(TALL.has(t)){const sq=rP([q[0]+.08,q[1]+.08,q[2]-.08,q[3]-.08]);let nu=0;for(let i=0;i<G.winZ.length;i++)if(polyOv(G.winZ[i],sq,EPS)){if(t==='kitch'&&(G.wins[i].sill||0)>=.85)nu=1;else return no('tall-at-window');}it.nu=nu;}

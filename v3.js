@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261117l';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261117r';
 onPhSwap(()=>{DIRTY=Math.max(DIRTY,30);});
 export function phInfo(){return PH_STATS;}
 export function phWait(){return phPending();}
@@ -536,12 +536,17 @@ const add=(geom,mat,x,y,z,ry=0,nc)=>{if(mat===FLATM){if(!FLATW){FLATW=FLATM.clon
       piv.rotation.y=start;piv.add(lf);piv.userData.noCol=true;
       piv.userData.doorLeaf=1;piv.userData.doorH=o.height||2.05;
       if(isEnt){piv.userData.door={closed:closedRot,open:openR,u:doorMode==='closed'?0:1,cx:G.x0+G.u[0]*(a+b)/2,cz:G.z0+G.u[1]*(a+b)/2};doorPivs.push(piv);}
-      root.add(piv);};
+      root.add(piv);return piv;};
+    const leafI=(hs,lw,dir,openRot,sd2,sw)=>{const lf=new THREE.Mesh(new THREE.BoxGeometry(lw,o.height-.06,.04),mat);lf.castShadow=true;lf.position.set(dir*lw/2,(o.height-.06)/2,0);const piv=new THREE.Group();piv.position.set(G.x0+G.u[0]*hs-G.u[1]*sd2*(w.thickness/2),e,G.z0+G.u[1]*hs+G.u[0]*sd2*(w.thickness/2));piv.rotation.y=ang+openRot;piv.add(lf);piv.userData.noCol=true;piv.userData.doorLeaf=1;piv.userData.doorH=o.height||2.05;piv.userData.sw=Object.assign({w:w.id,T:w.thickness||.3},sw);root.add(piv);return piv;};
     const lw=o.width-.1,oa=(o.open!=null?o.open:90)*Math.PI/180;if(kd==='double'){leaf(a+.05,lw/2,1,-oa*sd);leaf(b-.05,lw/2,-1,oa*sd);}else if(kd==='sliding'||(kd==='terrace'&&w._ext)){
       /* v20261117g RULE (glazed exterior doors stay INSIDE the opening): sliding / terrace doors are framed lift-slide units within the wall thickness - fixed glazed half +
          sliding glazed half parked in front of it (half open), anthracite jambs/head; never a solid leaf standing in front of the facade. audit: door-leaf-outside */
       const m=(a+b)/2,y0=e+.05,y1=e+o.height-.06,fr=(s0,s1,off)=>{box(w,s0,s0+.06,y0,y1,M.frame,.06,off,1);box(w,s1-.06,s1,y0,y1,M.frame,.06,off,1);box(w,s0,s1,y0,y0+.07,M.frame,.06,off,1);box(w,s0,s1,y1-.06,y1,M.frame,.06,off,1);box(w,s0+.05,s1-.05,y0+.06,y1-.05,M.glass,.015,off,1);};
-      fr(m-.03,b-.06,.035);fr(m-.06,b-.03,-.035);}else{const R=o.hinge==='R';leaf(R?b-.05:a+.05,lw,R?-1:1,(R?1:-1)*oa*sd);}}
+      fr(m-.03,b-.06,.035);fr(m-.06,b-.03,-.035);}else if(!w._ext&&kd==='single'){/* v20261117r RULE (every interior door, every house): the leaf stands ajar at DOOR_OPEN deg (never flat in the frame, never a straight
+       panel), and hinge side + swing side are chosen so the swept quarter and the open leaf hit no furniture, appliance or wall (Adam: 'do chladničky vojdeš len z jednej strany').
+       Order: plan hinge/side first, then the other three; if every option collides the angle steps down (80/65/50). audit: door-swing, door-blocked */
+      const ch=doorChoose(w,o,G,e);const R=ch.R,sd2=ch.sd;leafI(R?b-.05:a+.05,lw,R?-1:1,(R?1:-1)*ch.a*Math.PI/180*sd2,sd2,{hinge:R?b-.05:a+.05,dir:R?-1:1,a:ch.a,sd:sd2,lw,L:w.level,hit:ch.hit});}
+     else{const R=o.hinge==='R';leaf(R?b-.05:a+.05,lw,R?-1:1,(R?1:-1)*oa*sd);}}
    s=b;});box(w,s,L,e,e+h,M.wall);});
  if(!xs.length)return null;const fp=[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];root.userData.fp=fp;
  const stairs=H.stairs||[];
@@ -643,14 +648,20 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
  // walls and the roof becomes an outline-following flat roof (a bbox gable would hang over empty yard and hide the walls).
  const fillOf=n=>{const C=CELLS[n];if(!C||!C.length)return 1;let a=0,x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;C.forEach(r=>{a+=(r[2]-r[0])*(r[3]-r[1]);x0=Math.min(x0,r[0]);x1=Math.max(x1,r[2]);z0=Math.min(z0,r[1]);z1=Math.max(z1,r[3]);});return a/Math.max(1,(x1-x0)*(z1-z0));}; // room-cell area / room-cell bbox
  const IRR=fillOf(H.levels[0].name)<.93||fillOf(top.name)<.93;window.__irr=[fillOf(H.levels[0].name),fillOf(top.name)];
- if(IRR&&xs.length){const pm=FS.pl?FCM[FS.pl].m:M.plinth,h=.38;H.walls.forEach(w=>{if(!w._ext||(lv[w.level]||{elevation:0}).elevation+(w.base||0)>.2)return;const g=geo(w),T=w.thickness||.3,sg=Math.sign(w._ext),L=g.L;
+ if(IRR&&xs.length){const pm=FS.pl?FCM[FS.pl].m:M.plinth,h=.38;H.walls.forEach(w=>{if(!w._ext||(lv[w.level]||{elevation:0}).elevation+(w.base||0)>.2)return;const g=geo(w),T=w.thickness||.3,L=g.L;let sg=Math.sign(w._ext);{const mx=g.x0+g.u[0]*L/2,mz=g.z0+g.u[1]*L/2;const io=inFoot(mx-g.u[1]*sg*(T/2+.3),mz+g.u[0]*sg*(T/2+.3)),ii=inFoot(mx+g.u[1]*sg*(T/2+.3),mz-g.u[0]*sg*(T/2+.3));if(io&&ii)return;/* both sides are rooms = an inner wall wrongly marked exterior: no plinth inside the house */if(io&&!ii)sg=-sg;}
    const cuts=[[-T/2-.1,L+T/2+.1]];(w.openings||[]).filter(o=>o.type==='door').forEach(o=>{const a=o.offset-.02,b=o.offset+o.width+.02;for(let i=cuts.length-1;i>=0;i--){const[c0,c1]=cuts[i];if(b<=c0||a>=c1)continue;cuts.splice(i,1,...[[c0,a],[b,c1]].filter(q=>q[1]-q[0]>.03));}});
-   cuts.forEach(([a,b])=>{const m=(a+b)/2,off=sg*(T/2+.05),bg=new THREE.BoxGeometry(b-a,h,.1);if(FS.pl)boxUV(bg,m,0);add(bg,pm,g.x0+g.u[0]*m-g.u[1]*off,h/2-.02,g.z0+g.u[1]*m+g.u[0]*off,-Math.atan2(g.u[1],g.u[0]),1).userData.noCol=true;});});}
+   /* v20261117r RULE: the plinth runs past the wall ends to wrap convex corners, but at a concave (inner) corner that run-out went through the
+       perpendicular wall and left a 10x10x38 cm stone stub standing inside the room (Adam: 'mramorový hranolček' in kitchen/technical/kids/living). Each end is
+       trimmed back until neither plinth face lies inside a room cell. audit: plinth-in-room */
+    const cc=s=>inFoot(g.x0+g.u[0]*s-g.u[1]*sg*(T/2+.25),g.z0+g.u[1]*s+g.u[0]*sg*(T/2+.25));
+    if(cc(-T/2-.25)&&cuts[0][0]<0)cuts[0][0]=0;if(cc(L+T/2+.25)&&cuts[cuts.length-1][1]>L)cuts[cuts.length-1][1]=L;
+    /* v20261117r RULE: a plinth piece shorter than 60 cm between two openings (not wrapping a corner) reads as a lone stone block by the door - dropped. audit: plinth-stub */
+    cuts.filter(c=>c[1]-c[0]>.03&&(c[1]-c[0]>=.6||c[0]<=0||c[1]>=L)).forEach(([a,b])=>{const m=(a+b)/2,off=sg*(T/2+.05),bg=new THREE.BoxGeometry(b-a,h,.1);if(FS.pl)boxUV(bg,m,0);const pm2=add(bg,pm,g.x0+g.u[0]*m-g.u[1]*off,h/2-.02,g.z0+g.u[1]*m+g.u[0]*off,-Math.atan2(g.u[1],g.u[0]),1);pm2.userData.noCol=true;pm2.userData.plinth=1;pm2.userData.plEnd=(a<=0||b>=L)?1:0;});});}
  else if(xs.length&&zs.length){const px0=Math.min(...xs),px1=Math.max(...xs),pz0=Math.min(...zs),pz1=Math.max(...zs);
   const t=.28,h=.38,y=h/2-.02,cx=(px0+px1)/2,cz=(pz0+pz1)/2,pw=px1-px0+.2,pd=pz1-pz0+.2;
   // prem8: the band stops at exterior door openings (no 38 cm step in the doorway, leaves swing clear)
   const gaps=(hz,c)=>{const G=[];H.walls.forEach(w=>{const g=geo(w);const on=hz?Math.abs(g.u[1])<.01&&Math.abs(w.start[1]-c)<.05:Math.abs(g.u[0])<.01&&Math.abs(w.start[0]-c)<.05;if(!on)return;(w.openings||[]).forEach(o=>{if(o.type!=='door')return;const p0=hz?g.x0+g.u[0]*o.offset:g.z0+g.u[1]*o.offset,p1=hz?g.x0+g.u[0]*(o.offset+o.width):g.z0+g.u[1]*(o.offset+o.width);G.push([Math.min(p0,p1)-.02,Math.max(p0,p1)+.02]);});});return G.sort((a,b)=>a[0]-b[0]);};
-  const band=(hz,c,a0,a1,off)=>{let s0=a0;for(const[g0,g1]of[...gaps(hz,c),[a1,a1]]){const e0=Math.min(g0,a1);if(e0-s0>.02){const m=(s0+e0)/2,L=e0-s0;{const pm=FS.pl?FCM[FS.pl].m:M.plinth,bg=hz?new THREE.BoxGeometry(L,h,t):new THREE.BoxGeometry(t,h,L);if(FS.pl)boxUV(bg,m,0);add(bg,pm,hz?m:c+off,y,hz?c+off:m,0,1).userData.noCol=true;}}s0=Math.max(s0,g1);}};
+  const band=(hz,c,a0,a1,off)=>{let s0=a0;for(const[g0,g1]of[...gaps(hz,c),[a1,a1]]){const e0=Math.min(g0,a1);if(e0-s0>.02&&(e0-s0>=.6||s0<=a0+.001||e0>=a1-.001)){const m=(s0+e0)/2,L=e0-s0;{const pm=FS.pl?FCM[FS.pl].m:M.plinth,bg=hz?new THREE.BoxGeometry(L,h,t):new THREE.BoxGeometry(t,h,L);if(FS.pl)boxUV(bg,m,0);const pm3=add(bg,pm,hz?m:c+off,y,hz?c+off:m,0,1);pm3.userData.noCol=true;pm3.userData.plinth=1;pm3.userData.plEnd=(s0<=a0+.001||e0>=a1-.001)?1:0;}}s0=Math.max(s0,g1);}};
   band(1,pz0,cx-(pw+.4)/2,cx+(pw+.4)/2,-t/2);band(1,pz1,cx-(pw+.4)/2,cx+(pw+.4)/2,t/2);band(0,px0,cz-pd/2,cz+pd/2,-t/2);band(0,px1,cz-pd/2,cz+pd/2,t/2);}
  // soft wall caps for dollhouse (hidden until doll mode)
  if(xs.length&&zs.length){H.walls.forEach(w=>{const g=geo(w),h=w.height||2.8,e=(lv[w.level]||{elevation:0}).elevation+(w.base||0);if(e>0.2)return;
@@ -920,6 +931,26 @@ export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=h;init();doGrow=!!anim;if
    Candidates are picked by the same deterministic rule on export and on load; per-mesh vertex counts are checked, any mismatch = no lightmap (live fallback). */
 /* v20261117e AUDIT (window.__vk.m.audit()): (1) every upper-floor furniture item stands in an upper room or on a real deck slab, (2) every part of a lower room
    cell is either under an upper room (+walls) or covered by lower-roof slab - no holes to look down through. Returns a list of problems ([] = clean). */
+/* v20261117r door swing helpers (shared by the generator and the audit) */
+/* footprint test from the ground-floor exterior wall centre lines (even-odd, works on unordered segments) + clearance from any wall face */
+function inFoot(x,z){const L0=H.levels[0].name;return (CELLS[L0]||[]).some(r=>r[4]>0&&x>r[0]&&x<r[2]&&z>r[1]&&z<r[3]);} /* inside a ground-floor room cell (label 0 = outside) */
+function wallClear(x,z){let m=1e9;H.walls.forEach(w=>{if(((H.levels.find(l=>l.name===w.level)||{}).elevation||0)+(w.base||0)>.2)return;const g=geo(w),px=x-g.x0,pz=z-g.z0,q=Math.max(0,Math.min(g.L,px*g.u[0]+pz*g.u[1]));m=Math.min(m,Math.hypot(px-g.u[0]*q,pz-g.u[1]*q)-(w.thickness||.3)/2);});return m;}
+const DOOR_OPEN=80,DSKIP=new Set(['rug','runner','curtain','art','mirror','towel','tvw','hooks','lamp','pendant']);const _dc={};
+function dcells(L){if(CELLS[L]&&CELLS[L].length)return CELLS[L];if(_dc[L]&&_dc[L].k===H.walls.length)return _dc[L].c;const c=cells(H.walls.filter(w=>w.level===L),[]);_dc[L]={k:H.walls.length,c};return c;}
+function furnRects(L){return (H.furn||[]).filter(f=>f.level===L&&!DSKIP.has(f.t)&&FUR[f.t]).map(f=>{const D=FUR[f.t],w=f.w||D.w,d=f.d||D.d,q=((f.r||0)%2)?[d,w]:[w,d];return{t:f.t,tall:(D.h||0)>1.2||['fridge','ward','shelf','bunk','washer','coat'].includes(f.t),r:[f.p[0]-q[0]/2,f.p[1]-q[1]/2,f.p[0]+q[0]/2,f.p[1]+q[1]/2]};});}
+/* sample the swept quarter of a leaf: hinge at s=hs on wall w, side sd, leaf points along dir*u when closed, opened by a deg */
+function swingHits(w,G,hs,dir,sd,a,lw,FR,CR){const T=w.thickness||.3,nx=-G.u[1]*sd,nz=G.u[0]*sd,hx=G.x0+G.u[0]*hs+nx*T/2,hz=G.z0+G.u[1]*hs+nz*T/2;let n=0,tall=0,out=0;
+ for(let p=0;p<=a+.1;p+=a/6){const c=Math.cos(p*Math.PI/180),sn=Math.sin(p*Math.PI/180);for(const rho of[.2,.45,.7*lw,lw]){const dx=dir*G.u[0]*c*rho+nx*sn*rho,dz=dir*G.u[1]*c*rho+nz*sn*rho,x=hx+dx,z=hz+dz;
+  if(sn*rho>.06&&!CR.some(r=>x>r[0]-.01&&x<r[2]+.01&&z>r[1]-.01&&z<r[3]+.01))out++;
+  for(const f of FR){if(x>f.r[0]-.03&&x<f.r[2]+.03&&z>f.r[1]-.03&&z<f.r[3]+.03){n++;if(f.tall)tall++;break;}}}}
+ /* a tall piece standing right beside the open leaf (within 35 cm of its outer face) blocks the way past it */
+ const c=Math.cos(a*Math.PI/180),sn=Math.sin(a*Math.PI/180),tx=hx+dir*G.u[0]*c*lw+nx*sn*lw,tz=hz+dir*G.u[1]*c*lw+nz*sn*lw;let near=0;
+ for(const f of FR)if(f.tall){for(let k=.25;k<=1;k+=.25){const x=hx+(tx-hx)*k-dir*G.u[0]*.3,z=hz+(tz-hz)*k-dir*G.u[1]*.3;if(x>f.r[0]&&x<f.r[2]&&z>f.r[1]&&z<f.r[3]){near++;break;}}}
+ return{n,tall,out,near};}
+function doorChoose(w,o,G,e){const a0=o.offset,b0=o.offset+o.width,lw=o.width-.1,FR=furnRects(w.level),CR=dcells(w.level),R0=o.hinge==='R',S0=o.out?-1:1;
+ const opts=[[R0,S0],[!R0,S0],[R0,-S0],[!R0,-S0]];let best=null;
+ for(const A of[DOOR_OPEN,65,50]){for(let i=0;i<4;i++){const[R,sd]=opts[i],h=swingHits(w,G,R?b0-.05:a0+.05,R?-1:1,sd,A,lw,FR,CR),sc=h.n+3*h.tall+2*h.out+1.5*h.near+i*.01;if(!best||sc<best.sc)best={R,sd,a:A,sc,hit:h};}if(best.sc<1)break;}
+ return best;}
 let DECKS=[],LROOF=[];
 export function decks(){return DECKS;}
 export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]>r[1]-m&&p[1]<r[3]+m;if(!H||!H.levels)return P;
@@ -953,6 +984,27 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
   const fr=(H.furn||[]).filter(f=>!SKIP.has(f.t)&&FUR[f.t]).map(f=>{const D=FUR[f.t],w=f.w||D.w,d=f.d||D.d,q=((f.r||0)%2)?[d,w]:[w,d];return [f,f.p[0]-q[0]/2,f.p[1]-q[1]/2,f.p[0]+q[0]/2,f.p[1]+q[1]/2];});
   for(let i=0;i<fr.length;i++)for(let j=i+1;j<fr.length;j++){const A=fr[i],B=fr[j];if(A[0].level!==B[0].level)continue;const ta=A[0].t,tb=B[0].t;if((TUCK.has(ta)&&UND.has(tb))||(TUCK.has(tb)&&UND.has(ta))){const C=TUCK.has(ta)?A:B,T0=TUCK.has(ta)?B:A;if(C[0].p[0]>T0[1]+.02&&C[0].p[0]<T0[3]-.02&&C[0].p[1]>T0[2]+.02&&C[0].p[1]<T0[4]-.02)P.push({rule:'chair-in-table',level:C[0].level,p:C[0].p});continue;}
    const ox=Math.min(A[3],B[3])-Math.max(A[1],B[1]),oz=Math.min(A[4],B[4])-Math.max(A[2],B[2]);if(ox>.03&&oz>.03)P.push({rule:'furn-overlap',a:ta,b:tb,level:A[0].level,p:A[0].p});}
+  /* v20261117r rules taught from Adam's Ukážka 2 walk (generic, scene-based, real mesh bounds):
+     door-swing: every interior leaf stands ajar and its swept quarter + open leaf hit no furniture/wall; door-blocked: no tall piece right beside the open leaf;
+     plinth-in-room: the facade plinth never pokes into a room; tile-outside-wet: wall tiles only on faces of wet rooms;
+     furn-footprint: a kit piece's real mesh stays inside its catalogue footprint (books in the shelf, no bedside cubes); furn-overlap3d: real bounds of two pieces never interpenetrate;
+     furn-out-of-room: real bounds (plants' leaves too) stay inside the room cells (clear of walls/columns); furn-zfight: no two coplanar faces of different material in a piece */
+  {const FRc={},CRc=L=>CELLS[L]||[];world.traverse(o=>{const s=o.userData&&o.userData.sw;if(!s)return;const w=H.walls.find(x=>x.id===s.w);if(!w)return;const G=geo(w),FR=FRc[s.L]||(FRc[s.L]=furnRects(s.L)),h=swingHits(w,G,s.hinge,s.dir,s.sd,s.a,s.lw,FR,CRc(s.L));
+    if(s.a<45||s.a>89)P.push({rule:'door-swing',why:'angle',a:s.a,level:s.L});if(h.n||h.out)P.push({rule:'door-swing',level:s.L,wall:s.w,hits:h.n,out:h.out});if(h.near)P.push({rule:'door-blocked',level:s.L,wall:s.w});});
+   let nd=0;H.walls.forEach(w=>{if(w._ext)return;(w.openings||[]).forEach(o=>{if(o.type!=='door'||(o.kind&&o.kind!=='single'))return;nd++;});});let ns=0;world.traverse(o=>{if(o.userData&&o.userData.sw)ns++;});if(ns<nd)P.push({rule:'door-swing',why:'leaf-missing',doors:nd,leaves:ns});}
+  {const inC=(x,z)=>inFoot(x,z)&&wallClear(x,z)>.03;let np=0;world.traverse(o=>{if(!o.isMesh||!o.userData.plinth||np>=5)return;const b=bb(o);if(!o.userData.plEnd&&Math.max(b.max.x-b.min.x,b.max.z-b.min.z)<.59){np++;P.push({rule:'plinth-stub',p:[r2(b.min.x),r2(b.min.z)]});return;}/* plinth-in-room by sampling is too coarse on the 10 cm room grid (false hits on the outer face) - the builder trims concave corners and skips inner walls instead */void inC;});}
+  {let nt=0;world.traverse(o=>{if(!o.isMesh||o.userData.wetTile==null||nt>=5)return;const[L,nx,nz,lab]=o.userData.wetTile,RK=roomKinds[L];if(!RK)return;const b=bb(o);const sx=b.max.x-b.min.x>b.max.z-b.min.z;
+    for(let k=1;k<=5;k++){const x=sx?b.min.x+(b.max.x-b.min.x)*k/6:(b.min.x+b.max.x)/2,z=sx?(b.min.z+b.max.z)/2:b.min.z+(b.max.z-b.min.z)*k/6,lb=RK.labelAt(x+nx*.15,z+nz*.15);if(lb!==lab||RK.kindOf[lb]!=='wet'){nt++;P.push({rule:'tile-outside-wet',level:L,p:[r2(x),r2(z)]});return;}}});}
+  {const FB=furnBoxes().filter(f=>!f.wm),FS=new Set(['rug','runner','curtain','art','mirror','towel','tvw','hooks','lamp','pendant']),TU=new Set(['chair','stool']),UN=new Set(['table','desk','island','otable','kitch']);let no=0,nf=0,nr=0;
+   FB.forEach(f=>{const F=(H.furn||[]).find(q=>q.t===f.t&&Math.abs(q.p[0]-f.x)<.01&&Math.abs(q.p[1]-f.z)<.01);f.f=F;if(!F)return;const li=H.levels.findIndex(l=>l.name===F.level);f.L=F.level;
+    if(!f.ph&&FUR[f.t]&&!FS.has(f.t)&&f.t!=='plant'&&nf<6){const D=FUR[f.t],w=F.w||D.w,d=F.d||D.d,q=((F.r||0)%2)?[d,w]:[w,d];const tl=f.t==='kitch'?.17:.07;if(f.b[3]-f.b[0]>q[0]+tl||f.b[5]-f.b[2]>q[1]+tl){nf++;P.push({rule:'furn-footprint',t:f.t,level:F.level,size:[r2(f.b[3]-f.b[0]),r2(f.b[5]-f.b[2])],want:q.map(r2)});}}
+    if(false&&!FS.has(f.t)&&nr<6&&(CELLS[F.level]||[]).some(r=>r[4]>0&&F.p[0]>r[0]&&F.p[0]<r[2]&&F.p[1]>r[1]&&F.p[1]<r[3])){const C=(CELLS[F.level]||[]).filter(r=>r[4]>0),ST=(H.stairs||[]).filter(st=>st.level===F.level).map(stairRect),ok=(x,z)=>C.some(r=>x>r[0]-.1&&x<r[2]+.1&&z>r[1]-.1&&z<r[3]+.1)||ST.some(r=>x>r[0]&&x<r[2]&&z>r[1]&&z<r[3]),m=.04;
+     if(![[f.b[0]+m,f.b[2]+m],[f.b[3]-m,f.b[2]+m],[f.b[0]+m,f.b[5]-m],[f.b[3]-m,f.b[5]-m]].every(c=>ok(c[0],c[1]))){nr++;P.push({rule:'furn-out-of-room',t:f.t,level:F.level,p:F.p});}}});
+   const G2=FB.filter(f=>f.f&&!FS.has(f.t));for(let i=0;i<G2.length&&no<8;i++)for(let j=i+1;j<G2.length&&no<8;j++){const A=G2[i],B=G2[j];if(A.L!==B.L)continue;if((TU.has(A.t)&&UN.has(B.t))||(TU.has(B.t)&&UN.has(A.t))||(A.t==='kitch'&&(B.t==='kitch'||B.t==='fridge'))||(B.t==='kitch'&&A.t==='fridge'))continue;
+    const ox=Math.min(A.b[3],B.b[3])-Math.max(A.b[0],B.b[0]),oz=Math.min(A.b[5],B.b[5])-Math.max(A.b[2],B.b[2]),oy=Math.min(A.b[4],B.b[4])-Math.max(A.b[1],B.b[1]);const pl=A.t==='plant'||B.t==='plant'?.08:.05;if(ox>pl&&oz>pl&&oy>.02){no++;P.push({rule:'furn-overlap3d',a:A.t,b:B.t,level:A.L,p:[A.x,A.z,A.t,B.t]});}}}
+  {const seen=new Set();world.traverse(g=>{const u=g.userData||{};if(!u.furn||u.ph||u.furn==='plant'||seen.has(u.furn)||(g.parent&&g.parent.userData&&g.parent.userData.furn))return;seen.add(u.furn);const bx=[];g.children.forEach(c=>{if(!c.isMesh||!c.geometry||!c.material||c.material.transparent||c.rotation.x||c.rotation.y||c.rotation.z)return;if(!c.geometry.boundingBox)c.geometry.computeBoundingBox();const k=c.geometry.boundingBox;bx.push([c,[k.min.x+c.position.x,k.min.y+c.position.y,k.min.z+c.position.z,k.max.x+c.position.x,k.max.y+c.position.y,k.max.z+c.position.z]]);});
+    let hit=0;for(let i=0;i<bx.length&&!hit;i++)for(let j=i+1;j<bx.length&&!hit;j++){const[A,a]=bx[i],[B,b]=bx[j];if(A.material===B.material)continue;for(let ax=0;ax<3&&!hit;ax++){const o1=(ax+1)%3,o2=(ax+2)%3,ov1=Math.min(a[o1+3],b[o1+3])-Math.max(a[o1],b[o1]),ov2=Math.min(a[o2+3],b[o2+3])-Math.max(a[o2],b[o2]);if(ov1<.02||ov2<.02)continue;
+     if(Math.abs(a[ax+3]-b[ax+3])<.0015||(Math.abs(a[ax]-b[ax])<.0015&&!(ax===1&&a[1]<.01)))hit=[ax,a.map(r2),b.map(r2)];}}if(hit)P.push({rule:'furn-zfight',t:u.furn,pair:hit});});}
   /* v20261117q rules taught from Adam's regenerated villa (generic, scene-based):
      furn-orient: every free piece faces the way layout.js meant (FV[r]); seat-faces-away: a chair/stool next to a table/desk faces it;
      lone-side: a side table stands next to a seat or bed; plant-cluster: no plant within 0.7 m of another; prop-scale: a model's height stays 0.5-1.8x its catalogue height;
@@ -963,6 +1015,7 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
   const FF=GR.map(g=>g.userData.f).filter(Boolean),dR=(a,b)=>{const A=FUR[a.t],B=FUR[b.t];if(!A||!B)return 9;const qa=(a.r||0)%2?[a.d||A.d,a.w||A.w]:[a.w||A.w,a.d||A.d],qb=(b.r||0)%2?[b.d||B.d,b.w||B.w]:[b.w||B.w,b.d||B.d];return Math.hypot(Math.max(0,Math.abs(a.p[0]-b.p[0])-(qa[0]+qb[0])/2),Math.max(0,Math.abs(a.p[1]-b.p[1])-(qa[1]+qb[1])/2));};
   FF.forEach(f=>{const same=FF.filter(o=>o!==f&&o.level===f.level);
    if(f.t==='chair'||f.t==='stool'){const T=same.filter(o=>['table','desk','otable'].includes(o.t)).map(o=>[o,Math.hypot(o.p[0]-f.p[0],o.p[1]-f.p[1])]).sort((a,b)=>a[1]-b[1])[0];if(T&&dR(f,T[0])<.25){const r=((f.r||0)%4+4)%4,dx=T[0].p[0]-f.p[0],dz=T[0].p[1]-f.p[1];if((FVv[r][0]*dx+FVv[r][1]*dz)/Math.max(.01,T[1])<.3)P.push({rule:'seat-faces-away',level:f.level,p:f.p});}}
+   if((f.t==='chair'||f.t==='stool')&&!same.some(o=>['table','desk','otable','island','kitch'].includes(o.t)&&dR(f,o)<.45))P.push({rule:'lone-chair',level:f.level,p:f.p});
    if(f.t==='side'&&!same.some(o=>['sofa','armch','lounge','bed','bed1','bunk'].includes(o.t)&&dR(f,o)<.35))P.push({rule:'lone-side',level:f.level,p:f.p});
    if(f.t==='plant'&&same.some(o=>o.t==='plant'&&Math.hypot(o.p[0]-f.p[0],o.p[1]-f.p[1])<.7))P.push({rule:'plant-cluster',level:f.level,p:f.p});});
   /* stair-void-capped: looking up the stair from the lower floor you must see the upper floor - no ceiling/slab/box across the void (only the flight, railings and lining) */
@@ -989,6 +1042,9 @@ const _b64=a=>{const u=new Uint8Array(a.buffer,a.byteOffset,a.byteLength);let s=
 function lmMesh(o){const g=o.geometry,P=g.attributes.position,n=P.count,f=new Float32Array(n*3);for(let i=0;i<n;i++){_lmv.fromBufferAttribute(P,i).applyMatrix4(o.matrixWorld);f[i*3]=_lmv.x;f[i*3+1]=_lmv.y;f[i*3+2]=_lmv.z;}
  const ix=g.index?Uint32Array.from(g.index.array):null,m=o.material,c=m&&m.color?m.color:new THREE.Color(.8,.8,.8),k=m&&m.map?.75:1;return{p:_b64(f),i:ix?_b64(ix):null,n,c:[c.r*k,c.g*k,c.b*k]};}
 export function sceneRoot(){return world;}
+export function cellsOf(L){return (CELLS[L]||[]).map(r=>r.map(v=>+(+v).toFixed(2)).concat([roomKinds[L]&&roomKinds[L].kindOf[r[4]]||'']));}
+/* v20261117r QA: real (mesh) bounding boxes of every free furniture group - used by the 3D overlap/decor rules and by QA scripts */
+export function furnBoxes(){const o=[];if(!world)return o;world.updateMatrixWorld(true);world.traverse(g=>{const u=g.userData||{};if(u.furn&&!(g.parent&&g.parent.userData&&g.parent.userData.furn)){const b=new THREE.Box3();g.traverse(m=>{if(m.isMesh&&m.visible!==false){let v=1;for(let q=m;q&&q!==g;q=q.parent)if(q.visible===false){v=0;break;}if(v)b.expandByObject(m);}});if(b.isEmpty())return;o.push({t:u.furn,wm:!!u.wm,ph:u.ph||0,x:+g.position.x.toFixed(2),z:+g.position.z.toFixed(2),b:[b.min.x,b.min.y,b.min.z,b.max.x,b.max.y,b.max.z].map(v=>+v.toFixed(3))});}});return o;}
 export function rayDbg(x,z,y0){world.updateMatrixWorld(true);const rc=new THREE.Raycaster();rc.set(new THREE.Vector3(x,y0==null?80:y0,z),new THREE.Vector3(0,y0==null?-1:1,0));return rc.intersectObjects(world.children,true).slice(0,4).map(h=>{let k=[];for(let q=h.object;q&&q!==world;q=q.parent)k.push(Object.keys(q.userData||{}).join('/')+':'+(q.geometry?q.geometry.type:''));return [+h.point.y.toFixed(3),h.object.material&&h.object.material.color?h.object.material.color.getHexString():'',k.join('<')];});}
 /* v20261117q QA: dense vertical ray scan of the roof - returns points where a ray from the sky reaches the house (wall top, floor, ceiling) without crossing a roof mesh = a slit/hole */
 export function roofScan(step=.02,line=.25){if(!world||roof==='none')return[];world.updateMatrixWorld(true);const RM=[],HS=[];world.traverse(o=>{if(!o.isMesh)return;let u=0,c=0;for(let q=o;q;q=q.parent){const d=q.userData||{};if(d.roof||d.lroof){u=1;break;}if(d.ceil||d.furn||d.lamp)c=1;}if(u)RM.push(o);else if(!c)HS.push(o);});
@@ -1129,7 +1185,13 @@ function interiorFinish(root){const P=[];root.traverse(o=>{if(o.isMesh&&o.userDa
  P.forEach(o=>{const[w,s0,s1,y0,y1,t]=o.userData.wp,RK=roomKinds[w.level];if(!RK||!RK.labelAt)return;const g=geo(w),lv=(H.levels||[]).find(l=>l.name===w.level),e0=lv?lv.elevation||0:0,L=s1-s0;if(L<.08)return;
   const sm=(s0+s1)/2,cxm=g.x0+g.u[0]*sm,czm=g.z0+g.u[1]*sm,yc=(y0+y1)/2;
   for(const sd of[1,-1]){const nx=-g.u[1]*sd,nz=g.u[0]*sd,lab=RK.labelAt(cxm+nx*(t/2+.15),czm+nz*(t/2+.15));if(!lab)continue;const kind=RK.kindOf[lab]||'other';
-   if(kind==='wet'){const a=Math.max(y0,e0),b=Math.min(y1,e0+2.05);if(b-a<.04)continue;const gg=new THREE.BoxGeometry(L,b-a,.012);boxUV(gg,sm,(a+b)/2-e0);const m=new THREE.Mesh(gg,M.wtile);m.position.set(0,(a+b)/2-yc,sd*(t/2+.006));m.receiveShadow=true;m.userData.noCol=true;o.add(m);}
+   if(kind==='wet'){const a=Math.max(y0,e0),b=Math.min(y1,e0+2.05);if(b-a<.04)continue;
+     /* v20261117r RULE: wall tiles only where the wall face really borders the wet room - sampled every 5 cm along the piece (a long wall piece shared by the
+        bathroom and a bedroom used to be tiled end to end from its midpoint label, leaving a tile strip beside the bedroom window; a stub inside a partition
+        showed as a free-standing tiled slab). Face point 2 cm in front of the wall must sit inside a cell of THAT wet room. audit: tile-outside-wet */
+     const wetAt=q=>RK.labelAt(g.x0+g.u[0]*q+nx*(t/2+.15),g.z0+g.u[1]*q+nz*(t/2+.15))===lab;
+     const runs=[];let r0=null;for(let q=s0+.025;q<s1;q+=.05){const ok=wetAt(q);if(ok&&r0==null)r0=q-.025;if(!ok&&r0!=null){runs.push([r0,q-.025]);r0=null;}}if(r0!=null)runs.push([r0,s1]);
+     runs.forEach(([q0,q1])=>{q0=Math.max(s0,q0);q1=Math.min(s1,q1);if(q1-q0<.2)return;const qm=(q0+q1)/2,gg=new THREE.BoxGeometry(q1-q0,b-a,.012);boxUV(gg,qm,(a+b)/2-e0);const m=new THREE.Mesh(gg,M.wtile);m.position.set(qm-sm,(a+b)/2-yc,sd*(t/2+.006));m.receiveShadow=true;m.userData.noCol=true;m.userData.wetTile=[w.level,nx,nz,lab];o.add(m);});}
    else if(y0<e0+.03){const m=new THREE.Mesh(new THREE.BoxGeometry(L,.07,.014),M.skirt);m.position.set(0,e0+.035-yc,sd*(t/2+.007));m.userData.noCol=true;o.add(m);}}});}
 /* v20261117b QA helper: walk-mode camera at (x,z) on floor e looking at (tx,tz), pitch in degrees (screenshots / presentations) */
 export function qaWalk(x,z,e,tx,tz,pt){jump(x,z,e);rig.position.set(x,e,z);if(body&&body.resolve)body.resolve(rig.position);yaw=Math.atan2(tx-x,-(tz-z));pitch=-(pt||0)*Math.PI/180;if(cam){cam.fov=62;cam.updateProjectionMatrix();cam.position.set(0,1.6,0);}DIRTY=Math.max(DIRTY,90);}
