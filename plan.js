@@ -459,11 +459,14 @@ export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)r
  const o=mk(X1-X0,Y1-Y0),ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(img,X0,Y0,X1-X0,Y1-Y0,0,0,o.width,o.height);info.crop=[X0,Y0,X1,Y1];return o;}
 export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);
  let src=img,ch=null,page=0;try{if(!(globalThis.__PF||{}).noChrome){const pg=cropPage(img);if(pg){src=pg;ch=pg;page=1;o=Object.assign({},o);o._chrome=cropPage.info;}else{ch=cropChrome(img);if(ch){src=ch;o=Object.assign({},o);o._chrome=cropChrome.info;}}}}catch(e){}
+ const qual=R=>{if(!R||!R.dbg)return -1e9;const d=R.dbg;return (d.Q||0)+1.2*(d.nR||0)+(/^(room)?dims|scalebar$/.test(d.scale||'')?.6:0);};
  const run=im=>{let cr=null;try{cr=uploadRegion(im);}catch(e){cr=null;}const ci=uploadRegion.info;
   if(!cr)return readPlanX(im,o);
-  const R=readPlanX(cr,o);if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}
+  let R=readPlanX(cr,o);
+  /* v18: a small region crop (plan inside a sheet) is upsampled up to 2.5x, blurring thin strokes; also read it at a capped scale and keep the better reading */
+  const PFc=(globalThis.__PF||{}).noCropCap?0:((globalThis.__PF||{}).cropCap||1.5);if(PFc&&R&&R.dbg&&MAXD/Math.max(cr.width,cr.height)>((globalThis.__PF||{}).cropUp||1.6)){let N=null;try{N=readPlanX(cr,{...o,upCap:PFc});}catch(e){N=null;}const qa=qual(R),qn=qual(N);R.dbg.capQ=[+qa.toFixed(2),+qn.toFixed(2)];if(N&&N.dbg&&N.walls&&N.walls.length>=4&&qn>qa+((globalThis.__PF||{}).cropM??.5)){N.dbg.capQ=R.dbg.capQ;N.dbg.capped=PFc;R=N;}}
+  if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}
   const F=readPlanX(im,o);if(F&&F.dbg)F.dbg.cropFail=ci;return F||R;};
- const qual=R=>{if(!R||!R.dbg)return -1e9;const d=R.dbg;return (d.Q||0)+1.2*(d.nR||0)+(/^(room)?dims|scalebar$/.test(d.scale||'')?.6:0);};
  let A=run(src);if(A&&A.dbg&&o._chrome)A.dbg.chrome=o._chrome;
  /* v18a: a letterbox page crop of a small phone screenshot gets upsampled ~1.5-2x, which blurs thin strokes into 4-5 px lines; also read it at native resolution and keep the better reading */
  if(page&&!(globalThis.__PF||{}).noNative&&MAXD/Math.max(src.width,src.height)>1.3){const A0=A,qA=qual(A0),mg=(globalThis.__PF||{}).natM??.5,nq=[+qA.toFixed(2)];for(const cap of (globalThis.__PF||{}).natCaps||[1]){let N=null;try{N=readPlanX(src,{...o,upCap:cap});}catch(e){N=null;}const qN=qual(N);nq.push(+qN.toFixed(2));if(N&&N.dbg&&qN>qA+mg&&qN>qual(A)){N.dbg.native=cap;N.dbg.chrome=o._chrome;A=N;}}if(A&&A.dbg)A.dbg.natQ=nq;}
@@ -513,9 +516,17 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  if(!dbg.paper&&!(globalThis.__PF||{}).noLP){const m2=inkMask(n,W,H,.86);let lp=0;for(let i=0;i<W*H;i+=5)if(m2[i]&&!ink[i])lp++;dbg.lpF=+(lp*5/(W*H)).toFixed(4);if(lp*5>W*H*.004){const ok=Math.max(4,Math.round(base.kOpen*.7));const hm=openK(m2,W,H,ok);const B=wallMask(hm,W,H);add('lp',B.wm,B.wk,B.kOpen,B.kInt);}}
  // prem8 sketch stage: thin, wobbly, broken hand strokes (pen/pencil photo) -> looser threshold, short axis closings bridge
  // breaks and wobble, then the double-line walls are filled like 'pair'. Only when strokes are thin and no reading closes rooms.
- if(!o.noSketch&&((globalThis.__PF||{}).oldSk?lw<=3:(dbg.paper?lw<=((globalThis.__PF||{}).skW||3):lw<=2))&&!V.some(v=>v.q.nR>=3))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
+ if(!o.noSketch&&((globalThis.__PF||{}).oldSk?lw<=3:(dbg.paper?lw<=((globalThis.__PF||{}).skW||3):lw<=2))&&!V.some(v=>v.q.nR>=((globalThis.__PF||{}).skR||3)))for(const skT of[.74,.8,.86]){const m2=inkMask(n,W,H,skT),mx=Math.max(W,H);let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
   const km=Math.max(6,Math.round(.022*mx)),pf=close1(close1(pairFill(c2,W,H,km,lw*2+5),W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-c2[i];
   if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('sk'+Math.round(skT*100),B.wm,B.wk,B.kOpen,B.kInt);}}
+ /* v18 local (adaptive) binarisation for pen/pencil photos: a stroke is darker than its own neighbourhood, so a soft shadow edge or a
+    left-over light gradient does not flood a global threshold. Same sketch fill as above; quality-picked against the others. */
+ if(!o.noSketch&&!(globalThis.__PF||{}).noSkA&&((globalThis.__PF||{}).oldSk?lw<=3:(dbg.paper?lw<=3:lw<=2))&&!V.some(v=>v.q.nR>=((globalThis.__PF||{}).skAR||3))){const mx=Math.max(W,H),r=Math.max(6,Math.round(((globalThis.__PF||{}).skAr||.012)*mx)),I=new Float64Array((W+1)*(H+1));
+  for(let y=0;y<H;y++){let rs=0;for(let x=0;x<W;x++){rs+=n[y*W+x];I[(y+1)*(W+1)+x+1]=I[y*(W+1)+x+1]+rs;}}const m2=new Uint8Array(W*H),kf=(globalThis.__PF||{}).skAk||.86;
+  for(let y=0;y<H;y++){const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);for(let x=0;x<W;x++){const x0=Math.max(0,x-r),x1=Math.min(W,x+r+1),mu=(I[y1*(W+1)+x1]-I[y0*(W+1)+x1]-I[y1*(W+1)+x0]+I[y0*(W+1)+x0])/((y1-y0)*(x1-x0));const v=n[y*W+x];m2[y*W+x]=v<mu*kf&&v<.92?1:0;}}
+  let c2=close1(close1(m2,W,H,7,1),W,H,7,0);c2=compsFilter(c2,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.03*mx);
+  const km=Math.max(6,Math.round(.022*mx)),pf=close1(close1(pairFill(c2,W,H,km,lw*2+5),W,H,9,1),W,H,9,0);let d=0;for(let i=0;i<W*H;i+=7)d+=pf[i]-c2[i];
+  if(d>W*H*.0003/7){const B=wallMask(pf,W,H);add('skA',B.wm,B.wk,B.kOpen,B.kInt);}}
  const solidOK=V.length&&V[0].S.length>=4&&(base.wk>2.2*lw+2)&&sideCoverage(V[0].S,V[0].bb).n>=2;dbg.solidOK=!!solidOK;
  for(const src of solidOK?[]:nTone>W*H*.0008?[ink,body]:[ink]){const inkBig=compsFilter(src,W,H,k=>Math.max(k.x1-k.x0,k.y1-k.y0)>=.025*Math.max(W,H));
   for(const kc of[5,9,13]){const kk=Math.max(kc,lw*3+1);const hm=openK(closeK(inkBig,W,H,kk),W,H,Math.max(base.kOpen,Math.round(kc*.6)));add((src===ink?'h':'th')+kc,hm,Math.max(base.wk,kk),base.kOpen,base.kInt);}}
