@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261117r';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261117s';
 onPhSwap(()=>{DIRTY=Math.max(DIRTY,30);});
 export function phInfo(){return PH_STATS;}
 export function phWait(){return phPending();}
@@ -464,8 +464,11 @@ function cells(ws,stairsHole){const C=.1;let xs=[],zs=[];ws.forEach(w=>{xs.push(
  const q=[0];g[0]=2;while(q.length){const i=q.pop(),x=i%nx,z=(i/nx)|0;for(const[dx,dz]of[[1,0],[-1,0],[0,1],[0,-1]]){const X=x+dx,Z=z+dz;if(X<0||Z<0||X>=nx||Z>=nz)continue;const j=Z*nx+X;if(!g[j]){g[j]=2;q.push(j);}}}
  // prem8: label each enclosed room (4-connected interior component) so floors can follow room type
  const lab=new Int32Array(nx*nz);let nl=0;for(let i0=0;i0<nx*nz;i0++){if(g[i0]||lab[i0])continue;nl++;const st=[i0];lab[i0]=nl;while(st.length){const i=st.pop(),x=i%nx,z=(i/nx)|0;for(const[dx,dz]of[[1,0],[-1,0],[0,1],[0,-1]]){const X=x+dx,Z=z+dz;if(X<0||Z<0||X>=nx||Z>=nz)continue;const j=Z*nx+X;if(!g[j]&&!lab[j]){lab[j]=nl;st.push(j);}}}}
- const labelAt=(px,pz)=>{const ix=((px-x0)/C)|0,iz=((pz-z0)/C)|0;if(ix<0||iz<0||ix>=nx||iz>=nz)return 0;let L=lab[iz*nx+ix];if(L)return L;for(let r=1;r<4&&!L;r++)for(let dz=-r;dz<=r&&!L;dz++)for(let dx=-r;dx<=r&&!L;dx++){const X=ix+dx,Z=iz+dz;if(X>=0&&Z>=0&&X<nx&&Z<nz)L=lab[Z*nx+X];}return L;};
- const rects=[];for(let z=0;z<nz;z++){let s=-1,sl=0;for(let x=0;x<=nx;x++){const cx0=x0+x*C+C/2,cz=z0+z*C+C/2;const inH=stairsHole&&stairsHole.some(h=>cx0>h[0]&&cx0<h[2]&&cz>h[1]&&cz<h[3]);const v=x<nx&&g[z*nx+x]!==2&&!inH;const L=v?(lab[z*nx+x]||sl):0;
+ /* v20261117s RULE: wall / door-threshold cells take the label of the NEAREST room (multi-source BFS, max 3 cells) instead of the room left of them in the scan row -
+    a wet/kitchen floor used to run through the whole wall and door opening into the next room or corridor. The material edge now sits on the wall centre / door line. audit: floor-spill */
+  const LL=Int32Array.from(lab);{let fr=[];for(let i=0;i<nx*nz;i++)if(lab[i]&&!g[i])fr.push(i);for(let d=0;d<3&&fr.length;d++){const nf=[];for(const i of fr){const x=i%nx,z=(i/nx)|0;for(const[dx,dz]of[[1,0],[-1,0],[0,1],[0,-1]]){const X=x+dx,Z=z+dz;if(X<0||Z<0||X>=nx||Z>=nz)continue;const j=Z*nx+X;if(!LL[j]&&g[j]!==2){LL[j]=LL[i];nf.push(j);}}}fr=nf;}}
+  const labelAt=(px,pz)=>{const ix=((px-x0)/C)|0,iz=((pz-z0)/C)|0;if(ix<0||iz<0||ix>=nx||iz>=nz)return 0;let L=lab[iz*nx+ix];if(L)return L;for(let r=1;r<4&&!L;r++)for(let dz=-r;dz<=r&&!L;dz++)for(let dx=-r;dx<=r&&!L;dx++){const X=ix+dx,Z=iz+dz;if(X>=0&&Z>=0&&X<nx&&Z<nz)L=lab[Z*nx+X];}return L;};
+ const rects=[];for(let z=0;z<nz;z++){let s=-1,sl=0;for(let x=0;x<=nx;x++){const cx0=x0+x*C+C/2,cz=z0+z*C+C/2;const inH=stairsHole&&stairsHole.some(h=>cx0>h[0]&&cx0<h[2]&&cz>h[1]&&cz<h[3]);const v=x<nx&&g[z*nx+x]!==2&&!inH;const L=v?(LL[z*nx+x]||sl):0;
   if(s>=0&&(!v||(L&&L!==sl))){rects.push([x0+s*C,z0+z*C,x0+x*C,z0+(z+1)*C,sl]);s=-1;}if(v&&s<0){s=x;sl=L;}else if(v&&!sl&&L)sl=L;}}
  const out=[];rects.forEach(r=>{const p=out.find(o=>o[0]===r[0]&&o[2]===r[2]&&o[4]===r[4]&&Math.abs(o[3]-r[1])<1e-6);if(p)p[3]=r[3];else out.push(r);});out.labelAt=labelAt;return out;}
 // prem8: room-typed floor textures (procedural, tiny canvases; cached)
@@ -733,8 +736,8 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
     add(new THREE.BoxGeometry(pL+.06,.05,xT+.06-(r.ax?.004:0)),M.frame,cx,lh+.375+dy,cz,an,1).userData.roof=1;
     add(new THREE.BoxGeometry(L-.05,.62,.02),M.glass,cx,lh+.4+.31,cz,an,1).userData.rail=1;add(new THREE.BoxGeometry(L-.05,.05,.06),M.frame,cx,lh+1.05,cz,an,1).userData.rail=1;
     [b0,b1].forEach(b=>{const px=r.ax?c:b,pz=r.ax?b:c,k=px.toFixed(2)+','+pz.toFixed(2);if(PST.has(k))return;PST.add(k);add(new THREE.BoxGeometry(.06,.7,.06),M.frame,px,lh+.4+.35,pz,0,1).userData.rail=1;});});}
-  lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;const T=w.thickness||.3,mg=T/2+.2;/* v20261117c: margin includes the wall's own half-thickness - a thick (48 cm) outer wall under the upper floor got a stray parapet ledge */if(uc.some(u=>mx>u[0]-mg&&mx<u[2]+mg&&mz>u[1]-mg&&mz<u[3]+mg))return;if(dc.length&&dc.some(r=>mx>r[0]-.6&&mx<r[2]+.6&&mz>r[1]-.6&&mz<r[3]+.6))return;/* v20261117e: deck walls get their parapet+railing per open deck edge below */const ang=-Math.atan2(g.u[1],g.u[0]);
-   const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;});
+  lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;const T=w.thickness||.3,mg=T/2+.2;/* v20261117c: margin includes the wall's own half-thickness - a thick (48 cm) outer wall under the upper floor got a stray parapet ledge */if(uc.some(u=>mx>u[0]-mg&&mx<u[2]+mg&&mz>u[1]-mg&&mz<u[3]+mg))return;if(dc.length&&dc.some(r=>mx>r[0]-.6&&mx<r[2]+.6&&mz>r[1]-.6&&mz<r[3]+.6))return;/* v20261117e: deck walls get their parapet+railing per open deck edge below */const ang=-Math.atan2(g.u[1],g.u[0]),dy=Math.abs(g.u[1])>Math.abs(g.u[0])?-.003:0;/* v20261117s: walls along z sit 3 mm lower (parapet + coping) so the corner overlap never z-fights. audit: coplanar-overlap */
+   const pp=add(new THREE.BoxGeometry(g.L+T,.35+dy,T),M.fac,mx,lh+.175+dy/2,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375+dy,mz,ang,1).userData.roof=1;});
 });
  if(roof!=='none'&&IRR){const ah=.5,tc=(CELLS[top.name]||[]).concat(/* v20261117q: the stair void of the top floor is not a room cell - without it the slab left a hairline slit wherever the void is wider than 2x the wall growth (Adam: 'čiarka v streche'). audit: roof-hole */(H.stairs||[]).filter(st=>{const li=H.levels.findIndex(x=>x.name===st.level);return H.levels[li+1]===top;}).map(stairRect));
   /* v13c: ONE continuous roof - each room cell grows by the outer-wall thickness so the slab also covers every wall top (no gaps / dark wall lines above the roof); clipped to the building outline */
@@ -1005,6 +1008,10 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
   {const seen=new Set();world.traverse(g=>{const u=g.userData||{};if(!u.furn||u.ph||u.furn==='plant'||seen.has(u.furn)||(g.parent&&g.parent.userData&&g.parent.userData.furn))return;seen.add(u.furn);const bx=[];g.children.forEach(c=>{if(!c.isMesh||!c.geometry||!c.material||c.material.transparent||c.rotation.x||c.rotation.y||c.rotation.z)return;if(!c.geometry.boundingBox)c.geometry.computeBoundingBox();const k=c.geometry.boundingBox;bx.push([c,[k.min.x+c.position.x,k.min.y+c.position.y,k.min.z+c.position.z,k.max.x+c.position.x,k.max.y+c.position.y,k.max.z+c.position.z]]);});
     let hit=0;for(let i=0;i<bx.length&&!hit;i++)for(let j=i+1;j<bx.length&&!hit;j++){const[A,a]=bx[i],[B,b]=bx[j];if(A.material===B.material)continue;for(let ax=0;ax<3&&!hit;ax++){const o1=(ax+1)%3,o2=(ax+2)%3,ov1=Math.min(a[o1+3],b[o1+3])-Math.max(a[o1],b[o1]),ov2=Math.min(a[o2+3],b[o2+3])-Math.max(a[o2],b[o2]);if(ov1<.02||ov2<.02)continue;
      if(Math.abs(a[ax+3]-b[ax+3])<.0015||(Math.abs(a[ax]-b[ax])<.0015&&!(ax===1&&a[1]<.01)))hit=[ax,a.map(r2),b.map(r2)];}}if(hit)P.push({rule:'furn-zfight',t:u.furn,pair:hit});});}
+  /* v20261117s floor-spill: just inside each side of an interior door the floor material belongs to the room on that side (the floor cell under p1 = room seen deeper at p2) */
+  {let nfs=0;H.walls.forEach(w=>{if(w._ext||nfs>=5)return;const RK=roomKinds[w.level],C=CELLS[w.level]||[];if(!RK)return;const G=geo(w),T=w.thickness||.3,n=[-G.u[1],G.u[0]];(w.openings||[]).forEach(o=>{if(o.type!=='door'||nfs>=5)return;const m=o.offset+o.width/2,cx=G.x0+G.u[0]*m,cz=G.z0+G.u[1]*m;
+    for(const sd of[1,-1]){const p1=[cx+n[0]*sd*(T/2+.06),cz+n[1]*sd*(T/2+.06)],p2=[cx+n[0]*sd*(T/2+.45),cz+n[1]*sd*(T/2+.45)],c=C.find(r=>p1[0]>r[0]&&p1[0]<r[2]&&p1[1]>r[1]&&p1[1]<r[3]),l2=RK.labelAt(p2[0],p2[1]);if(!c||!l2)continue;
+     const k1=RK.kindOf[c[4]]||'other',k2=RK.kindOf[l2]||'other';if(k1!==k2){nfs++;P.push({rule:'floor-spill',level:w.level,p:p1.map(r2),floor:k1,room:k2});}}});});}
   /* v20261117q rules taught from Adam's regenerated villa (generic, scene-based):
      furn-orient: every free piece faces the way layout.js meant (FV[r]); seat-faces-away: a chair/stool next to a table/desk faces it;
      lone-side: a side table stands next to a seat or bed; plant-cluster: no plant within 0.7 m of another; prop-scale: a model's height stays 0.5-1.8x its catalogue height;

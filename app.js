@@ -1,6 +1,6 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
 import {readPlan} from './plan.js?v=20261117p';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261117r';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261117s';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -527,7 +527,7 @@ addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 /* v20261117a: keep the canvas bitmap in sync with its CSS box. The header grows when the editor toolbar appears (main = 100% - --hh), which shrank the canvas without a refit, so the bitmap was squeezed vertically and every click landed lower than the cursor. */
 new ResizeObserver(()=>{if(!H||!$('ed').classList.contains('on'))return;const r=cv.getBoundingClientRect();if(!r.width||!r.height)return;const W=Math.round(r.width*devicePixelRatio),Hh=Math.round(r.height*devicePixelRatio);if(Math.abs(cv.width-W)<2&&Math.abs(cv.height-Hh)<2)return;if(!view.u){fit();return;}const cx0=view.x+cv.width/2/view.s,cy0=view.y+cv.height/2/view.s;cv.width=W;cv.height=Hh;view.x=cx0-W/2/view.s;view.y=cy0-Hh/2/view.s;draw();}).observe(cv);
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261117r');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261117s');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 // prem10 storey picker (Bez strechy): Všetko / 1NP / 2NP …; only for multi-storey houses. Picking a storey = it becomes the top cut (upper storeys hidden, lower ones ghosted).
 let LVSEL=-1;function lvPickUI(md){const P=$('lvpick');if(!P)return;const ok=md==='doll'&&H&&H.levels&&H.levels.length>1;P.hidden=!ok;if(!ok)return;
  P.innerHTML='';[['Všetko',-1],...H.levels.map((l,i)=>[l.name,i])].forEach(([t,i])=>{const b=document.createElement('button');b.textContent=t;b.dataset.l=t;b.setAttribute('aria-pressed',LVSEL===i?'true':'false');if(LVSEL===i)b.classList.add('on');
@@ -830,6 +830,15 @@ function stairNoGo(G,L){const V=stairVoids(L);if(V.length)G.noGo=V.map(r=>[r[0]-
 /* v20261117r: a chair/stool whose table or desk was removed goes too (no lone chair by the railing). audit: lone-chair */
 function lonelySeats(log){const sz=f=>{const D=DIM3[f.t]||[.5,.5],w=f.w||D[0],d=f.d||D[1];return (f.r||0)%2?[d,w]:[w,d];},gp=(a,b)=>{const A=sz(a),B=sz(b);return Math.hypot(Math.max(0,Math.abs(a.p[0]-b.p[0])-(A[0]+B[0])/2),Math.max(0,Math.abs(a.p[1]-b.p[1])-(A[1]+B[1])/2));};
  const n0=H.furn.length;H.furn=H.furn.filter(f=>!(f.t==='chair'||f.t==='stool')||H.furn.some(o=>o.level===f.level&&['table','desk','otable','island','kitch'].includes(o.t)&&gp(f,o)<.4));if(H.furn.length<n0&&log)log.push('lone-chair');}
+/* v20261117s RULE: the furniture check relocates before it deletes - a non-decor piece (bed, desk + chair, wardrobe, WC, basin ...) that breaks a rule makes its whole room
+   re-laid by the same layout engine (which honours the stair walkway, door zones, WC clearance); only decor is ever dropped. audit: fixture-missing, lone-chair */
+const DECOR_DROP=new Set(['plant','toy','side','lamp','art','rug','runner','shelf','wshelf','mirror','towel','curtain','pendant','dresser','sideb','armch','nstand','bench','coat','shoe','ctable','hooks','tvw']);
+function relayRoom(L,rid,ex){const RS=rooms(L),R=RC[L];if(!R)return null;const r=RS.find(q=>q.id===rid);if(!r)return null;const T=assignTypes(R,L),n=roomType(r,T,R,L),OPS=layoutOps(R,L),WS=layoutWalls(L),hasWC=RS.some(q=>/^WC/.test(roomType(q,T,R,L)));
+ const G=stairNoGo(makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim),L);const it=layoutRoom(G,n,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC,...(ex||{})});
+ H.furn=H.furn.filter(f=>!(f.level===L&&roomAt(R,f.p)===rid));it.forEach(f=>H.furn.push({...f,level:L,rid}));return it;}
+window.__relay=(L,x,z,ex)=>{rooms(L);return relayRoom(L,roomAt(RC[L],[x,z]),ex);};
+function dropOrRelay(list,log,tag){const relay=new Map();list.forEach(f=>{if(DECOR_DROP.has(f.t)){H.furn=H.furn.filter(o=>o!==f);log.push(tag+':'+f.t);return;}const R=RC[f.level]||(rooms(f.level),RC[f.level]);if(!R)return;const rid=roomAt(R,f.p);const k=f.level+':'+rid;if(!relay.has(k))relay.set(k,[f.level,rid,{needWC:H.furn.some(o=>o.level===f.level&&o.t==='wc'&&roomAt(R,o.p)===rid)}]);});
+ relay.forEach(([L,rid,ex])=>{if(relayRoom(L,rid,ex)){log.push(tag+'-relayout:'+L+':'+rid);}});}
 function stairFurn(){const out=[];(H.stairs||[]).forEach(st=>{const li=H.levels.findIndex(l=>l.name===st.level);const lv=[st.level,(H.levels[li+1]||{}).name];const r=stairRect(st);(H.furn||[]).forEach((f,q)=>{if(!lv.includes(f.level)||!f.p)return;if(f.p[0]>r[0]-.05&&f.p[0]<r[2]+.05&&f.p[1]>r[1]-.05&&f.p[1]<r[3]+.05&&!out.includes(q))out.push(q);
   else if(f.level===lv[1]&&!WALK_SOFT.has(f.t)&&!out.includes(q)){const D=DIM3[f.t]||[.5,.5],w=f.w||D[0],d=f.d||D[1],e=(f.r||0)%2?[d,w]:[w,d];if(f.p[0]+e[0]/2>r[0]-.58&&f.p[0]-e[0]/2<r[2]+.58&&f.p[1]+e[1]/2>r[1]-.58&&f.p[1]-e[1]/2<r[3]+.58)out.push(q);}});});return out;}
 // door clearance zone: door width + 10 cm each side, 1 m deep on both faces of the wall; overlaps the stair run on its level and the stair opening on the level above
@@ -844,16 +853,16 @@ function rulesFix(op){op=op||{};const log=[];/* v20261117q: the same furniture r
    if(f.t==='plant'&&same.some(o=>o.t==='plant'&&Math.hypot(o.p[0]-f.p[0],o.p[1]-f.p[1])<.7)){log.push('plant-cluster');continue;}
    if(f.t==='chair'||f.t==='stool'){const T=H.furn.find(o=>o.level===f.level&&['table','desk','otable'].includes(o.t)&&Math.abs(o.p[0]-f.p[0])<sz(o)[0]/2-.02&&Math.abs(o.p[1]-f.p[1])<sz(o)[1]/2-.02);if(T){log.push('chair-in-table');continue;}}
    keep.push(f);}if(keep.length!==H.furn.length)H.furn=keep;
-  {const b=stairFurn();if(b.length){H.furn=H.furn.filter((f,q)=>!b.includes(q));log.push('furniture-on-stairs');}}lonelySeats(log);
+  {const b=stairFurn();if(b.length){dropOrRelay(b.map(q=>H.furn[q]),log,'furniture-on-stairs');const b2=stairFurn();if(b2.length)H.furn=H.furn.filter((f,q)=>!b2.includes(q));}}lonelySeats(log);
   /* v20261117r: no two pieces may overlap (demo JSON had a shelf inside the bunk bed, a shelf inside the desk) - the lower-priority piece goes; chairs/stools may tuck under tables/desks.
      WC keeps 20 cm from any neighbour (centre >= 40 cm from side obstacles): it slides along its wall if the room allows, else the WC is dropped. audit: furn-overlap3d, wc-clearance */
   const SOFTF=new Set(['rug','runner','art','curtain','mirror','towel','tvw','hooks','wshelf','pendant','lamp']),TU=new Set(['chair','stool']),UN=new Set(['table','desk','island','otable','kitch']),PRI=['plant','toy','side','lamp','shelf','armch','dresser','sideb','nstand','bench','coat','shoe','washer','tv','ctable','chair','stool'];
   const rq=f=>{const e=sz(f);return[f.p[0]-e[0]/2,f.p[1]-e[1]/2,f.p[0]+e[0]/2,f.p[1]+e[1]/2];},ovq=(A,B,m)=>Math.min(A[2],B[2])-Math.max(A[0],B[0])>m&&Math.min(A[3],B[3])-Math.max(A[1],B[1])>m;
   for(let pass=0;pass<3;pass++){let ch=0;const F=H.furn.filter(f=>!SOFTF.has(f.t));for(let i=0;i<F.length&&!ch;i++)for(let j=i+1;j<F.length&&!ch;j++){const a=F[i],b=F[j];if(a.level!==b.level)continue;if((TU.has(a.t)&&UN.has(b.t))||(TU.has(b.t)&&UN.has(a.t)))continue;if(!ovq(rq(a),rq(b),.03))continue;
-    const pa=PRI.indexOf(a.t),pb=PRI.indexOf(b.t),drop=pa<0&&pb<0?b:pa<0?b:pb<0?a:(pa<=pb?a:b);H.furn=H.furn.filter(f=>f!==drop);log.push('furn-overlap:'+drop.t);ch=1;}if(!ch)break;}
+    const pa=PRI.indexOf(a.t),pb=PRI.indexOf(b.t),drop=pa<0&&pb<0?b:pa<0?b:pb<0?a:(pa<=pb?a:b);if(DECOR_DROP.has(drop.t)){H.furn=H.furn.filter(f=>f!==drop);log.push('furn-overlap:'+drop.t);}else dropOrRelay([drop],log,'furn-overlap');ch=1;}if(!ch)break;}
   H.furn.filter(f=>f.t==='wc').forEach(wc=>{const L=wc.level,RS=rooms(L),R=RC[L];if(!R)return;const rid=roomAt(R,wc.p),nb=()=>H.furn.filter(o=>o!==wc&&o.level===L&&!SOFTF.has(o.t)&&gap(o,wc)<.195);let bad=nb();if(!bad.length)return;
     const ax=(wc.r||0)%2?[0,1]:[1,0],p0=[...wc.p];for(const dd of[.05,.1,.15,.2,.25,.3,-.05,-.1,-.15,-.2,-.25,-.3]){wc.p=[p0[0]+ax[0]*dd,p0[1]+ax[1]*dd];const q=rq(wc);if([[q[0]+.02,q[1]+.02],[q[2]-.02,q[1]+.02],[q[0]+.02,q[3]-.02],[q[2]-.02,q[3]-.02]].every(c=>roomAt(R,c)===rid)&&!nb().length){wc.p=wc.p.map(v=>Math.round(v*100)/100);log.push('wc-clearance-slide');return;}}
-    wc.p=p0;H.furn=H.furn.filter(f=>f!==wc);log.push('wc-clearance-drop');});}H.walls.forEach(w=>{const wh=w.height||((H.levels||[]).find(l=>l.name===w.level)||{}).height||2.8;(w.openings||[]).forEach(o=>{if((o.sill||0)<0){o.sill=0;log.push('opening-height');}
+    wc.p=p0;const it=relayRoom(L,rid,{needWC:1});if(it&&it.some(f=>f.t==='wc')){log.push('wc-clearance-relayout');return;}H.furn=H.furn.filter(f=>f!==wc);log.push('wc-clearance-drop');});}H.walls.forEach(w=>{const wh=w.height||((H.levels||[]).find(l=>l.name===w.level)||{}).height||2.8;(w.openings||[]).forEach(o=>{if((o.sill||0)<0){o.sill=0;log.push('opening-height');}
  if((o.sill||0)+(o.height||0)>wh-.05){o.height=Math.max(.4,r2(wh-.05-(o.sill||0)));if((o.sill||0)+o.height>wh-.05)o.sill=Math.max(0,r2(wh-.05-o.height));log.push('opening-height');}});});
  // door-into-wall auto-fix: slide the door along its wall (≤ 0.6 m) to the nearest spot where both sides are walkable and it overlaps no other opening
  const blocked=[];
@@ -906,7 +915,7 @@ function rulesFix(op){op=op||{};const log=[];/* v20261117q: the same furniture r
      H.rn=(H.rn||[]).filter(e=>!(e.level===L&&(roomAt(R,e.p)===r.id||roomAt(R,e.p)===q.id)));H.rn.push({level:L,p:[...r.p],n:tq.replace(/ \d+$/,''),auto:1},{level:L,p:[...q.p],n:n.replace(/ \d+$/,''),auto:1});log.push('type-swap:'+L+':'+n+'<->'+tq);nameR(R,L);return;}}
     return;}
    H.furn=H.furn.filter(f=>!inR(f));it.forEach(f=>H.furn.push({...f,level:L,rid:r.id}));log.push('fixture-missing:'+L+':'+n);});if(log.length>lg0&&hv(L)>v0){H.furn=JSON.parse(F0);H.rn=JSON.parse(N0);log.length=lg0;log.push('fix-reverted:'+L);nameR(R,L);}});
- if(!op.noFix){const bad=stairFurn();if(bad.length){H.furn=H.furn.filter((f,q)=>!bad.includes(q));log.push('furniture-on-stairs');lonelySeats(log);}}return log;}
+ if(!op.noFix){const bad=stairFurn();if(bad.length){dropOrRelay(bad.map(q=>H.furn[q]),log,'furniture-on-stairs');const b2=stairFurn();if(b2.length){H.furn=H.furn.filter((f,q)=>!b2.includes(q));}lonelySeats(log);}}return log;}
 function rulesCheck(){const out=[],P=(id,where,extra)=>{const R0=RULES.find(r=>r[0]===id);out.push({id,sev:R0?R0[1]:'soft',where,...(extra||{})});};
  if(!H.levels||!H.walls.length)return out;extSides();const nm={},graph={},ext=new Set();const L0=H.levels[0].name;
  H.levels.forEach((l,li)=>{const L=l.name,RS=rooms(L),R=RC[L];if(!R||!R.g||!RS.length)return;const ids=new Set(RS.map(q=>q.id)),T=assignTypes(R,L);RS.forEach(r=>{const k=L+':'+r.id;nm[k]=roomType(r,T,R,L);graph[k]=graph[k]||new Set();});
@@ -918,10 +927,11 @@ function rulesCheck(){const out=[],P=(id,where,extra)=>{const R0=RULES.find(r=>r
   // fixtures (only when this floor is furnished)
   const F=(H.furn||[]).filter(f=>f.level===L);if(F.length)RS.forEach(r=>{const n=nm[L+':'+r.id]||'',fs=F.filter(f=>roomAt(R,f.p)===r.id),has=(...t)=>fs.some(f=>t.includes(f.t)),wh={level:L,room:n};
    if(/^WC/.test(n)&&!has('wc'))P('fixture-missing',wh,{need:'wc'});
-   if(/Kúpeľ/.test(n)){if(!has('bath','shower'))P('fixture-missing',wh,{need:'bath|shower'});if(!has('sink'))P('fixture-secondary',wh,{need:'sink'});}
+   if(/Kúpeľ/.test(n)){if(!has('bath','shower'))P('fixture-missing',wh,{need:'bath|shower'});if(!has('sink'))P('fixture-missing',wh,{need:'sink'});/* v20261117s: wet rooms keep their fixtures */}
    if(/Spálň|Detsk/.test(n)&&!has('bed','bed1','bunk'))P('fixture-missing',wh,{need:'bed'});
    if(/Kuchyň/.test(n)){const K=fs.filter(f=>f.t==='kitch'),len=K.reduce((a,f)=>a+(f.w||2.8),0);if(!K.length)P('fixture-missing',wh,{need:'kitch'});else if(len<1.8)out.push({id:'kitchen-short',sev:len<1.2?'hard':'soft',where:wh,len:r2(len)});if(!has('fridge'))P('fixture-secondary',wh,{need:'fridge'});}});});
  if(!ext.size&&Object.keys(nm).some(k=>k.startsWith(L0+':')))P('no-entrance',{level:L0});
+ /* v20261117s: a house with a bathroom always has a WC somewhere (a bathroom WC is never dropped when it is the only one) */if((H.furn||[]).some(f=>f.t==='bath'||f.t==='shower')&&!(H.furn||[]).some(f=>f.t==='wc'))P('fixture-missing',{level:L0},{need:'wc'});
  // stairs: bottom on st.level, top on the next level; link the two rooms for reachability
  (H.stairs||[]).forEach(st=>{const li=H.levels.findIndex(l=>l.name===st.level);if(li<0)return;const Lc=st.length||3.6,Wd=st.width||1,d=st.dir||0,c=Math.cos(d),sn=Math.sin(d),mid=[-sn*Wd/2,c*Wd/2];
   const bot=[st.pos[0]+mid[0]-c*.5,st.pos[1]+mid[1]-sn*.5],top=[st.pos[0]+mid[0]+c*(Lc+.5),st.pos[1]+mid[1]+sn*(Lc+.5)],ends=[[H.levels[li].name,bot,'bottom']];if(H.levels[li+1])ends.push([H.levels[li+1].name,top,'top']);
@@ -935,7 +945,7 @@ function rulesCheck(){const out=[],P=(id,where,extra)=>{const R0=RULES.find(r=>r
  doorViol().forEach(v=>P('upper-door-to-nowhere',{wall:v.p[0],at:v.p[1]}));
  // scale: a guessed scale is always flagged; if several rooms are too small/narrow for their type, the needed enlargement is proposed (never applied silently)
  if(H.underlay&&H.underlay.guess&&!H.underlay.cal){const sf=scaleCheck();if(sf&&sf.f>=1.1)P('scale-implausible',{level:L0},{f:sf.f,n:sf.n});else P('scale-guess',{level:L0});}
- {const SF=new Set(['rug','runner','art','curtain','mirror','towel','tvw','hooks','wshelf','pendant','lamp']),sz=f=>{const D=DIM3[f.t]||[.5,.5],w=f.w||D[0],d=f.d||D[1];return (f.r||0)%2?[d,w]:[w,d];};(H.furn||[]).filter(f=>f.t==='wc').forEach(wc=>{const A=sz(wc);(H.furn||[]).forEach(o=>{if(o===wc||o.level!==wc.level||SF.has(o.t))return;const B=sz(o),g=Math.hypot(Math.max(0,Math.abs(o.p[0]-wc.p[0])-(A[0]+B[0])/2),Math.max(0,Math.abs(o.p[1]-wc.p[1])-(A[1]+B[1])/2));if(g<.19)out.push({id:'wc-clearance',sev:'hard',where:{level:wc.level},t:o.t,gap:r2(g)});});});}
+ {const SF=new Set(['rug','runner','art','curtain','mirror','towel','tvw','hooks','wshelf','pendant','lamp']),sz=f=>{const D=DIM3[f.t]||[.5,.5],w=f.w||D[0],d=f.d||D[1];return (f.r||0)%2?[d,w]:[w,d];};(H.furn||[]).filter(f=>f.t==='wc').forEach(wc=>{const A=sz(wc);(H.furn||[]).forEach(o=>{if(o===wc||o.level!==wc.level||SF.has(o.t)||(o.rid!=null&&wc.rid!=null&&o.rid!==wc.rid))return;/* v20261117s: only same-room neighbours (a shelf behind the wall is not a clearance problem) */const B=sz(o),g=Math.hypot(Math.max(0,Math.abs(o.p[0]-wc.p[0])-(A[0]+B[0])/2),Math.max(0,Math.abs(o.p[1]-wc.p[1])-(A[1]+B[1])/2));if(g<.19)out.push({id:'wc-clearance',sev:'hard',where:{level:wc.level},t:o.t,gap:r2(g)});});});}
  window.__rulesOut=out;stairFurn().forEach(q=>{const f=H.furn[q];P('furniture-on-stairs',{level:f.level,t:f.t});});return out;}
 // minimum plausible size per room type: [area m², shorter side m]
 const RMIN=[[/^Obýva/,16,3.0],[/^Spálň/,9,2.7],[/^Detsk/,8,2.4],[/^Pracov/,6,2.1],[/^Kuchyň/,5,1.8],[/^Kúpeľ/,3.2,1.5],[/^Jedáleň/,7,2.4]];

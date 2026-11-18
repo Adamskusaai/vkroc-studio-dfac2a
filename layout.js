@@ -89,7 +89,7 @@ function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k
  if(!inRoomR(G,q))return no('outside-room');if(wallHit(G,EPS<.005?[q[0]-.004,q[1]-.004,q[2]+.004,q[3]+.004]:q))return no('wall-overlap');
  /* v20261117r: stair opening + 60 cm walkway (upper floor) and 20 cm around a WC stay free */if(G.noGo&&!SOFT.has(t)&&!MOUNT.has(t)&&G.noGo.some(z=>ov(z,q,EPS)))return no('stair-walkway');
  if(t==='wc'||items.some(o=>o.t==='wc')){for(const o of items){if(o===it||SOFT.has(o.t)||MOUNT.has(o.t)||(t!=='wc'&&o.t!=='wc'))continue;if(rGap(o.q,q)<.2)return no('wc-clearance');}}
- if(G.doorZ.some((P,i)=>!(MOUNT.has(t)&&!G.doors[i].swingIn)&&polyOv(P,rP(q),EPS)))return no('door-zone');
+ if(((RELAX||it.rx)?(G.doorZr||(G.doorZr=G.doors.map(o=>opPoly(o,o.s0-.05,o.s1+.05,0,o.t/2+.6)))):G.doorZ).some((P,i)=>!(MOUNT.has(t)&&!G.doors[i].swingIn)&&polyOv(P,rP(q),EPS)))return no('door-zone');
  if(MOUNT.has(t)&&t!=='curtain'&&onOpening(G,it,['window','door']))return no('decor-over-opening');
  if(TALL.has(t)){const sq=rP([q[0]+.08,q[1]+.08,q[2]-.08,q[3]-.08]);let nu=0;for(let i=0;i<G.winZ.length;i++)if(polyOv(G.winZ[i],sq,EPS)){if(t==='kitch'&&(G.wins[i].sill||0)>=.85)nu=1;else return no('tall-at-window');}it.nu=nu;}
  if(!SOFT.has(t))for(const o of items){if(o===it||SOFT.has(o.t))continue;/* wall TV hangs above low furniture */if((t==='tvw'&&LOWW.has(o.t))||(o.t==='tvw'&&LOWW.has(t)))continue;if(ov(o.q,q,EPS))return no('overlap:'+o.t);
@@ -99,7 +99,7 @@ function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k
  if(!FREE.has(t)&&!SEAT.has(t)&&t!=='nstand'&&t!=='plant'&&t!=='lamp'&&wallFrac(G,backR(q,it.r,.02,.14))<.6)return no('not-against-wall');
  if(WALLSTAND.has(t)&&t!=='curtain'&&backGap(G,it).gap>.03)return no('not-flush-to-wall');
  if(t==='art'){const F=frontR(q,it.r,.5);if(items.some(o=>o!==it&&TALL.has(o.t)&&o.t!=='art'&&ov(o.q,F)))return no('art-hidden');if(items.some(o=>o!==it&&o.t==='art'&&Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1])<1.5))return no('art-crowded');}
- if(t==='bed'||t==='bed1'||t==='bunk'){const B=rP(backR(q,it.r,-.05,.35));if(G.winB.some(P=>polyOv(P,B)))return no('bed-head-at-window');}
+ if((t==='bed'||t==='bed1'||t==='bunk')&&!(RELAX||it.rx)){const B=rP(backR(q,it.r,-.05,.35));if(G.winB.some(P=>polyOv(P,B)))return no('bed-head-at-window');}
  return true;}
 function mkItem(G,t,x,z,r,extra){const q=extra&&extra.sz?rectOf(t,x,z,r,()=>extra.sz):rectOf(t,x,z,r,G.dims),it={t,p:[x,z],r,q,...extra};const D=FRONT[t]||0;it.clr=D?[frontR(q,r,D)]:[];
  if(t==='bed'||t==='bed1'||t==='bunk'){const S=sidesR(q,r,.7,.45);it.sides=S;it.clr=[frontR(q,r,.6)];}
@@ -190,7 +190,7 @@ function entry0(G,S,e,opt){const req=e.endsWith('!');e=e.replace('!','');const c
  if(e==='reading'){if(G.room.a<20)return;/* second zone in big rooms: armchair + side table + floor lamp in the emptiest wall spot */const C=wallCands(G,'armch').map(c=>{let dn=9;for(const o of S.items)dn=Math.min(dn,Math.hypot(o.p[0]-c[0],o.p[1]-c[1]));return[c,dn];}).filter(x=>x[1]>=1.6).sort((a,b)=>b[1]-a[1]).slice(0,40).map(x=>x[0]);
   for(const c of C){const a=place(G,S,'armch',[c],{},1);if(!a)continue;const tan=a.r%2?[0,1]:[1,0];let k=0;for(const sg of[1,-1]){const x=a.p[0]+tan[0]*sg*.68,z=a.p[1]+tan[1]*sg*.68;if(!k&&place(G,S,'side',[[x,z,a.r]],{},1)){k++;continue;}if(place(G,S,'lamp',[[x,z,0]],{},1))break;}ok(true);return;}return;}
  if(e==='curtains'){let k=0;for(const o of G.wins){const sm=(o.s0+o.s1)/2,r=FV.findIndex(f=>f[0]*o.n[0]+f[1]*o.n[1]>.9);if(r<0)continue;const[,cd]=G.dims('curtain');const x=o.p0[0]+o.u[0]*sm+o.n[0]*(o.t/2+cd/2+.003),z=o.p0[1]+o.u[1]*sm+o.n[1]*(o.t/2+cd/2+.003);const it=mkItem(G,'curtain',x,z,r);it.clr=[];if(inRoomR(G,it.q,.5)){S.items.push(it);k++;}}ok(k>0);return;}
- if(e==='wc?'){if(opt.hasWC||G.room.a<3)return;ok(place(G,S,'wc',wallCands(G,'wc')));return;}
+ if(e==='wc?'){if((opt.hasWC&&!opt.needWC)||G.room.a<3)return;ok(place(G,S,'wc',wallCands(G,'wc')));return;}
  if(e==='fridge'&&S.last.kitch){const k=S.last.kitch;let got=place(G,S,'fridge',[rel(G,k,'fridge',-1),rel(G,k,'fridge',1)])||place(G,S,'fridge',wallCands(G,'fridge'));
   for(const fz of[null,[.55,.6]]){if(got)break;const d0=G.dims;if(fz)G.dims=t=>t==='fridge'?fz:d0(t);try{got=place(G,S,'fridge',[rel(G,k,'fridge',-1),rel(G,k,'fridge',1)])||place(G,S,'fridge',wallCands(G,'fridge'));
    // still nothing: shorten the kitchen run by the fridge width and put the fridge column at its end
@@ -216,7 +216,10 @@ const DROP=['art','plant','lamp','side','toy','runner','rug','armch','chair','sh
 const REPAIR={side:['side'],tv:['tv','seating'],tvw:['tvw'],wshelf:['wshelf'],hooks:['hooks'],sofa:['seating','sofa'],ctable:['ctable'],table:['table','chair4'],fridge:['fridge'],bed:['bed','nstand2'],bed1:['bed1'],bunk:['bunk'],desk:['desk','chair1'],sink:['sink'],bath:['bath'],shower:['shower','shower~'],wc:['wc']};
 function relast(S){S.last={};for(const it of S.items)S.last[it.t]=it;}
 function tryReq(G,S,g,opt){for(const t of g){const n0=S.items.length;for(const e of REPAIR[t]||[t]){if(e==='tv'&&!S.last.sofa)continue;entry(G,S,e,opt);relast(S);}if(S.items.some(i=>g.includes(i.t)))return true;S.items.length=Math.max(S.items.length,0);void n0;}return false;}
-function repair(G,S,key,opt){const R=reqFor(key,G.room.a);const reqT=new Set(R.flat());
+/* v20261117s: a required fixture group that still does not fit gets one relaxed pass (head under a window allowed, door clear zone 60 cm instead of the full swing
+   zone - the 3D door then swings to its free side); a bathroom that had a WC keeps it (opt.needWC). Never ends with a bedroom without a bed. audit: fixture-missing */
+let RELAX=0;
+function repair(G,S,key,opt){const R=reqFor(key,G.room.a).concat(opt.needWC&&/^Kúpeľ/.test(key)?[['wc']]:[]);const reqT=new Set(R.flat());
  for(const g of R){if(S.items.some(i=>g.includes(i.t)))continue;relast(S);const keep=S.items.slice();if(tryReq(G,S,g,opt))continue;
   // remove optional items one by one, least important first, newest first
   const opt2=S.items.filter(i=>!reqT.has(i.t)&&DROP.includes(i.t)).sort((a,b)=>DROP.indexOf(a.t)-DROP.indexOf(b.t)||S.items.indexOf(b)-S.items.indexOf(a));let ok=false;
@@ -228,7 +231,10 @@ function repair(G,S,key,opt){const R=reqFor(key,G.room.a);const reqT=new Set(R.f
    for(const t of g){const X={items:[],last:{},score:0,req:0,reqOk:0,fv:S.fv};for(const e of REPAIR[t]||[t]){if(e==='tv')continue;entry(G,X,e,opt);relast(X);}if(!X.items.some(i=>g.includes(i.t)))continue;
     for(const e0 of S.tp||[]){const e=e0.replace(/[!~]/g,'');const prod=e==='seating'?'sofa':e;if(reqT.has(prod)&&X.items.some(i=>i.t===prod))continue;entry(G,X,e0,opt);relast(X);}
     fillRoom(G,X,key,opt);if(sat(X)>base&&(!bestX||sat(X)>sat(bestX)))bestX=X;}
-   if(bestX){S.items=bestX.items;relast(S);}}}
+   if(bestX){S.items=bestX.items;relast(S);}}
+  if(!S.items.some(i=>g.includes(i.t))&&g.some(t=>['bed','bed1','bunk','wc','sink','bath','shower','kitch'].includes(t))){RELAX=1;try{const keep2=S.items.slice();let ok2=tryReq(G,S,g,opt);
+   if(!ok2){const o3=S.items.filter(i=>!g.includes(i.t)&&(DROP.includes(i.t)||['sink','desk','chair'].includes(i.t))).sort((a,b)=>DROP.indexOf(a.t)-DROP.indexOf(b.t));for(const it of o3){const k=S.items.indexOf(it);if(k<0)continue;S.items.splice(k,1);for(let j=S.items.length-1;j>=0;j--)if(S.items[j].partner===it)S.items.splice(j,1);relast(S);if(tryReq(G,S,g,opt)){ok2=true;break;}}}
+   if(ok2){S.items.forEach(i=>{if(g.includes(i.t))i.rx=1;});/* refill what the relaxed pass removed */for(const e of S.tp||[]){const b0=e.replace(/[!~?]/g,''),b=({curtains:'curtain',nstand2:'nstand',chair4:'chair',chair1:'chair',seating:'sofa',reading:'armch'})[b0]||b0;if(!S.items.some(i=>i.t===b))entry(G,S,e.replace('!',''),opt);relast(S);}}else{S.items=keep2;relast(S);}}finally{RELAX=0;}}}
  // top-up: keep adding small items until the room clears the sparse limit with margin
  const tg=TARGET[key]??.2,F=(FILL[key]||[]).concat(['shelf','side','plant','lamp','plant','dresser~','sideb~','armch~','desk~','shelf~']);let guard=0;
  while(fillRatio(G,S.items)<.62*tg&&guard++<4){let prog=false;for(const e of F){if(fillRatio(G,S.items)>=.62*tg)break;if(S.items.filter(i=>i.t===e).length>=6)continue;const n0=S.items.length;entry(G,S,e,opt);relast(S);if(S.items.length>n0)prog=true;}if(!prog)break;}
@@ -243,7 +249,7 @@ export function layoutRoom(G,typ,opt={}){const key=tplKey(typ,/ [2468]$/.test(ty
    for(const[t,z]of[['shelf',null],['shoe',null],['shelf',[.6,.3]],['shoe',[.6,.3]],['shelf',[.45,.3]]]){if(z)G.dims=q=>q===t?z:d0(q);const it=place(G,S,t,wallCands(G,t));G.dims=d0;if(it){if(z)it.sz=z;S.score+=8;break;}}}
   S.score-=10*(S.req-S.reqOk);for(const g of reqFor(key,G.room.a))if(!S.items.some(i=>g.includes(i.t)))S.score-=(g.includes('bath')||g.includes('bed')||g.includes('kitch')||g.includes('wc'))?12:8;S.score+=10*Math.min(fillRatio(G,S.items),TARGET[key]??.2);if(!best||S.score>best.score+1e-6)best=S;if(S.req===S.reqOk&&tp===T[0])break;}
  repair(G,best,key,opt);
- return best.items.map(it=>{const o={t:it.t,p:[+it.p[0].toFixed(3),+it.p[1].toFixed(3)],r:it.r};if(it.nu)o.nu=1;if(it.sz||(SOFT.has(it.t)&&it.t!=='art'&&it.t!=='curtain')){const z=it.sz||G.dims(it.t);o.w=z[0];o.d=z[1];}return o;});}
+ return best.items.map(it=>{const o={t:it.t,p:[+it.p[0].toFixed(3),+it.p[1].toFixed(3)],r:it.r};if(it.nu)o.nu=1;if(it.rx)o.rx=1;if(it.sz||(SOFT.has(it.t)&&it.t!=='art'&&it.t!=='curtain')){const z=it.sz||G.dims(it.t);o.w=z[0];o.d=z[1];}return o;});}
 
 // ---------- wall snap (exact geometry): gap between the item's back and the nearest solid wall face it stands against ----------
 export const WALLSTAND=new Set(['wshelf','tvw','hooks','washer','ward','dresser','shelf','bed','bed1','bunk','kitch','fridge','bath','shower','sink','wc','desk','tv','sideb','shoe','bench','towel','mirror','art','curtain']);
@@ -260,7 +266,7 @@ function onOpening(G,it,types){const bg=backGap(G,it);if(!bg.w)return false;cons
 // can this item stand in the EMPTY room at all (standard or compact size)? if not, the room shape / openings were misread
 function fitsAlone(G,t){const S0={items:[],last:{},score:0};const zs=[null].concat(SHRINK[t]||[],COMPACT[t]?[COMPACT[t]]:[]);const d0=G.dims;
  for(const z of zs){if(z)G.dims=q=>q===t?z:d0(q);try{if(place(G,S0,t,wallCands(G,t).concat(FREE.has(t)?freeCands(G):[]),{},40))return true;}finally{G.dims=d0;}}return false;}
-export function validateRoom(G,furn,typ){const items=furn.map(f=>mkItem(G,f.t,f.p[0],f.p[1],f.r||0,f.w&&f.d?{sz:[f.w,f.d]}:undefined));const V=[];
+export function validateRoom(G,furn,typ){const items=furn.map(f=>mkItem(G,f.t,f.p[0],f.p[1],f.r||0,Object.assign(f.w&&f.d?{sz:[f.w,f.d]}:{},f.rx?{rx:1}:{})));const V=[];
  // re-derive partners (chairs belong to the nearest table/desk; nightstands to the bed)
  items.forEach(it=>{if(SEAT.has(it.t)||it.t==='nstand'){let b=null,bd=9;items.forEach(o=>{if(['table','desk','otable','bed','bed1','bunk'].includes(o.t)){const d=Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1]);if(d<bd){bd=d;b=o;}}});it.partner=b;}});
  items.forEach(it=>{if(it.sides){const k=bedSides(G,it,items);if(!k.length)V.push({t:it.t,p:it.p,rule:'bed-no-side-access'});it.clr=it.clr.concat(it.t==='bed'?k:k.slice(0,1));}});
