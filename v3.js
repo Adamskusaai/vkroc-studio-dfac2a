@@ -562,10 +562,11 @@ const add=(geom,mat,x,y,z,ry=0,nc)=>{if(mat===FLATM){if(!FLATW){FLATW=FLATM.clon
   const topH=Math.max(...ws.map(w=>w.height||l.height));
   const CR=cells(ws,hole),byL={};CELLS[l.name]=CR;(H.furn||[]).filter(f=>f.level===l.name).forEach(f=>{const L=CR.labelAt(f.p[0],f.p[1]);if(!L)return;(byL[L]=byL[L]||{t:new Set(),k:[]}).t.add(f.t);if(['kitch','fridge','island','stool'].includes(f.t))byL[L].k.push(f);});
   const kindOf={};Object.keys(byL).forEach(L=>kindOf[L]=roomKind(byL[L].t));roomKinds[l.name]={labelAt:CR.labelAt,kindOf};
-  CR.forEach(r=>{/* v20261117t: floors/ceilings stop at the inner face of exterior walls, so oak/tile never shows as an outside cornice. audit: ext-material */
-   const cl=clipInExt(r[0],r[1],r[2],r[3],ws,.02);if(cl[2]-cl[0]<.05||cl[3]-cl[1]<.05)return;const cx=(cl[0]+cl[2])/2,cz=(cl[1]+cl[3])/2;
+  CR.forEach(r=>{/* v20261117u: floors/ceilings stop at the inner face of bordering exterior walls (never an infinite plane). if a clip would go degenerate, keep the room cell so a floor is never dropped. audit: floor-present, ext-material */
+   const raw=clipInExt(r[0],r[1],r[2],r[3],ws,.02);let cl=(raw[2]-raw[0]>=.05&&raw[3]-raw[1]>=.05)?shrinkIn(raw,ws):null;if(cl&&(cl[2]-cl[0]<.05||cl[3]-cl[1]<.05||inExtBand((cl[0]+cl[2])/2,(cl[1]+cl[3])/2,ws)||_bOutExt((cl[0]+cl[2])/2,(cl[1]+cl[3])/2,ws)))cl=null;/* v20261117u BASICS: a floor is NEVER dropped - a failed clip falls back to the room cell inset 2 cm */if(!cl&&raw[2]-raw[0]>=.005&&raw[3]-raw[1]>=.005&&(raw[2]-raw[0]<.05||raw[3]-raw[1]<.05)){const mx=(raw[0]+raw[2])/2,mz=(raw[1]+raw[3])/2;if(inExtBand(mx,mz,ws)||_bOutExt(mx,mz,ws))return;cl=raw;}/* thin strip already inside the inner wall face: keep it as is */
+   if(!cl){let tn=0,ti=0;for(let a=.1;a<1;a+=.2)for(let c=.1;c<1;c+=.2){tn++;const x=r[0]+(r[2]-r[0])*a,z=r[1]+(r[3]-r[1])*c;if(inExtBand(x,z,ws)||_bOutExt(x,z,ws))ti++;}if(ti/tn>=.8)return;/* cell is wall or outside the envelope *//* a sliver cell lying inside an exterior wall is wall, not room */cl=[r[0]+.02,r[1]+.02,r[2]-.02,r[3]-.02];}if(cl[2]-cl[0]<.01||cl[3]-cl[1]<.01)return;const cx=(cl[0]+cl[2])/2,cz=(cl[1]+cl[3])/2;
    const kind=kindOf[r[4]]||'other';const mat=floorMat(kind);const fg=new THREE.BoxGeometry(cl[2]-cl[0],.06,cl[3]-cl[1]);boxUV(fg,cx,cz);
-const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userData.floor=1;
+const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userData.floor=1;m.userData.lvJ=i;
    const up=H.levels[i+1];if(up){/* v20261117q: no ceiling across the stair void - you see the upper floor when you look up the stairs. audit: stair-void-capped */let pcs=[[r[0],r[1],r[2],r[3]]];(H.stairs||[]).filter(st=>st.level===l.name).map(stairRect).forEach(q=>{const nx=[];pcs.forEach(c=>{if(q[0]>=c[2]||q[2]<=c[0]||q[1]>=c[3]||q[3]<=c[1]){nx.push(c);return;}if(q[0]>c[0])nx.push([c[0],c[1],q[0],c[3]]);if(q[2]<c[2])nx.push([q[2],c[1],c[2],c[3]]);const a0=Math.max(c[0],q[0]),a1=Math.min(c[2],q[2]);if(q[1]>c[1])nx.push([a0,c[1],a1,q[1]]);if(q[3]<c[3])nx.push([a0,q[3],a1,c[3]]);});pcs=nx;});pcs.forEach(c=>{if(c[2]-c[0]<.02||c[3]-c[1]<.02)return;add(new THREE.BoxGeometry(c[2]-c[0],.05,c[3]-c[1]),M.ceil,(c[0]+c[2])/2,l.elevation+topH+.025,(c[1]+c[3])/2,0,1).userData.ceil=1;});}/* ukážka 2 fix: lower floors get a white ceiling too */if(!up){add(new THREE.BoxGeometry(cl[2]-cl[0],.05,cl[3]-cl[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;
     // warm ceiling disc light (emissive) + soft point
     if(Math.min(r[2]-r[0],r[3]-r[1])>1.6){const disc=add(new THREE.CylinderGeometry(.26,.26,.012,16),std({color:0xe8dcc8,emissive:0xb89a70,emissiveIntensity:0.02,roughness:.98}),cx,l.elevation+topH-.03,cz,0,1);disc.scale.set(1,1,1);disc.castShadow=false;disc.userData.ceil=1;disc.userData.noCol=true;
@@ -586,7 +587,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   lw.forEach(w=>{const g=geo(w),e=el+(w.base||0),h=w.height||2.8;if(e+h>=eu-.005)return;const T=(w.thickness||.3)/2+.12,N=Math.max(2,Math.ceil(g.L/.1));let a=null;
    for(let k=0;k<=N;k++){const s=k/N*g.L,x=g.x0+g.u[0]*s,z=g.z0+g.u[1]*s,c=k<N&&(inUp(x,z,.02)||inUp(x-g.u[1]*T,z+g.u[0]*T,0)||inUp(x+g.u[1]*T,z-g.u[0]*T,0)||uw.some(q=>segD(x,z,q)<(q.thickness||.3)/2));
     if(c&&a===null)a=s;if((!c||k===N)&&a!==null){const b=c?g.L:s;if(b-a>.05)box(w,Math.max(0,a-.02),Math.min(g.L,b+.02),e+h,eu+.002,M.wall,0,0,1);a=null;}}});
-  uc.forEach(r=>{const sl=clipInExt(r[0]-.01,r[1]-.01,r[2]+.01,r[3]+.01,uw.filter(w=>w._ext),'outer');if(sl[2]-sl[0]<.05||sl[3]-sl[1]<.05)return;add(new THREE.BoxGeometry(sl[2]-sl[0],eu-lt-.002,sl[3]-sl[1]),M.fac,(sl[0]+sl[2])/2,(lt+eu)/2,(sl[1]+sl[3])/2,0,1).userData.slab=1;});
+  uc.forEach(r=>{const raw=clipInExt(r[0]-.01,r[1]-.01,r[2]+.01,r[3]+.01,uw.filter(w=>w._ext),'outer'),sl=(raw[2]-raw[0]>=.05&&raw[3]-raw[1]>=.05)?raw:[r[0]+.02,r[1]+.02,r[2]-.02,r[3]-.02];if(sl[2]-sl[0]<.05||sl[3]-sl[1]<.05)return;add(new THREE.BoxGeometry(sl[2]-sl[0],eu-lt-.002,sl[3]-sl[1]),M.fac,(sl[0]+sl[2])/2,(lt+eu)/2,(sl[1]+sl[3])/2,0,1).userData.slab=1;});
   uw.forEach(w=>{const g=geo(w),N=Math.max(2,Math.ceil(g.L/.1));let a=null;
    for(let k=0;k<=N;k++){const s=k/N*g.L,x=g.x0+g.u[0]*s,z=g.z0+g.u[1]*s,c=k<N&&!lowWallAt(x,z,.02);
     if(c&&a===null)a=s;if((!c||k===N)&&a!==null){const b=c?g.L:s;if(b-a>.05)box(w,Math.max(0,a-.02),Math.min(g.L,b+.02),lt,eu+.002,M.wall,0,0,1);a=null;}}});
@@ -599,10 +600,10 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   /* v20261117t: every multi-storey house gets a dark metal flashing at the storey joint (never a floor material). audit: ext-material */
   lw.filter(w=>w._ext).forEach((w,k)=>{const g=geo(w),T=w.thickness||.3,D=.04,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,o=T/2+D/2+.01,fb=add(new THREE.BoxGeometry(g.L+T+2*D-.02,eu-lt+.12+(k%2)*.004,D),M.frame,g.x0+g.u[0]*g.L/2+nx*o,(lt+eu)/2+.03,g.z0+g.u[1]*g.L/2+nz*o,-Math.atan2(g.u[1],g.u[0]),1);fb.userData.lvJ=i;fb.userData.flash=D;fb.userData.cope=1;});});
  // prem8: kitchen tile zone inside open-plan living (bbox of kitchen pieces + 0.9 m working aisle)
- H.levels.forEach(l=>{const RK=roomKinds[l.name];if(!RK)return;const grp={};(H.furn||[]).filter(f=>f.level===l.name&&['kitch','fridge','island'].includes(f.t)).forEach(f=>{const L=RK.labelAt(f.p[0],f.p[1]);if(L&&RK.kindOf[L]==='living')(grp[L]=grp[L]||[]).push(f);});
+ H.levels.forEach((l,i)=>{const RK=roomKinds[l.name];if(!RK)return;const grp={};(H.furn||[]).filter(f=>f.level===l.name&&['kitch','fridge','island'].includes(f.t)).forEach(f=>{const L=RK.labelAt(f.p[0],f.p[1]);if(L&&RK.kindOf[L]==='living')(grp[L]=grp[L]||[]).push(f);});
   Object.values(grp).forEach(fs=>{let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;fs.forEach(f=>{const F=FUR[f.t]||{w:1,d:1},rot=(f.r||0)%2,w=rot?F.d:F.w,d=rot?F.w:F.d;x0=Math.min(x0,f.p[0]-w/2);x1=Math.max(x1,f.p[0]+w/2);z0=Math.min(z0,f.p[1]-d/2);z1=Math.max(z1,f.p[1]+d/2);});
    x0-=.9;z0-=.9;x1+=.9;z1+=.9;const fp0=root.userData.fp;x0=Math.max(x0,fp0[0]+.16);z0=Math.max(z0,fp0[1]+.16);x1=Math.min(x1,fp0[2]-.16);z1=Math.min(z1,fp0[3]-.16);if(x1-x0<.5||z1-z0<.5)return;
-   const kg=new THREE.BoxGeometry(x1-x0,.004,z1-z0);boxUV(kg,(x0+x1)/2,(z0+z1)/2);const m=add(kg,floorMat('kitchen'),(x0+x1)/2,l.elevation+.0625,(z0+z1)/2,0,1);m.receiveShadow=false;m.castShadow=false;m.userData.floor=1;});});
+   const kg=new THREE.BoxGeometry(x1-x0,.004,z1-z0);boxUV(kg,(x0+x1)/2,(z0+z1)/2);const m=add(kg,floorMat('kitchen'),(x0+x1)/2,l.elevation+.0625,(z0+z1)/2,0,1);m.receiveShadow=false;m.castShadow=false;m.userData.floor=1;m.userData.lvJ=i;});});
  M.wood2.color.set((STY[H.style]||{}).wood||'#d4b48a');(H.furn||[]).forEach(f=>{const l=lv[f.level];if(!l)return;let F=FUR[f.t];if(!F)return;if(f.w&&f.d)F={...F,w:f.w,d:f.d};if(f.nu)F={...F,nu:1};const S=STY[H.style]||{};
   const RK=roomKinds[f.level],rk=RK?RK.kindOf[RK.labelAt(f.p[0],f.p[1])]:null;
   // prem8 h11: no big potted plants in wet rooms or rooms under 6 m² (they blocked the bathroom view)
@@ -958,8 +959,14 @@ function nudgeFree(p){if(!body||!p)return p;const tryP=(x,z,y)=>{const q=p.clone
  if(tryP(p.x,p.z,p.y)){const fl=body.floor(p);if(fl!==null)p.y=fl;if(body.resolve)body.resolve(p);return p;}
  for(let rad=.15;rad<=2.8;rad+=.15){for(let a=0;a<16;a++){const x=p.x+Math.cos(a*Math.PI/8)*rad,z=p.z+Math.sin(a*Math.PI/8)*rad,q=tryP(x,z,p.y);if(q){p.x=q.x;p.y=q.y;p.z=q.z;return p;}}}
  if(body.resolve)body.resolve(p);const y=body.floor(p);if(y!==null)p.y=y;return p;}
-function clipInExt(x0,z0,x1,z1,ws,mode){ (ws||[]).forEach(w=>{if(!w._ext)return;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,ins=(mode==='outer'?0:(+mode||0)),k=mode==='outer'?T:-(T+ins),px=g.x0+nx*k,pz=g.z0+nz*k;
-  if(Math.abs(nx)>.9){if(nx>0)x1=Math.min(x1,px);else x0=Math.max(x0,px);}else if(Math.abs(nz)>.9){if(nz>0)z1=Math.min(z1,pz);else z0=Math.max(z0,pz);}});return[x0,z0,x1,z1];}
+function clipInExt(x0,z0,x1,z1,ws,mode){ (ws||[]).forEach(w=>{if(!w._ext)return;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,ins=(mode==='outer'?0:(+mode||0)),k=mode==='outer'?T:-(T+ins),px=g.x0+nx*k,pz=g.z0+nz*k,near=T+Math.abs(ins)+.12;
+  /* v20261117u: inset a cell that the inner face actually cuts; never treat a recess wall as an infinite plane. slivers in the wall/yard are dropped later by inExtBand. audit: floor-present, ext-material */
+  if(Math.abs(nx)>.9){const a=g.z0,b=g.z0+g.u[1]*g.L;if(Math.min(z1,Math.max(a,b)+.08)-Math.max(z0,Math.min(a,b)-.08)<=0)return;const wx=g.x0;if(wx+T+near<x0||wx-T-near>x1)return;
+   if(nx>0){if(x0<px&&px<=x1+near)x1=Math.min(x1,px);}else if(x1>px&&px>=x0-near)x0=Math.max(x0,px);}
+  else if(Math.abs(nz)>.9){const a=g.x0,b=g.x0+g.u[0]*g.L;if(Math.min(x1,Math.max(a,b)+.08)-Math.max(x0,Math.min(a,b)-.08)<=0)return;const wz=g.z0;if(wz+T+near<z0||wz-T-near>z1)return;
+   if(nz>0){if(z0<pz&&pz<=z1+near)z1=Math.min(z1,pz);}else if(z1>pz&&pz>=z0-near)z0=Math.max(z0,pz);}});return[x0,z0,x1,z1];}
+function inExtBand(x,z,ws){return (ws||[]).some(w=>{if(!w._ext)return false;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,px=x-g.x0,pz=z-g.z0,q=px*g.u[0]+pz*g.u[1];if(q<-.05||q>g.L+.05)return false;const d=(x-(g.x0+g.u[0]*q))*nx+(z-(g.z0+g.u[1]*q))*nz;return d>-T+.02&&d<T+.08;});}
+function shrinkIn(cl,ws){let[x0,z0,x1,z1]=cl;for(let k=0;k<24;k++){const a=inExtBand(x0,z0,ws),b=inExtBand(x1,z0,ws),c=inExtBand(x0,z1,ws),d=inExtBand(x1,z1,ws);if(!(a||b||c||d))return[x0,z0,x1,z1];if(a||c)x0+=.03;if(b||d)x1-=.03;if(a||b)z0+=.03;if(c||d)z1-=.03;if(x1-x0<.05||z1-z0<.05)return null;}return[x0,z0,x1,z1];}
 function stairPads(L){const li=(H.levels||[]).findIndex(l=>l.name===L),out=[];if(li>=1)(H.stairs||[]).filter(st=>st.level===H.levels[li-1].name).forEach(st=>{const r=stairRect(st);out.push([r[0]-.6,r[1]-.6,r[2]+.6,r[3]+.6]);});
  if(li>=0)(H.stairs||[]).filter(st=>st.level===L).forEach(st=>out.push(stairRect(st)));return out;}
 function stairHoles(L){const li=(H.levels||[]).findIndex(l=>l.name===L),out=[];if(li>=1)(H.stairs||[]).filter(st=>st.level===H.levels[li-1].name).forEach(st=>{const r=stairRect(st);out.push([r[0]-.08,r[1]-.08,r[2]+.08,r[3]+.08]);});
@@ -1014,11 +1021,11 @@ function installDownpipes(root){if(!root||roof==='none')return;
 
 function extPipeAudit(P,world,bb,r2){if(!world)return;
  const floorMats=new Set([M.floor]);
- const past=(b,tol)=>H.walls.some(w=>{if(!w._ext)return false;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext;
-  return [[b.min.x,b.min.z],[b.max.x,b.min.z],[b.min.x,b.max.z],[b.max.x,b.max.z]].some(([x,z])=>{const px=x-g.x0,pz=z-g.z0,q=px*g.u[0]+pz*g.u[1];if(q<-.08||q>g.L+.08)return false;const d=(x-(g.x0+g.u[0]*q))*nx+(z-(g.z0+g.u[1]*q))*nz;return d>T+tol;});});
+ const past=(b,tol)=>H.walls.some(w=>{if(!w._ext)return false;const lv=H.levels.find(l=>l.name===w.level),el=(lv&&lv.elevation)||0,eh=el+(w.height||(lv&&lv.height)||2.8);if(b.max.y<el-.15||b.min.y>eh+.15)return false;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext;
+  return [[b.min.x,b.min.z],[b.max.x,b.min.z],[b.min.x,b.max.z],[b.max.x,b.max.z]].some(([x,z])=>{const px=x-g.x0,pz=z-g.z0,q=px*g.u[0]+pz*g.u[1];if(q<-.08||q>g.L+.08)return false;const d=(x-(g.x0+g.u[0]*q))*nx+(z-(g.z0+g.u[1]*q))*nz;return d>T+tol&&d<T+.5;});});
  let ne=0;world.traverse(o=>{if(!o.isMesh||ne>=6)return;const u=o.userData||{};if(u.furn||u.doorLeaf||u.wm||u.rug)return;
   const mats=[].concat(o.material||[]),isFl=u.floor||mats.some(m=>m&&(floorMats.has(m)||(m.userData&&m.userData.floor)));
-  if(!isFl)return;const b=bb(o);if(b.max.y>.5&&past(b,.04)){ne++;P.push({rule:'ext-material',p:[r2(b.min.x),r2(b.min.z)],why:'floor-outside'});}});
+  if(!isFl)return;const b=bb(o);if(b.max.y>.5&&past(b,.10)){ne++;P.push({rule:'ext-material',p:[r2(b.min.x),r2(b.min.z)],why:'floor-outside'});}});
  const pipes=[],hops=[],guts=[],copes=[];world.traverse(o=>{const u=o.userData||{};if(!o.isMesh)return;if(u.dpipe&&o.geometry&&/Cylinder/.test(o.geometry.type||''))pipes.push(o);if(u.hopper)hops.push(o);if(u.gutter)guts.push(o);if(u.cope)copes.push(o);});
  pipes.forEach(p=>{const b=bb(p),c=b.getCenter(new THREE.Vector3()),top=b.max.y,bot=b.min.y;
   const nearH=hops.some(h=>{const a=bb(h);return Math.hypot(c.x-(a.min.x+a.max.x)/2,c.z-(a.min.z+a.max.z)/2)<.4&&Math.abs((a.min.y+a.max.y)/2-top)<.45;});
@@ -1134,6 +1141,19 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
   {let nfs=0;H.walls.forEach(w=>{if(w._ext||nfs>=5)return;const RK=roomKinds[w.level],C=CELLS[w.level]||[];if(!RK)return;const G=geo(w),T=w.thickness||.3,n=[-G.u[1],G.u[0]];(w.openings||[]).forEach(o=>{if(o.type!=='door'||nfs>=5)return;const m=o.offset+o.width/2,cx=G.x0+G.u[0]*m,cz=G.z0+G.u[1]*m;
     for(const sd of[1,-1]){const p1=[cx+n[0]*sd*(T/2+.06),cz+n[1]*sd*(T/2+.06)],p2=[cx+n[0]*sd*(T/2+.45),cz+n[1]*sd*(T/2+.45)],c=C.find(r=>p1[0]>r[0]&&p1[0]<r[2]&&p1[1]>r[1]&&p1[1]<r[3]),l2=RK.labelAt(p2[0],p2[1]);if(!c||!l2)continue;
      const k1=RK.kindOf[c[4]]||'other',k2=RK.kindOf[l2]||'other';if(k1!==k2){nfs++;P.push({rule:'floor-spill',level:w.level,p:p1.map(r2),floor:k1,room:k2});}}});});}
+  /* v20261117u floor-present: every room on every storey has an opaque floor mesh covering ≥95% of its area, in exterior / bez strechy (each floor filter) / walk. a clip must never drop a room floor. audit: floor-present */
+  {const holes=L=>{const li=H.levels.findIndex(x=>x.name===L),out=[];if(li>=1)(H.stairs||[]).filter(st=>st.level===H.levels[li-1].name).forEach(st=>out.push(stairRect(st)));return out;};
+   const FL=[];world.updateMatrixWorld(true);world.traverse(o=>{if(!o.isMesh)return;const u=o.userData||{},mat=o.material;if(!(u.floor||(mat&&mat.userData&&mat.userData.floor)))return;const b=bb(o);FL.push({b,o,y:(b.min.y+b.max.y)/2,ghost:mat===GHOST||(mat&&mat.transparent&&(mat.opacity||1)<.9)});});
+   const inWall=(x,z,L)=>H.walls.some(w=>{if(w.level!==L)return false;const g=geo(w),T=(w.thickness||.3)/2+.03,px=x-g.x0,pz=z-g.z0,q=px*g.u[0]+pz*g.u[1];if(q<-.02||q>g.L+.02)return false;return Math.hypot(px-g.u[0]*q,pz-g.u[1]*q)<T;});
+   const outExt=(x,z,L)=>H.walls.some(w=>{if(w.level!==L||!w._ext)return false;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,px=x-g.x0,pz=z-g.z0,q=px*g.u[0]+pz*g.u[1];if(q<-.05||q>g.L+.05)return false;const d=(x-(g.x0+g.u[0]*q))*nx+(z-(g.z0+g.u[1]*q))*nz;return d>-T+.04;});
+   const cover=(i,useVis)=>{const l=H.levels[i],hs=holes(l.name),fl=FL.filter(f=>f.y>=(l.elevation||0)+.02&&f.y<(l.elevation||0)+.2&&(!useVis||(f.o.visible!==false&&!f.ghost&&f.o.material!==GHOST)));let bad=0;
+    (CELLS[l.name]||[]).forEach(r=>{const area=(r[2]-r[0])*(r[3]-r[1]);if(area<.25)return;const step=Math.max(.15,Math.min(.4,Math.sqrt(area)/7));let t=0,h=0;
+     for(let x=r[0]+.08;x<r[2]-.08;x+=step)for(let z=r[1]+.08;z<r[3]-.08;z+=step){if(hs.some(q=>x>q[0]&&x<q[2]&&z>q[1]&&z<q[3])||inWall(x,z,l.name)||outExt(x,z,l.name))continue;t++;if(fl.some(f=>x>=f.b.min.x&&x<=f.b.max.x&&z>=f.b.min.z&&z<=f.b.max.z))h++;}
+     if(t>=4&&h/t<.95){bad++;if(!useVis)P.push({rule:'floor-present',level:l.name,p:[r2((r[0]+r[2])/2),r2((r[1]+r[3])/2)],frac:r2(h/t),area:r2(area)});}});return bad;};
+   H.levels.forEach((l,i)=>cover(i,false));
+   const prevD=DOLL,prevC=LVCUT,prevW=walk;try{setDollViz(true);
+    [null,...H.levels.map((l,i)=>i)].forEach(k=>{LVCUT=k;applyCut();const idx=k==null?H.levels.map((l,i)=>i):[k];idx.forEach(i=>{if(cover(i,true))P.push({rule:'floor-present',level:H.levels[i].name,mode:k==null?'doll-all':'doll-'+H.levels[i].name});});});
+   }finally{DOLL=prevD;LVCUT=prevC;if(prevD){setDollViz(true);applyCut();}else if(prevW)setInteriorViz();else resetExterior();}}
   /* v20261117q rules taught from Adam's regenerated villa (generic, scene-based):
      furn-orient: every free piece faces the way layout.js meant (FV[r]); seat-faces-away: a chair/stool next to a table/desk faces it;
      lone-side: a side table stands next to a seat or bed; plant-cluster: no plant within 0.7 m of another; prop-scale: a model's height stays 0.5-1.8x its catalogue height;
@@ -1188,8 +1208,10 @@ export function roofScan(step=.02,line=.25){if(!world||roof==='none')return[];wo
  return out;}
 export function lmExport(){if(!world)return null;finishGrow();lmNorm();const C=lmCands(world),cs=new Set(C),occ=[];
  world.traverse(o=>{if(!o.isMesh||cs.has(o)||Array.isArray(o.material)||!o.visible)return;const m=o.material;if(!m||m.transparent&&m.opacity<.9)return;if(!o.geometry.attributes.position||o.geometry.attributes.position.count>60000)return;occ.push(lmMesh(o));});
- return JSON.stringify({v:1,bake:C.map(o=>Object.assign(lmMesh(o),{off:o.userData.floor?.006:.0015})),occ});}
-async function lmHook(){const src=H&&H.lightmap&&H.lightmap.src;if(LMS&&LMS.w!==world)LMS=null;if(!src||!world||/[?&]nolm=1/.test(location.search))return;const w=world;
+ return JSON.stringify({v:1,geom:LM_GEOM,bake:C.map(o=>Object.assign(lmMesh(o),{off:o.userData.floor?.006:.0015})),occ});}
+/* v20261117u: a bake is only valid for the floor/ceiling geometry it was baked on. Same mesh counts with re-clipped boxes mapped the baked atlas onto the wrong spots (white 'tile grid' floors in Ukážka 2 2NP). LM_GEOM changes whenever floor/ceiling generation changes; a bake without the matching tag -> live lighting. */
+const LM_GEOM='u1';
+async function lmHook(){const src=H&&H.lightmap&&H.lightmap.src;if(LMS&&LMS.w!==world)LMS=null;if(!src||!world||/[?&]nolm=1/.test(location.search))return;if((H.lightmap.geom||'')!==LM_GEOM){console.warn('lightmap: baked on older geometry, live lighting');return;}const w=world;
  try{const t0=performance.now(),meta=await(await fetch(src)).json(),base=src.replace(/[^/]*$/,''),mob=Math.min(innerWidth,innerHeight)<700;
   const [bin,tex]=await Promise.all([fetch(base+meta.uv).then(r=>r.arrayBuffer()),new THREE.TextureLoader().loadAsync(base+(mob&&meta.texMob?meta.texMob:meta.tex))]);if(w!==world)return;
   const C=lmCands(w),cn=o=>{const g=o.geometry;return g.index?g.index.count-g.index.count%3:g.attributes.position.count;};if(C.length!==meta.counts.length||C.some((o,i)=>cn(o)!==meta.counts[i])){console.warn('lightmap: mesh mismatch, live lighting',C.length,meta.counts.length);return;}
@@ -1412,3 +1434,56 @@ function wxTick(dt,xr){const o=wxObj,u=o.userData,a=o.geometry.attributes.positi
  for(let i=0;i<n;i++){if(rain){const k=i*6;A[k+1]-=v;A[k+4]-=v;if(A[k+1]<0){A[k+1]+=u.box.h;A[k+4]+=u.box.h;}}else{const k=i*3;A[k+1]-=v;A[k]+=Math.sin(t+u.ph[i])*.15*dt;if(A[k+1]<0)A[k+1]+=u.box.h;}}
  a.needsUpdate=true;}
 export function dbgLights(){const o=[];scene.traverse(x=>{if(x.isLight)o.push([x.type,+x.intensity.toFixed(2),x.visible]);});return{L:o,env:scene.environmentIntensity,exp:R.toneMappingExposure,ATM,SUNK,bg:scene.background&&(scene.background.isColor?'col':scene.background===skyDay?'day':scene.background===skyT?'grad':'tex'),px:skyCv?Array.from(skyCv.getContext('2d').getImageData(0,64,1,1).data):null};}
+/* v20261117u BASICS gate (Adam: "basics must never break again"). Scene-based checks run by __rules() on every house, in every build:
+   ceiling-present, walls-closed, opening-mesh, stair-connects, room-empty (+ floor-present/roof-hole/walkability/ext-material in audit/rulesCheck).
+   basicsBreak(kind) deliberately removes geometry so test/basics_negative.sh can prove each rule fires. */
+const r2=v=>+(+v).toFixed(2);const _bTag=(o,ks)=>{for(let q=o;q&&q!==world;q=q.parent){const u=q.userData||{};if(ks.some(k=>u[k]))return true;}return false;};
+const _bVis=o=>{for(let q=o;q;q=q.parent)if(q.visible===false)return false;return true;};
+function _bRayAll(ox,oy,oz,dx,dy,dz,far){return new THREE.Raycaster(new THREE.Vector3(ox,oy,oz),new THREE.Vector3(dx,dy,dz).normalize(),0,far).intersectObjects(world.children,true);}
+function _bInWall(x,z,ws,me){return ws.some(v=>{if(v===me)return false;const g=geo(v),T=(v.thickness||.3)/2+.05,px=x-g.x0,pz=z-g.z0,q=px*g.u[0]+pz*g.u[1];if(q<-T||q>g.L+T)return false;return Math.abs(px*g.u[1]-pz*g.u[0])<T;});}
+function _bDoorOk(px,pz,wb,g,T,o){let f=false;world.traverse(m=>{if(f||!m.userData||!m.userData.doorLeaf||!_bVis(m))return;const v=new THREE.Vector3();m.getWorldPosition(v);if(Math.abs(v.y-wb)<.6&&Math.hypot(v.x-px,v.z-pz)<o.width/2+.35)f=true;});if(f)return true;const nx=-g.u[1],nz=g.u[0];return [.6,1.2,1.7].some(y=>_bRay(px-nx*(T+.3),wb+y,pz-nz*(T+.3),nx,0,nz,2*T+.6).length>0);}
+function _bOutExt(x,z,ws){return (ws||[]).some(w=>{if(!w._ext)return false;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,px=x-g.x0,pz=z-g.z0,q=px*g.u[0]+pz*g.u[1];if(q<-.05||q>g.L+.05)return false;const d=(x-(g.x0+g.u[0]*q))*nx+(z-(g.z0+g.u[1]*q))*nz;return d>T-.02&&d<6;});}
+function _bRay(ox,oy,oz,dx,dy,dz,far){const rc=new THREE.Raycaster(new THREE.Vector3(ox,oy,oz),new THREE.Vector3(dx,dy,dz).normalize(),0,far);return rc.intersectObjects(world.children,true).filter(h=>_bVis(h.object));}
+export function basics(){const P=[];if(!H||!H.levels||!world)return P;world.updateMatrixWorld(true);const NL=H.levels.length;
+ H.levels.forEach((l,i)=>{const el=l.elevation||0,lh=l.height||2.8,top=i===NL-1,ws=H.walls.filter(w=>w.level===l.name),sh=(H.stairs||[]).filter(st=>st.level===l.name).map(stairRect);
+  // ceiling-present: every room cell has a ceiling (top storey: ceiling or roof) above it, except over its own stair void
+  if(!(top&&roof==='none'))(CELLS[l.name]||[]).forEach(r=>{if((r[2]-r[0])*(r[3]-r[1])<.25)return;let t=0,h=0;for(let a=.2;a<.85;a+=.3)for(let b=.2;b<.85;b+=.3){const x=r[0]+(r[2]-r[0])*a,z=r[1]+(r[3]-r[1])*b;if(sh.some(q=>x>q[0]-.1&&x<q[2]+.1&&z>q[1]-.1&&z<q[3]+.1)||inExtBand(x,z,ws)||_bOutExt(x,z,ws)||_bInWall(x,z,ws,null))continue;t++;
+   if(_bRayAll(x,el+1,z,0,1,0,lh+1.2).some(hh=>_bTag(hh.object,top?['ceil','roof','roofMat','lroof','slab']:['ceil'])))h++;}
+   if(t>=2&&h/t<.75)P.push({rule:'ceiling-present',level:l.name,p:[r2((r[0]+r[2])/2),r2((r[1]+r[3])/2)],frac:r2(h/t)});});
+  ws.forEach(w=>{const g=geo(w),T=(w.thickness||.3)/2,wb=el+(w.base||0),wh=w.height||lh,O=w.openings||[];
+   // walls-closed: an exterior wall has no hole outside its openings (horizontal rays from inside, every 25 cm, 3 heights)
+   if(w._ext){const nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext;let run=0,bad=null;for(let s=.45;s<g.L-.45;s+=.25){if(O.some(o=>s>o.offset-.12&&s<o.offset+o.width+.12)){run=0;continue;}
+     const px=g.x0+g.u[0]*s,pz=g.z0+g.u[1]*s;if(_bInWall(px-nx*(T+.2),pz-nz*(T+.2),ws,w)){run=0;continue;}const miss=[.3,wh*.5,wh-.35].some(y=>!_bRay(px-nx*(T+.2),wb+y,pz-nz*(T+.2),nx,0,nz,2*T+.45).length);run=miss?run+1:0;if(run>=2&&!bad)bad=[r2(px),r2(pz)];}
+    if(bad)P.push({rule:'walls-closed',level:l.name,wall:w.id,p:bad});}
+   // opening-mesh: every window has glass/frame in its hole, every door has a leaf
+   O.forEach(o=>{const q=o.offset+o.width/2,px=g.x0+g.u[0]*q,pz=g.z0+g.u[1]*q;
+    if(o.type==='door'){if(!_bDoorOk(px,pz,wb,g,T,o))P.push({rule:'opening-mesh',level:l.name,wall:w.id,kind:'door',p:[r2(px),r2(pz)]});}
+    else{const y=wb+(o.sill||0)+(o.height||1.2)/2,nx=-g.u[1],nz=g.u[0];if(!_bRay(px-nx*(T+.3),y,pz-nz*(T+.3),nx,0,nz,2*T+.6).length)P.push({rule:'opening-mesh',level:l.name,wall:w.id,kind:'window',p:[r2(px),r2(pz)]});}});});
+  // stair-connects: the run under every stair rises from this floor to the next storey, monotonic
+  const up=H.levels[i+1];(H.stairs||[]).filter(st=>st.level===l.name).forEach(st=>{if(!up)return;const r=stairRect(st),eu=up.elevation||0,lx=r[2]-r[0]>=r[3]-r[1],hs=[];
+   for(let k=0;k<7;k++){const f=.06+k*.88/6,x=lx?r[0]+(r[2]-r[0])*f:(r[0]+r[2])/2,z=lx?(r[1]+r[3])/2:r[1]+(r[3]-r[1])*f;const hit=_bRay(x,eu+.9,z,0,-1,0,eu-el+1.2).find(hh=>!_bTag(hh.object,['rail','post','noCol','lamp'])&&hh.point.y>el-.2);hs.push(hit?hit.point.y:el-9);}
+   const mn=Math.min(...hs),mx=Math.max(...hs),inc=hs.every((v,k)=>!k||v>=hs[k-1]-.06),dec=hs.every((v,k)=>!k||v<=hs[k-1]+.06);
+   if(mn<el-1||mx<eu-.6||mn>el+.6||!(inc||dec))P.push({rule:'stair-connects',level:l.name,p:[r2((r[0]+r[2])/2),r2((r[1]+r[3])/2)],hs:hs.map(r2)});});});
+ // room-empty: a habitable room ≥4 m² has at least one piece of furniture in the scene
+ try{const FB=[];world.traverse(o=>{if(o.userData&&o.userData.furn&&_bVis(o)){const b=new THREE.Box3().setFromObject(o);if(!b.isEmpty())FB.push(b);}});
+  (window.__roomsAll?window.__roomsAll():[]).forEach(x=>{const bb=x.bb,a=(bb[2]-bb[0])*(bb[3]-bb[1]);if(a<4||/^(chodba|hala|zádver|predsie|schod|komunik|technick|šatn|sklad|komora|wc|terasa|balk|lodžia|garáž|kotol|práčov)/i.test(x.n.trim()))return;
+   if(!FB.some(b=>{const cx=(b.min.x+b.max.x)/2,cz=(b.min.z+b.max.z)/2,cy=(b.min.y+b.max.y)/2;return cx>bb[0]&&cx<bb[2]&&cz>bb[1]&&cz<bb[3]&&cy>x.e-.1&&cy<x.e+2.6;}))P.push({rule:'room-empty',level:x.L,room:x.n,where:{room:x.n,level:x.L}});});}catch(e){P.push({rule:'basics-crash',err:String(e)});}
+ return P;}
+export function basicsBreak(kind){world.updateMatrixWorld(true);const rm=o=>{if(o&&o.parent)o.parent.remove(o);},R=(window.__roomsAll?window.__roomsAll():[]),NL=H.levels.length,TL=H.levels[NL-1],L0=H.levels[0];
+ const big=L=>R.filter(x=>x.L===L.name).sort((a,b)=>(b.bb[2]-b.bb[0])*(b.bb[3]-b.bb[1])-(a.bb[2]-a.bb[0])*(a.bb[3]-a.bb[1]))[0];let n=0;
+ if(kind==='floor'){const x=big(TL);const hs=_bRay(x.c[0],TL.elevation+.5,x.c[1],0,-1,0,1).filter(h=>_bTag(h.object,['floor']));hs.forEach(h=>{rm(h.object);n++;});}
+ if(kind==='ceiling'){const toR=[];world.traverse(o=>{if(o.userData&&o.userData.ceil)toR.push(o);});toR.forEach(o=>{rm(o);n++;});}
+ if(kind==='wall'){const el=L0.elevation||0;for(const w of H.walls.filter(w=>w._ext&&w.level===L0.name)){const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,O=w.openings||[];
+  for(let s=.6;s<g.L-.6&&!n;s+=.25){if(O.some(o=>s>o.offset-.5&&s<o.offset+o.width+.5))continue;const px=g.x0+g.u[0]*s,pz=g.z0+g.u[1]*s;
+   for(const y of [.3,1.4,2.4])for(let k=0;k<8;k++){const h=_bRay(px-nx*(T+.2),el+(w.base||0)+y,pz-nz*(T+.2),nx,0,nz,2*T+.45)[0];if(!h)break;rm(h.object);n++;}}if(n)break;}}
+ if(kind==='window'){const w=H.walls.find(w=>w._ext&&(w.openings||[]).some(o=>o.type!=='door')),o=w.openings.find(o=>o.type!=='door'),g=geo(w),T=(w.thickness||.3)/2,q=o.offset+o.width/2,px=g.x0+g.u[0]*q,pz=g.z0+g.u[1]*q,lv=H.levels.find(l=>l.name===w.level),y=(lv.elevation||0)+(w.base||0)+(o.sill||0)+(o.height||1.2)/2;
+  for(let k=0;k<10;k++){const h=_bRay(px+g.u[1]*(T+.3),y,pz-g.u[0]*(T+.3),-g.u[1],0,g.u[0],2*T+.6)[0];if(!h)break;rm(h.object);n++;}}
+ if(kind==='door'){let leaf=null;world.traverse(m=>{if(!leaf&&m.userData&&m.userData.doorLeaf&&m.parent)leaf=m;});if(leaf){const v=new THREE.Vector3();leaf.getWorldPosition(v);
+  for(const w of H.walls){const g=geo(w),T=(w.thickness||.3)/2,lv=H.levels.find(l=>l.name===w.level),wb=(lv.elevation||0)+(w.base||0);for(const o of (w.openings||[]).filter(o=>o.type==='door')){const q=o.offset+o.width/2,px=g.x0+g.u[0]*q,pz=g.z0+g.u[1]*q;if(Math.abs(v.y-wb)>.6||Math.hypot(v.x-px,v.z-pz)>o.width/2+.35)continue;
+   const toR=[];world.traverse(m=>{if(m.userData&&m.userData.doorLeaf){const u=new THREE.Vector3();m.getWorldPosition(u);if(Math.abs(u.y-wb)<.6&&Math.hypot(u.x-px,u.z-pz)<o.width/2+.35)toR.push(m);}});toR.forEach(m=>{rm(m);n++;});
+   const nx=-g.u[1],nz=g.u[0];for(const y of [.6,1.2,1.7])for(let k=0;k<8;k++){const h=_bRay(px-nx*(T+.3),wb+y,pz-nz*(T+.3),nx,0,nz,2*T+.6)[0];if(!h)break;rm(h.object);n++;}return n;}}}}
+ if(kind==='stair'){(H.stairs||[]).forEach(st=>{const li=H.levels.findIndex(l=>l.name===st.level),el=H.levels[li].elevation||0,eu=(H.levels[li+1]||{}).elevation||el+3,r=stairRect(st);const toR=[];
+  world.traverse(o=>{if(!o.isMesh||_bTag(o,['floor','ceil']))return;const b=new THREE.Box3().setFromObject(o),cx=(b.min.x+b.max.x)/2,cz=(b.min.z+b.max.z)/2,cy=(b.min.y+b.max.y)/2;if(cx>r[0]&&cx<r[2]&&cz>r[1]&&cz<r[3]&&cy>el+.05&&cy<eu-.05&&b.max.x-b.min.x<6)toR.push(o);});toR.forEach(o=>{rm(o);n++;});});}
+ if(kind==='furn'){const x=R.filter(x=>/^(spálň|obýva|detsk|pracov)/i.test(x.n.trim()))[0];const toR=[];world.traverse(o=>{if(!(o.userData&&o.userData.furn))return;const b=new THREE.Box3().setFromObject(o),cx=(b.min.x+b.max.x)/2,cz=(b.min.z+b.max.z)/2,cy=(b.min.y+b.max.y)/2;if(cx>x.bb[0]&&cx<x.bb[2]&&cz>x.bb[1]&&cz<x.bb[3]&&cy>x.e-.1&&cy<x.e+2.6)toR.push(o);});toR.forEach(o=>{rm(o);n++;});}
+ if(kind==='roof'){let best=null;world.traverse(o=>{if(o.isMesh&&o.userData&&o.userData.roof){const b=new THREE.Box3().setFromObject(o),a=(b.max.x-b.min.x)*(b.max.z-b.min.z);if(!best||a>best[1])best=[o,a];}});if(best){rm(best[0]);n++;}}
+ world.updateMatrixWorld(true);return n;}
