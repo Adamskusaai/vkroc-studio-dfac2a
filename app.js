@@ -1,5 +1,5 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
-import {readPlan} from './plan.js?v=20261117w';
+import {readPlan} from './plan.js?v=20261117x';
 import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261117s';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
