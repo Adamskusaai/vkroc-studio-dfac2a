@@ -1,6 +1,6 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
 import {readPlan} from './plan.js?v=20261117p';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261112j';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261117q';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -527,7 +527,7 @@ addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 /* v20261117a: keep the canvas bitmap in sync with its CSS box. The header grows when the editor toolbar appears (main = 100% - --hh), which shrank the canvas without a refit, so the bitmap was squeezed vertically and every click landed lower than the cursor. */
 new ResizeObserver(()=>{if(!H||!$('ed').classList.contains('on'))return;const r=cv.getBoundingClientRect();if(!r.width||!r.height)return;const W=Math.round(r.width*devicePixelRatio),Hh=Math.round(r.height*devicePixelRatio);if(Math.abs(cv.width-W)<2&&Math.abs(cv.height-Hh)<2)return;if(!view.u){fit();return;}const cx0=view.x+cv.width/2/view.s,cy0=view.y+cv.height/2/view.s;cv.width=W;cv.height=Hh;view.x=cx0-W/2/view.s;view.y=cy0-Hh/2/view.s;draw();}).observe(cv);
 // ---------- 3D (lazy) ----------
-let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261117l');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
+let V=null,roof='flat';const v3=async()=>{if(!V){$('sk3').hidden=false;V=await import('./v3.js?v=20261117q');window.__vk={get m(){return V;},playCam:(k,s,e)=>V.playCam(k,s,e),scrub:(u)=>V.scrubCam&&V.scrubCam(u),count:()=>V.countFurn&&V.countFurn(),snap:()=>V.snapBuild&&V.snapBuild(),debug:()=>V.debugViz&&V.debugViz(),doll:on=>V.dollhouse(on),walk:v=>V.setWalk(v),jump:(x,z)=>V.jump&&V.jump(x,z,1.55),stop:()=>V.stopCam&&V.stopCam(),clearance:()=>V.checkClearances&&V.checkClearances(),bird:(x,z,h)=>V.birdCam&&V.birdCam(x,z,h),pause:on=>V.pauseCam&&V.pauseCam(on)};}return V;};
 // prem10 storey picker (Bez strechy): Všetko / 1NP / 2NP …; only for multi-storey houses. Picking a storey = it becomes the top cut (upper storeys hidden, lower ones ghosted).
 let LVSEL=-1;function lvPickUI(md){const P=$('lvpick');if(!P)return;const ok=md==='doll'&&H&&H.levels&&H.levels.length>1;P.hidden=!ok;if(!ok)return;
  P.innerHTML='';[['Všetko',-1],...H.levels.map((l,i)=>[l.name,i])].forEach(([t,i])=>{const b=document.createElement('button');b.textContent=t;b.dataset.l=t;b.setAttribute('aria-pressed',LVSEL===i?'true':'false');if(LVSEL===i)b.classList.add('on');
@@ -828,7 +828,13 @@ function doorStairHit(w,o,L,off){const G=geo(w),n=[-G.u[1],G.u[0]],t=(w.thicknes
  return (H.stairs||[]).some(st=>{const sl=H.levels.findIndex(l=>l.name===st.level);if(sl!==li&&sl!==li-1)return false;const r=stairRect(st),m=.02;if(!(zx[0]<r[2]-m&&zx[2]>r[0]+m&&zx[1]<r[3]-m&&zx[3]>r[1]+m))return false;
   /* exact test in the wall frame (walls may be oblique) */const C=[[r[0],r[1]],[r[2],r[1]],[r[2],r[3]],[r[0],r[3]]].map(p=>[(p[0]-G.x0)*G.u[0]+(p[1]-G.z0)*G.u[1],(p[0]-G.x0)*n[0]+(p[1]-G.z0)*n[1]]);const a0=Math.min(...C.map(c=>c[0])),a1=Math.max(...C.map(c=>c[0])),b0=Math.min(...C.map(c=>c[1])),b1=Math.max(...C.map(c=>c[1]));return a0<s1-m&&a1>s0+m&&b0<t-m&&b1>-t+m;});}
 function doorStairHits(){const out=[];(H.levels||[]).forEach(l=>{rooms(l.name);H.walls.filter(w=>w.level===l.name).forEach(w=>(w.openings||[]).forEach(o=>{if(o.type==='door'&&doorStairHit(w,o,l.name))out.push({w,o,L:l.name});}));});return out;}
-function rulesFix(op){op=op||{};const log=[];H.walls.forEach(w=>{const wh=w.height||((H.levels||[]).find(l=>l.name===w.level)||{}).height||2.8;(w.openings||[]).forEach(o=>{if((o.sill||0)<0){o.sill=0;log.push('opening-height');}
+function rulesFix(op){op=op||{};const log=[];/* v20261117q: the same furniture rules for every house - demo JSON, uploaded plan or re-generated: a side table needs a seat/bed next to it, plants keep 0.7 m apart, a chair never stands inside its table (rules lone-side / plant-cluster / chair-in-table in audit) */
+ if(H.furn&&H.furn.length){const FD=window.__FUR3||{},sz=f=>{const D=DIM3[f.t]||[.5,.5],w=f.w||D[0],d=f.d||D[1];return (f.r||0)%2?[d,w]:[w,d];},gap=(a,b)=>{const A=sz(a),B=sz(b);return Math.hypot(Math.max(0,Math.abs(a.p[0]-b.p[0])-(A[0]+B[0])/2),Math.max(0,Math.abs(a.p[1]-b.p[1])-(A[1]+B[1])/2));};void FD;
+  const keep=[];for(const f of H.furn){const same=keep.filter(o=>o.level===f.level);
+   if(f.t==='side'&&!H.furn.some(o=>o!==f&&o.level===f.level&&['sofa','armch','lounge','bed','bed1','bunk'].includes(o.t)&&gap(f,o)<.35)){log.push('lone-side');continue;}
+   if(f.t==='plant'&&same.some(o=>o.t==='plant'&&Math.hypot(o.p[0]-f.p[0],o.p[1]-f.p[1])<.7)){log.push('plant-cluster');continue;}
+   if(f.t==='chair'||f.t==='stool'){const T=H.furn.find(o=>o.level===f.level&&['table','desk','otable'].includes(o.t)&&Math.abs(o.p[0]-f.p[0])<sz(o)[0]/2-.02&&Math.abs(o.p[1]-f.p[1])<sz(o)[1]/2-.02);if(T){log.push('chair-in-table');continue;}}
+   keep.push(f);}if(keep.length!==H.furn.length)H.furn=keep;}H.walls.forEach(w=>{const wh=w.height||((H.levels||[]).find(l=>l.name===w.level)||{}).height||2.8;(w.openings||[]).forEach(o=>{if((o.sill||0)<0){o.sill=0;log.push('opening-height');}
  if((o.sill||0)+(o.height||0)>wh-.05){o.height=Math.max(.4,r2(wh-.05-(o.sill||0)));if((o.sill||0)+o.height>wh-.05)o.sill=Math.max(0,r2(wh-.05-o.height));log.push('opening-height');}});});
  // door-into-wall auto-fix: slide the door along its wall (≤ 0.6 m) to the nearest spot where both sides are walkable and it overlaps no other opening
  const blocked=[];

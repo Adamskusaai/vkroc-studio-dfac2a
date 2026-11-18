@@ -559,7 +559,7 @@ const add=(geom,mat,x,y,z,ry=0,nc)=>{if(mat===FLATM){if(!FLATW){FLATW=FLATM.clon
   CR.forEach(r=>{const cx=(r[0]+r[2])/2,cz=(r[1]+r[3])/2;
    const kind=kindOf[r[4]]||'other';const mat=floorMat(kind);const fg=new THREE.BoxGeometry(r[2]-r[0],.06,r[3]-r[1]);boxUV(fg,cx,cz);
 const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userData.floor=1;
-   const up=H.levels[i+1];if(up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;}/* ukážka 2 fix: lower floors get a white ceiling too */if(!up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;
+   const up=H.levels[i+1];if(up){/* v20261117q: no ceiling across the stair void - you see the upper floor when you look up the stairs. audit: stair-void-capped */let pcs=[[r[0],r[1],r[2],r[3]]];(H.stairs||[]).filter(st=>st.level===l.name).map(stairRect).forEach(q=>{const nx=[];pcs.forEach(c=>{if(q[0]>=c[2]||q[2]<=c[0]||q[1]>=c[3]||q[3]<=c[1]){nx.push(c);return;}if(q[0]>c[0])nx.push([c[0],c[1],q[0],c[3]]);if(q[2]<c[2])nx.push([q[2],c[1],c[2],c[3]]);const a0=Math.max(c[0],q[0]),a1=Math.min(c[2],q[2]);if(q[1]>c[1])nx.push([a0,c[1],a1,q[1]]);if(q[3]<c[3])nx.push([a0,q[3],a1,c[3]]);});pcs=nx;});pcs.forEach(c=>{if(c[2]-c[0]<.02||c[3]-c[1]<.02)return;add(new THREE.BoxGeometry(c[2]-c[0],.05,c[3]-c[1]),M.ceil,(c[0]+c[2])/2,l.elevation+topH+.025,(c[1]+c[3])/2,0,1).userData.ceil=1;});}/* ukážka 2 fix: lower floors get a white ceiling too */if(!up){add(new THREE.BoxGeometry(r[2]-r[0],.05,r[3]-r[1]),M.ceil,cx,l.elevation+topH+.025,cz,0,1).userData.ceil=1;
     // warm ceiling disc light (emissive) + soft point
     if(Math.min(r[2]-r[0],r[3]-r[1])>1.6){const disc=add(new THREE.CylinderGeometry(.26,.26,.012,16),std({color:0xe8dcc8,emissive:0xb89a70,emissiveIntensity:0.02,roughness:.98}),cx,l.elevation+topH-.03,cz,0,1);disc.scale.set(1,1,1);disc.castShadow=false;disc.userData.ceil=1;disc.userData.noCol=true;
      const pl=new THREE.PointLight(0xffd4a0,0.16,Math.max(r[2]-r[0],r[3]-r[1])*1.15,2);pl.position.set(cx,l.elevation+topH-.22,cz);pl.userData.ceil=1;root.add(pl);}}});
@@ -609,7 +609,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
      the furniture below. Pieces without a valid wall are dropped. audit: curtain-off-window, art-placement */
   let WM=null;if(f.t==='art'||f.t==='mirror'||f.t==='curtain'){WM=wallMount(f,F,l);if(!WM)return;F={...F,...WM.F};}
   const g=makeFurn(f.t,F,{wood:(S.wood||'#d4b48a'),fab:f.c||(f.t==='rug'?rugC:(S[f.t]||F.c)),bed:f.cb||S.bed||'#c4a882',rug:f.c||rugC,curtain:S.curtain||'#b8a890',leather:S.leather,metal:S.metal,sty:H.style||''});
-  g.position.set(f.p[0],l.elevation,f.p[1]);g.rotation.y=-((f.r||0)*Math.PI/2);if(WM){g.position.set(WM.x,l.elevation,WM.z);g.rotation.y=WM.ry;g.userData.wm=WM.rec;}g.userData.furn=f.t;g.userData.noCol=true;root.add(g);});
+  g.position.set(f.p[0],l.elevation,f.p[1]);/* v20261117q: r follows layout.js FV (r=1 faces +x, r=3 faces -x); the old minus sign turned every odd-r piece 180 deg (chairs backing into the table, armchairs/sofas facing the wall). audit: furn-orient */g.rotation.y=((f.r||0)*Math.PI/2);if(WM){g.position.set(WM.x,l.elevation,WM.z);g.rotation.y=WM.ry;g.userData.wm=WM.rec;}g.userData.furn=f.t;g.userData.noCol=true;root.add(g);});
  // solid oak slab over whole footprint (guarantees readable floors from dollhouse + interior)
  if(xs.length&&zs.length){const fx0=Math.min(...xs),fx1=Math.max(...xs),fz0=Math.min(...zs),fz1=Math.max(...zs);
   const oak=M.floor;/* v12g: the footprint slab uses the chosen floor (style / Podlahy), no fixed oak */
@@ -679,7 +679,8 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   /* v20261117e LOGIC RULE (closed lower roof): every part of a lower room cell that is not under an upper room gets roof slab - the cell is cut along the
      upper cells' edges (grown by .3 m = under the upper walls) and each free piece is slabbed, so a terrace over part of a room is never an open hole.
      Pieces grow by .16 m only on the cell's own outer edges (cover the wall tops), never into the upper floor; a walkable deck gets decking on top. */
-  const ucg=uc.map(u=>[u[0]-.3,u[1]-.3,u[2]+.3,u[3]+.3]);
+  /* v20261117q: the stair void up to the next floor counts as covered (it is open to the upper floor, never roofed over). audit: stair-void-capped */
+  const ucg=uc.map(u=>[u[0]-.3,u[1]-.3,u[2]+.3,u[3]+.3]).concat((H.stairs||[]).filter(st=>st.level===l.name).map(stairRect));
   lc.forEach(r=>{const xs=[r[0],r[2]],zs=[r[1],r[3]];ucg.forEach(u=>{[u[0],u[2]].forEach(x=>{if(x>r[0]+.01&&x<r[2]-.01)xs.push(x);});[u[1],u[3]].forEach(z=>{if(z>r[1]+.01&&z<r[3]-.01)zs.push(z);});});
    xs.sort((a,b)=>a-b);zs.sort((a,b)=>a-b);
    for(let a=0;a<xs.length-1;a++)for(let b=0;b<zs.length-1;b++){let x0=xs[a],x1=xs[a+1],z0=zs[b],z1=zs[b+1];if(x1-x0<.02||z1-z0<.02)continue;const cx=(x0+x1)/2,cz=(z0+z1)/2;
@@ -724,9 +725,9 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   lw.forEach(w=>{if(!w._ext)return;const g=geo(w),mx=g.x0+g.u[0]*g.L/2,mz=g.z0+g.u[1]*g.L/2;const T=w.thickness||.3,mg=T/2+.2;/* v20261117c: margin includes the wall's own half-thickness - a thick (48 cm) outer wall under the upper floor got a stray parapet ledge */if(uc.some(u=>mx>u[0]-mg&&mx<u[2]+mg&&mz>u[1]-mg&&mz<u[3]+mg))return;if(dc.length&&dc.some(r=>mx>r[0]-.6&&mx<r[2]+.6&&mz>r[1]-.6&&mz<r[3]+.6))return;/* v20261117e: deck walls get their parapet+railing per open deck edge below */const ang=-Math.atan2(g.u[1],g.u[0]);
    const pp=add(new THREE.BoxGeometry(g.L+T,.35,T),M.fac,mx,lh+.175,mz,ang,1);pp.userData.roof=1;pp.castShadow=true;add(new THREE.BoxGeometry(g.L+T+.06,.05,T+.06),M.frame,mx,lh+.375,mz,ang,1).userData.roof=1;});
 });
- if(roof!=='none'&&IRR){const ah=.5,tc=CELLS[top.name]||[];
+ if(roof!=='none'&&IRR){const ah=.5,tc=(CELLS[top.name]||[]).concat(/* v20261117q: the stair void of the top floor is not a room cell - without it the slab left a hairline slit wherever the void is wider than 2x the wall growth (Adam: 'čiarka v streche'). audit: roof-hole */(H.stairs||[]).filter(st=>{const li=H.levels.findIndex(x=>x.name===st.level);return H.levels[li+1]===top;}).map(stairRect));
   /* v13c: ONE continuous roof - each room cell grows by the outer-wall thickness so the slab also covers every wall top (no gaps / dark wall lines above the roof); clipped to the building outline */
-  {const gT=Math.max(.3,...tw.filter(w=>w._ext).map(w=>w.thickness||.3)),eo2=Math.max(.15,...tw.filter(w=>w._ext).map(w=>(w.thickness||.3)/2)),B=[fp[0]-eo2,fp[1]-eo2,fp[2]+eo2,fp[3]+eo2],ca=tc.reduce((a,r)=>a+(r[2]-r[0])*(r[3]-r[1]),0),fa=(fp[2]-fp[0])*(fp[3]-fp[1]);
+  {const gT=Math.max(.3,...tw.filter(w=>w._ext).map(w=>w.thickness||.3)),eo2=Math.max(.15,...tw.filter(w=>w._ext).map(w=>(w.thickness||.3)/2)),B=tc.reduce((b,r)=>[Math.min(b[0],r[0]),Math.min(b[1],r[1]),Math.max(b[2],r[2]),Math.max(b[3],r[3])],[fp[0]-eo2,fp[1]-eo2,fp[2]+eo2,fp[3]+eo2])/* v20261117q: the clip box never cuts into a room cell (a cell reaching past the outline left a ceiling strip open to the sky) */,ca=tc.reduce((a,r)=>a+(r[2]-r[0])*(r[3]-r[1]),0),fa=(fp[2]-fp[0])*(fp[3]-fp[1]);
    const cs=ca<.6*fa?[[fp[0],fp[1],fp[2],fp[3]]]:tc;cs.forEach(r=>{const x0=Math.max(B[0],r[0]-gT),x1=Math.min(B[2],r[2]+gT),z0=Math.max(B[1],r[1]-gT),z1=Math.min(B[3],r[3]+gT);if(x1-x0<.05||z1-z0<.05)return;add(new THREE.BoxGeometry(x1-x0,.2,z1-z0),FLATM,(x0+x1)/2,th+.1,(z0+z1)/2,0,1).userData.roof=1;});}
   /* v20261117b: designed projects (H.roofEdge==='parapet', clean drawn walls) get a real attic parapet along the top-floor outline: render (or the wall's own cladding) + dark coping,
      one box per exterior wall; neighbouring boxes differ by 2-3 mm in height so the corner overlap never z-fights. Rain-water downpipes come from H.downpipes [[x,z,topY?],..]. */
@@ -925,7 +926,7 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
  (H.furn||[]).forEach(f=>{const li=H.levels.findIndex(l=>l.name===f.level);if(li<1)return;const cs=CELLS[f.level]||[];if(cs.some(r=>inR(f.p,r,.05)))return;
   if(!DECKS.some(d=>d[0]===f.level&&inR(f.p,[d[1],d[2],d[3],d[4]],.05)))P.push({rule:'furniture-on-slab',t:f.t,level:f.level,p:f.p});});
  H.levels.forEach((l,i)=>{const up=H.levels[i+1];if(!up)return;const uc=(CELLS[up.name]||[]).map(u=>[u[0]-.31,u[1]-.31,u[2]+.31,u[3]+.31]),lr=LROOF.filter(q=>q[0]===l.name).map(q=>q.slice(1));
-  (CELLS[l.name]||[]).forEach(r=>{for(let x=r[0]+.25;x<r[2];x+=.5)for(let z=r[1]+.25;z<r[3];z+=.5){const p=[x,z];if(uc.some(u=>inR(p,u))||lr.some(q=>inR(p,q)))continue;P.push({rule:'roof-gap',level:l.name,p:[+x.toFixed(2),+z.toFixed(2)]});return;}});});
+  (CELLS[l.name]||[]).forEach(r=>{for(let x=r[0]+.25;x<r[2];x+=.5)for(let z=r[1]+.25;z<r[3];z+=.5){const p=[x,z];if(uc.some(u=>inR(p,u))||lr.some(q=>inR(p,q))||(H.stairs||[]).some(st=>st.level===l.name&&inR(p,stairRect(st),.05)))continue;P.push({rule:'roof-gap',level:l.name,p:[+x.toFixed(2),+z.toFixed(2)]});return;}});});
  /* v20261117g geometric rules taught from Adam's review - all generic, scene-based */
  if(world){world.updateMatrixWorld(true);const bb=o=>new THREE.Box3().setFromObject(o),r2=v=>+v.toFixed(2),fp=world.userData.fp||[0,0,0,0],XW=H.walls.filter(w=>w._ext),xT=Math.max(.3,...XW.map(w=>w.thickness||.3));
   const faceD=(x,z)=>Math.min(...XW.map(w=>{const g=geo(w),px=x-g.x0,pz=z-g.z0,q=Math.max(0,Math.min(g.L,px*g.u[0]+pz*g.u[1]));return Math.abs(Math.hypot(px-g.u[0]*q,pz-g.u[1]*q)-(w.thickness||.3)/2);}));
@@ -950,8 +951,31 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
   // furniture footprints must not interpenetrate (rugs/wall decor excluded; chairs may tuck under tables/desks)
   const SKIP=new Set(['rug','runner','curtain','art','mirror','towel','tvw','hooks','wshelf','lamp']),TUCK=new Set(['chair','stool']),UND=new Set(['table','desk','island','otable','kitch']);
   const fr=(H.furn||[]).filter(f=>!SKIP.has(f.t)&&FUR[f.t]).map(f=>{const D=FUR[f.t],w=f.w||D.w,d=f.d||D.d,q=((f.r||0)%2)?[d,w]:[w,d];return [f,f.p[0]-q[0]/2,f.p[1]-q[1]/2,f.p[0]+q[0]/2,f.p[1]+q[1]/2];});
-  for(let i=0;i<fr.length;i++)for(let j=i+1;j<fr.length;j++){const A=fr[i],B=fr[j];if(A[0].level!==B[0].level)continue;const ta=A[0].t,tb=B[0].t;if((TUCK.has(ta)&&UND.has(tb))||(TUCK.has(tb)&&UND.has(ta)))continue;
-   const ox=Math.min(A[3],B[3])-Math.max(A[1],B[1]),oz=Math.min(A[4],B[4])-Math.max(A[2],B[2]);if(ox>.03&&oz>.03)P.push({rule:'furn-overlap',a:ta,b:tb,level:A[0].level,p:A[0].p});}}
+  for(let i=0;i<fr.length;i++)for(let j=i+1;j<fr.length;j++){const A=fr[i],B=fr[j];if(A[0].level!==B[0].level)continue;const ta=A[0].t,tb=B[0].t;if((TUCK.has(ta)&&UND.has(tb))||(TUCK.has(tb)&&UND.has(ta))){const C=TUCK.has(ta)?A:B,T0=TUCK.has(ta)?B:A;if(C[0].p[0]>T0[1]+.02&&C[0].p[0]<T0[3]-.02&&C[0].p[1]>T0[2]+.02&&C[0].p[1]<T0[4]-.02)P.push({rule:'chair-in-table',level:C[0].level,p:C[0].p});continue;}
+   const ox=Math.min(A[3],B[3])-Math.max(A[1],B[1]),oz=Math.min(A[4],B[4])-Math.max(A[2],B[2]);if(ox>.03&&oz>.03)P.push({rule:'furn-overlap',a:ta,b:tb,level:A[0].level,p:A[0].p});}
+  /* v20261117q rules taught from Adam's regenerated villa (generic, scene-based):
+     furn-orient: every free piece faces the way layout.js meant (FV[r]); seat-faces-away: a chair/stool next to a table/desk faces it;
+     lone-side: a side table stands next to a seat or bed; plant-cluster: no plant within 0.7 m of another; prop-scale: a model's height stays 0.5-1.8x its catalogue height;
+     roof-hole: vertical rays over the whole roofed footprint must hit roof (no slit/hole) */
+  const FVv=[[0,1],[1,0],[0,-1],[-1,0]],GR=[];world.traverse(o=>{const u=o.userData||{};if(u.furn&&!u.wm&&o.parent&&!(o.parent.userData&&o.parent.userData.furn))GR.push(o);});
+  const v0=new THREE.Vector3(),v1=new THREE.Vector3();GR.forEach(g=>{const f=(H.furn||[]).find(f=>f.t===g.userData.furn&&Math.abs(f.p[0]-g.position.x)<.01&&Math.abs(f.p[1]-g.position.z)<.01);if(!f)return;g.userData.f=f;g.getWorldDirection(v0);const r=((f.r||0)%4+4)%4;if(v0.x*FVv[r][0]+v0.z*FVv[r][1]<.9)P.push({rule:'furn-orient',t:f.t,level:f.level,p:f.p});
+   if(FUR[f.t]&&FUR[f.t].h&&!['rug','runner','plant'].includes(f.t)&&g.userData.ph){/* only downloaded (Poly Haven) models - kit pieces are authored to size */const b=bb(g),hh=b.max.y-b.min.y;if(hh>.05&&(hh<.5*FUR[f.t].h||hh>1.8*FUR[f.t].h))P.push({rule:'prop-scale',t:f.t,h:r2(hh),want:FUR[f.t].h,level:f.level});}});
+  const FF=GR.map(g=>g.userData.f).filter(Boolean),dR=(a,b)=>{const A=FUR[a.t],B=FUR[b.t];if(!A||!B)return 9;const qa=(a.r||0)%2?[a.d||A.d,a.w||A.w]:[a.w||A.w,a.d||A.d],qb=(b.r||0)%2?[b.d||B.d,b.w||B.w]:[b.w||B.w,b.d||B.d];return Math.hypot(Math.max(0,Math.abs(a.p[0]-b.p[0])-(qa[0]+qb[0])/2),Math.max(0,Math.abs(a.p[1]-b.p[1])-(qa[1]+qb[1])/2));};
+  FF.forEach(f=>{const same=FF.filter(o=>o!==f&&o.level===f.level);
+   if(f.t==='chair'||f.t==='stool'){const T=same.filter(o=>['table','desk','otable'].includes(o.t)).map(o=>[o,Math.hypot(o.p[0]-f.p[0],o.p[1]-f.p[1])]).sort((a,b)=>a[1]-b[1])[0];if(T&&dR(f,T[0])<.25){const r=((f.r||0)%4+4)%4,dx=T[0].p[0]-f.p[0],dz=T[0].p[1]-f.p[1];if((FVv[r][0]*dx+FVv[r][1]*dz)/Math.max(.01,T[1])<.3)P.push({rule:'seat-faces-away',level:f.level,p:f.p});}}
+   if(f.t==='side'&&!same.some(o=>['sofa','armch','lounge','bed','bed1','bunk'].includes(o.t)&&dR(f,o)<.35))P.push({rule:'lone-side',level:f.level,p:f.p});
+   if(f.t==='plant'&&same.some(o=>o.t==='plant'&&Math.hypot(o.p[0]-f.p[0],o.p[1]-f.p[1])<.7))P.push({rule:'plant-cluster',level:f.level,p:f.p});});
+  /* stair-void-capped: looking up the stair from the lower floor you must see the upper floor - no ceiling/slab/box across the void (only the flight, railings and lining) */
+  (H.stairs||[]).forEach(st=>{const li=H.levels.findIndex(x=>x.name===st.level),lo=H.levels[li],up=H.levels[li+1];if(!up)return;const q=stairRect(st),OB=[];world.traverse(o=>{if(!o.isMesh||!o.material||o.material.transparent||o.material===M.glass)return;for(let p=o;p;p=p.parent){const d=p.userData||{};if(d.stair||d.rail||d.stairLining||d.furn||d.lamp||d.flight||d.step)return;}OB.push(o);});const rc=new THREE.Raycaster(),u=new THREE.Vector3(0,1,0);let hit=0;
+   for(const fx of[.3,.5,.7])for(const fz of[.3,.5,.7]){const x=q[0]+(q[2]-q[0])*fx,z=q[1]+(q[3]-q[1])*fz;rc.set(v1.set(x,(lo.elevation||0)+(up.elevation-(lo.elevation||0))*.5,z),u);const h=rc.intersectObjects(OB,false)[0];if(h&&h.point.y<(up.elevation||0)+.5)hit++;}
+   if(hit>=3)P.push({rule:'stair-void-capped',level:st.level,hits:hit});});
+  {const RM=[];if(roof!=='none')world.traverse(o=>{if(o.isMesh){let u=null;for(let q=o;q;q=q.parent)if(q.userData&&(q.userData.roof||q.userData.lroof)){u=1;break;}if(u)RM.push(o);}});
+   if(RM.length){const rc=new THREE.Raycaster(),dn=new THREE.Vector3(0,-1,0),top=H.levels[H.levels.length-1],rects=[];(CELLS[top.name]||[]).forEach(r=>rects.push(r));LROOF.forEach(q=>rects.push(q.slice(1)));(H.stairs||[]).forEach(st=>{const li=H.levels.findIndex(x=>x.name===st.level);if(H.levels[li+1]===top)rects.push(stairRect(st));});let nh=0;
+    /* union bbox of the roofed area, scanned in 3 cm steps along 30 cm lines both ways: catches slits down to ~3 cm wide */
+    const tst=(x,z)=>{if(nh>=6||x<fp[0]||x>fp[2]||z<fp[1]||z>fp[3]||!rects.some(r=>x>r[0]+.03&&x<r[2]-.03&&z>r[1]+.03&&z<r[3]-.03))return;rc.set(v1.set(x,60,z),dn);if(!rc.intersectObjects(RM,false).length){nh++;P.push({rule:'roof-hole',p:[r2(x),r2(z)]});}};
+    const U=rects.reduce((a,r)=>[Math.min(a[0],r[0]),Math.min(a[1],r[1]),Math.max(a[2],r[2]),Math.max(a[3],r[3])],[1e9,1e9,-1e9,-1e9]);
+    for(let z=U[1]+.15;z<U[3];z+=.3)for(let x=U[0];x<U[2];x+=.03)tst(x,z);for(let x=U[0]+.15;x<U[2];x+=.3)for(let z=U[1];z<U[3];z+=.03)tst(x,z);}}
+ }
  return P;}
 let LMS=null;let LMSRC=[];const _lmv=new THREE.Vector3();
 function lmCands(w){const use=new Map();w.traverse(o=>{if(o.isMesh)use.set(o.geometry,(use.get(o.geometry)||0)+1);});const out=[];
@@ -964,6 +988,19 @@ function lmNorm(){world.traverse(o=>{const u=o.userData||{};if(u.wallCut){o.scal
 const _b64=a=>{const u=new Uint8Array(a.buffer,a.byteOffset,a.byteLength);let s='';for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s);};
 function lmMesh(o){const g=o.geometry,P=g.attributes.position,n=P.count,f=new Float32Array(n*3);for(let i=0;i<n;i++){_lmv.fromBufferAttribute(P,i).applyMatrix4(o.matrixWorld);f[i*3]=_lmv.x;f[i*3+1]=_lmv.y;f[i*3+2]=_lmv.z;}
  const ix=g.index?Uint32Array.from(g.index.array):null,m=o.material,c=m&&m.color?m.color:new THREE.Color(.8,.8,.8),k=m&&m.map?.75:1;return{p:_b64(f),i:ix?_b64(ix):null,n,c:[c.r*k,c.g*k,c.b*k]};}
+export function sceneRoot(){return world;}
+export function rayDbg(x,z,y0){world.updateMatrixWorld(true);const rc=new THREE.Raycaster();rc.set(new THREE.Vector3(x,y0==null?80:y0,z),new THREE.Vector3(0,y0==null?-1:1,0));return rc.intersectObjects(world.children,true).slice(0,4).map(h=>{let k=[];for(let q=h.object;q&&q!==world;q=q.parent)k.push(Object.keys(q.userData||{}).join('/')+':'+(q.geometry?q.geometry.type:''));return [+h.point.y.toFixed(3),h.object.material&&h.object.material.color?h.object.material.color.getHexString():'',k.join('<')];});}
+/* v20261117q QA: dense vertical ray scan of the roof - returns points where a ray from the sky reaches the house (wall top, floor, ceiling) without crossing a roof mesh = a slit/hole */
+export function roofScan(step=.02,line=.25){if(!world||roof==='none')return[];world.updateMatrixWorld(true);const RM=[],HS=[];world.traverse(o=>{if(!o.isMesh)return;let u=0,c=0;for(let q=o;q;q=q.parent){const d=q.userData||{};if(d.roof||d.lroof){u=1;break;}if(d.ceil||d.furn||d.lamp)c=1;}if(u)RM.push(o);else if(!c)HS.push(o);});
+ const fp=world.userData.fp||[0,0,0,0],rc=new THREE.Raycaster(),dn=new THREE.Vector3(0,-1,0),v=new THREE.Vector3(),out=[],y0=(H.levels[1]||H.levels[0]).elevation+.5;
+ const test=(x,z)=>{rc.set(v.set(x,80,z),dn);const a=rc.intersectObjects(RM,false)[0];const b=rc.intersectObjects(HS,false).find(h=>h.object.material&&h.object.material!==M.glass&&!h.object.material.transparent);if(b&&b.point.y>y0&&(!a||a.point.y<b.point.y-.01)){out.push([+x.toFixed(2),+z.toFixed(2),+b.point.y.toFixed(2),b.object.userData&&Object.keys(b.object.userData).join('/')||b.object.name||'']);}};
+ for(let z=fp[1]-.3;z<=fp[3]+.3&&out.length<400;z+=line)for(let x=fp[0]-.3;x<=fp[2]+.3;x+=step)test(x,z);
+ for(let x=fp[0]-.3;x<=fp[2]+.3&&out.length<400;x+=line)for(let z=fp[1]-.3;z<=fp[3]+.3;z+=step)test(x,z);
+ /* from inside: a ray up from eye height in every room must hit a ceiling/slab/roof before the sky (a light slit in the ceiling = gap) */
+ const ALLM=[];world.traverse(o=>{if(o.isMesh&&o.material&&o.material!==M.glass&&!o.material.transparent){let f=0;for(let q=o;q;q=q.parent){const d=q.userData||{};if(d.furn||d.lamp){f=1;break;}}if(!f)ALLM.push(o);}});const up=new THREE.Vector3(0,1,0),ST=(H.stairs||[]).map(stairRect);
+ H.levels.forEach(l=>{(CELLS[l.name]||[]).forEach(r=>{const tz=(x,z)=>{if(ST.some(q=>x>q[0]-.05&&x<q[2]+.05&&z>q[1]-.05&&z<q[3]+.05))return;rc.set(v.set(x,(l.elevation||0)+1.6,z),up);if(!rc.intersectObjects(ALLM,false).length&&out.length<400)out.push([+x.toFixed(2),+z.toFixed(2),'up',l.name]);};
+  for(let z=r[1]+.05;z<r[3];z+=line)for(let x=r[0]+.02;x<r[2];x+=step)tz(x,z);for(let x=r[0]+.05;x<r[2];x+=line)for(let z=r[1]+.02;z<r[3];z+=step)tz(x,z);});});
+ return out;}
 export function lmExport(){if(!world)return null;finishGrow();lmNorm();const C=lmCands(world),cs=new Set(C),occ=[];
  world.traverse(o=>{if(!o.isMesh||cs.has(o)||Array.isArray(o.material)||!o.visible)return;const m=o.material;if(!m||m.transparent&&m.opacity<.9)return;if(!o.geometry.attributes.position||o.geometry.attributes.position.count>60000)return;occ.push(lmMesh(o));});
  return JSON.stringify({v:1,bake:C.map(o=>Object.assign(lmMesh(o),{off:o.userData.floor?.006:.0015})),occ});}

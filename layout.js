@@ -81,7 +81,11 @@ const accessOK=(G,it,near)=>{if(NOACC.has(it.t))return true;const Z=(it.clr&&it.
 // ---------- hard rules for one item against the rest ----------
 // layout checks with a slightly stricter tolerance than the validator, so rounding of saved positions can never flip a result
 let EPS=.005;
+const COMPAN=new Set(['sofa','armch','lounge','bed','bed1','bunk']),rGap=(a,b)=>Math.hypot(Math.max(0,a[0]-b[2],b[0]-a[2]),Math.max(0,a[1]-b[3],b[1]-a[3]));
 function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k);return false;};
+ /* v20261117q: a side table only stands next to a seat or bed (never alone by a wall); plants keep 1.1 m apart (no rows of pots). audit: lone-side, plant-cluster */
+ if(t==='side'&&!items.some(o=>o!==it&&COMPAN.has(o.t)&&rGap(o.q,q)<.35))return no('lone-side');
+ if(t==='plant'&&items.some(o=>o!==it&&o.t==='plant'&&Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1])<1.1))return no('plant-cluster');
  if(!inRoomR(G,q))return no('outside-room');if(wallHit(G,EPS<.005?[q[0]-.004,q[1]-.004,q[2]+.004,q[3]+.004]:q))return no('wall-overlap');
  if(G.doorZ.some((P,i)=>!(MOUNT.has(t)&&!G.doors[i].swingIn)&&polyOv(P,rP(q),EPS)))return no('door-zone');
  if(MOUNT.has(t)&&t!=='curtain'&&onOpening(G,it,['window','door']))return no('decor-over-opening');
