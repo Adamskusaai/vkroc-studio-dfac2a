@@ -206,8 +206,8 @@ function classifyGap(A,lo,hi,c,t,ink,W,H){let lines=0;const nS=7;for(let k=0;k<n
  return lines>=2?'window':'door';}
 function findOpenings(S,ink,W,H,ppm,bb){const out=[];const used=new Set();
  const isExt=(A,c,t)=>A.hz?Math.min(Math.abs(c-bb[1]),Math.abs(c-bb[3]))<t*1.5:Math.min(Math.abs(c-bb[0]),Math.abs(c-bb[2]))<t*1.5;
- const pairs=[];for(let i=0;i<S.length;i++)for(let j=0;j<S.length;j++){if(i===j)continue;const A=S[i],B=S[j];if(A.hz!==B.hz||B.a<A.b-1)continue;if(Math.abs(A.c-B.c)>Math.max(A.t,B.t)*.6+1)continue;
-  const g=B.a-A.b;if(g<.45*ppm||g>3.2*ppm)continue;
+ const pairs=[];for(let i=0;i<S.length;i++)for(let j=0;j<S.length;j++){if(i===j)continue;const A=S[i],B=S[j];if(A.hz!==B.hz||B.a<A.b-1)continue;const g=B.a-A.b;if(Math.abs(A.c-B.c)>Math.max(A.t,B.t)*.6+1){const ct=findOpenings.cTol;if(!ct||g<.6*ppm||g>1.3*ppm||Math.abs(A.c-B.c)>ct*ppm||Math.max(A.t,B.t)>.6*findOpenings.Tm)continue;/* v18: final pass only - two THIN partition pieces slightly offset (<=30 cm) around a door-sized gap are still one wall with a door */}
+  if(g<.45*ppm||g>3.2*ppm)continue;
   if(S.some((C,k)=>k!==i&&k!==j&&C.hz===A.hz&&Math.abs(C.c-A.c)<A.t&&C.a<B.a-1&&C.b>A.b+1))continue;
   const lo=A.b,hi=B.a;if(S.some(C=>C.hz!==A.hz&&C.c>lo+C.t&&C.c<hi-C.t&&A.c>C.a-1&&A.c<C.b+1))continue;
   pairs.push([g,i,j]);}
@@ -582,7 +582,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
       S=S.map(q=>{const r=q.hz?xr:yr;return(q.a<r[0]-2||q.b>r[1]+2)?{...q,a:Math.max(q.a,r[0]),b:Math.min(q.b,r[1])}:q;}).filter(q=>q.b-q.a>q.t*2);}}}}}catch(e){dbg.dimErr=String(e);}
  tm('dims');if(o._chrome&&sc.src==='doors+walls'){const pD=estimateScale.last[0],pT=estimateScale.last[1],lo=Math.min(pD,pT),hi=Math.max(pD,pT);if(lo>0&&hi/lo>1.22&&hi/lo<1.7)sc={ppm:lo,src:pD<=pT?'doors':'walls'};}
  if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
- ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec||o._chrome),findOpenings)(S,ink,W,H,sc.ppm,bb);
+ findOpenings.cTol=(globalThis.__PF||{}).noCTol?0:((globalThis.__PF||{}).cTol||.3);findOpenings.Tm=Math.max(...S.map(q=>q.t));try{ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec||o._chrome),findOpenings)(S,ink,W,H,sc.ppm,bb);}finally{findOpenings.cTol=0;}
  /* v18 window recess: on a solid (poché) exterior wall a window is a stretch where the band is mostly white with only thin frame
     lines. Precision guards: wall solid elsewhere (median fill >= .85), run 0.5-3 m, some ink in the run (not a plain gap), solid on both sides, no opening there yet. */
  if(!(globalThis.__PF||{}).noRecess&&sc.ppm>0){let nw=0;const bx=bb;S.forEach((A,i)=>{if(A.t<((globalThis.__PF||{}).recT||Math.max(5,lw*3)))return;const ext=A.hz?Math.min(Math.abs(A.c-bx[1]),Math.abs(A.c-bx[3]))<A.t*1.5:Math.min(Math.abs(A.c-bx[0]),Math.abs(A.c-bx[2]))<A.t*1.5;if(!ext)return;
