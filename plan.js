@@ -329,9 +329,13 @@ function cropChrome(img){const W0=img.width,H0=img.height;if(W0<80||H0<80)return
  const o=mk(x1-x0,y1-y0);o.getContext('2d').drawImage(img,x0,y0,x1-x0,y1-y0,0,0,o.width,o.height);
  cropChrome.info={box:[x0,y0,x1,y1]};return o;}
 /* White PDF page sitting in a dark letterbox (phone screenshot). Tight crop so the page fills the working canvas. Rejects photos (textured surround) and already-full pages. */
-function cropPage(img){const W0=img.width,H0=img.height;if(W0<80||H0<80)return null;
+/* v18: light-mode PDF viewers (iOS Files/Books: #F2F2F7 around a white page) - retry with a threshold between the frame grey and white */
+function cropPage(img){const A=cropPage0(img,0);if(A||(globalThis.__PF||{}).noLight)return A;try{return cropPage0(img,1);}catch(e){return null;}}
+function cropPage0(img,lt){const W0=img.width,H0=img.height;if(W0<80||H0<80)return null;
  const s=Math.min(1,800/Math.max(W0,H0)),W=Math.max(8,Math.round(W0*s)),H=Math.max(8,Math.round(H0*s));
- const c=mk(W,H),x=c.getContext('2d');x.drawImage(img,0,0,W,H);const d=x.getImageData(0,0,W,H).data,m=new Uint8Array(W*H),thr=210;
+ const c=mk(W,H),x=c.getContext('2d');x.drawImage(img,0,0,W,H);const d=x.getImageData(0,0,W,H).data,m=new Uint8Array(W*H);let thr=210,bgM=0;
+ if(lt){const fr=[];const bw=Math.max(2,Math.round(.03*W));for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++){if(xx>=bw&&xx<W-bw)continue;const k=(yy*W+xx)*4,g=(d[k]+d[k+1]+d[k+2])/3;if(g>150)fr.push(g);}
+  if(fr.length<.5*2*bw*H)return null;fr.sort((a,b)=>a-b);bgM=fr[fr.length>>1];if(bgM<222||bgM>249)return null;thr=(bgM+255)/2;}
  for(let i=0;i<W*H;i++){const g=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(g>thr)m[i]=1;}
  const lab=new Int32Array(W*H),st=[];let bestN=0,bb=null;
  for(let i=0;i<W*H;i++){if(!m[i]||lab[i])continue;const id=i+1;st.push(i);lab[i]=id;let n=0,x0=1e9,y0=1e9,x1=-1,y1=-1;
@@ -341,12 +345,14 @@ function cropPage(img){const W0=img.width,H0=img.height;if(W0<80||H0<80)return n
   if(n>bestN){bestN=n;bb=[x0,y0,x1+1,y1+1];}}
  if(!bb)return null;let[x0,y0,x1,y1]=bb;const boxA=(x1-x0)*(y1-y0)/(W*H);if(boxA<.08||boxA>.75||(x1-x0)<.15*W&&(y1-y0)<.15*H)return null;
  let s1=0,s2=0,nO=0;for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++){if(xx>=x0&&xx<x1&&yy>=y0&&yy<y1)continue;const g=(d[(yy*W+xx)*4]+d[(yy*W+xx)*4+1]+d[(yy*W+xx)*4+2])/3;s1+=g;s2+=g*g;nO++;}
- if(!nO)return null;const om=s1/nO,osd=Math.sqrt(Math.max(0,s2/nO-om*om));if(om>=90||osd>=40)return null;
+ if(!nO)return null;const om=s1/nO,osd=Math.sqrt(Math.max(0,s2/nO-om*om));if(!lt&&(om>=90||osd>=40))return null;
+ if(lt){/* the frame must be flat grey (status bars excluded) and the page clearly whiter */let n1=0,q1=0,q2=0;for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++){if(xx>=x0&&xx<x1&&yy>=y0&&yy<y1)continue;const k=(yy*W+xx)*4,g=(d[k]+d[k+1]+d[k+2])/3;if(g<=150)continue;n1++;q1+=g;q2+=g*g;}
+  if(n1<.5*nO)return null;const m1=q1/n1,sd1=Math.sqrt(Math.max(0,q2/n1-m1*m1));if(sd1>6||m1>250)return null;}
  const X0=Math.max(0,Math.floor(x0/s)),Y0=Math.max(0,Math.floor(y0/s)),X1=Math.min(W0,Math.ceil(x1/s)),Y1=Math.min(H0,Math.ceil(y1/s));
  if(X1-X0<80||Y1-Y0<80)return null;
  const pad=Math.max(6,Math.round(.02*Math.max(X1-X0,Y1-Y0)));const a=Math.max(0,X0-pad),b=Math.max(0,Y0-pad),e=Math.min(W0,X1+pad),f=Math.min(H0,Y1+pad);
  const o=mk(e-a,f-b);o.getContext('2d').drawImage(img,a,b,e-a,f-b,0,0,o.width,o.height);
- cropPage.info={box:[a,b,e,f],page:1};return o;}
+ cropPage.info=lt?{box:[a,b,e,f],page:1,light:1}:{box:[a,b,e,f],page:1};return o;}
 /* Drop a small, far cluster of walls (key-plan thumbnail, elevation) and keep the main unit. */
 function dropSatellites(S){if(!S||S.length<6)return S;
  const n=S.length,par=S.map((_,i)=>i),find=i=>par[i]===i?i:(par[i]=find(par[i]));
