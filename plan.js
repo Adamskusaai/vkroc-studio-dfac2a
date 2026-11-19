@@ -1,4 +1,5 @@
 import {LTJ} from './ltpl.js?v=20261112i';
+import {tableAreas} from './ocr.js?v=20261117z';
 // plan.js — robust floor-plan reader (plain JS, no deps). prem8.
 // readPlan(img,{rect}) -> {walls:[{start,end,thickness,op:[]}], canvas, w, guess, mode:'plan', conf, scaleSrc, dbg} | null
 // Steps: paper detect + perspective warp -> colour-annotation removal -> illumination normalisation -> deskew ->
@@ -418,6 +419,13 @@ function roomPixels(S,W,H,ops){const f=3,gw=Math.ceil(W/f)+2,gh=Math.ceil(H/f)+2
    for(const j of[x>0?k-1:-1,x<gw-1?k+1:-1,y>0?k-gw:-1,y<gh-1?k+gw:-1])if(j>=0&&!g[j]&&!lab[j]){lab[j]=id;st.push(j);}}
   if(!edge&&n*f*f>=600)rooms.push({px:n*f*f,cx:(sx/n)*f,cy:(sy/n)*f});}
  return rooms;}
+/* v18: scale from an OCR'd area table without positions: every (room, area) pair proposes a scale; keep the scale that the most rooms
+   agree with (each room and each table row used once), so merged or missing rooms do not shift the pairing */
+function tabScale(rooms,vals,prior,tol=.05){if(!rooms||rooms.length<2||!vals||vals.length<2)return null;let best=null;
+ for(const r of rooms)for(const v of vals){if(v<1.2)continue;const p=Math.sqrt(r.px/v);if(p<15||p>300)continue;const used=new Set();let n=0,ar=0;const ps=[];
+  for(const q of rooms.slice().sort((a,b)=>b.px-a.px)){let bj=-1,be=tol;vals.forEach((u,j)=>{if(used.has(j)||u<1.2)return;const e=Math.abs(Math.sqrt(q.px/u)/p-1);if(e<be){be=e;bj=j;}});if(bj>=0){used.add(bj);n++;ar+=vals[bj];ps.push(Math.sqrt(q.px/vals[bj]));}}
+  const pm=median(ps),pd=prior?Math.abs(Math.log(pm/prior)):0;if(!best||n>best.n||(n===best.n&&(ar>best.a*1.05||(ar>best.a*.95&&pd<best.pd))))best={n,a:ar,ppm:pm,pd};}
+ return best;}
 function areaScale(rooms,areas,prior){if(!rooms||!rooms.length||!areas||!areas.length)return null;
  const vs=areas.map(a=>a.v).sort((a,b)=>a-b);
  const isTot=v=>{const rest=vs.filter(u=>u<v-0.01);if(rest.length<2)return 0;const s=rest.reduce((a,b)=>a+b,0);if(Math.abs(s-v)/v<.05&&rest.length>=3)return 1;for(let i=0;i<rest.length;i++)if(Math.abs(s-rest[i]-v)/v<.05&&rest.length>=4)return 1;return 0;};
@@ -457,7 +465,8 @@ export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)r
  if(!(share>=.6&&(x1-x0)>=.25*W&&(y1-y0)>=.2*H&&((asp>=1.6&&area<=.5)||area<=.2)))return null;
  const pad=.05*Math.max(x1-x0,y1-y0),X0=Math.max(0,Math.floor((x0-pad)/s)),Y0=Math.max(0,Math.floor((y0-pad)/s)),X1=Math.min(W0,Math.ceil((x1+pad)/s)),Y1=Math.min(H0,Math.ceil((y1+pad)/s));
  const o=mk(X1-X0,Y1-Y0),ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(img,X0,Y0,X1-X0,Y1-Y0,0,0,o.width,o.height);info.crop=[X0,Y0,X1,Y1];return o;}
-export function readPlan(img,o={}){if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);
+export function readPlan(img,o={}){/* v18: area table read once on the full upload by the tiny CNN reader (ocr.js) */if(o._tab===undefined&&!(globalThis.__PF||{}).noTab){let T=0;try{T=tableAreas(img,globalThis.__PF||{})||0;}catch(e){T=0;}o={...o,_tab:T};}
+ if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);
  let src=img,ch=null,page=0;try{if(!(globalThis.__PF||{}).noChrome){const pg=cropPage(img);if(pg){src=pg;ch=pg;page=1;o=Object.assign({},o);o._chrome=cropPage.info;}else{ch=cropChrome(img);if(ch){src=ch;o=Object.assign({},o);o._chrome=cropChrome.info;}}}}catch(e){}
  const qual=R=>{if(!R||!R.dbg)return -1e9;const d=R.dbg;return (d.Q||0)+1.2*(d.nR||0)+(/^(room)?dims|scalebar$/.test(d.scale||'')?.6:0);};
  const run=im=>{let cr=null;try{cr=uploadRegion(im);}catch(e){cr=null;}const ci=uploadRegion.info;
@@ -567,11 +576,14 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   const PT=mapPdfText(o,img,W,H,dbg);if(PT)dbg.pdfN=PT.length;const TX2=(PT&&PT.length)?TX.concat(PT):TX;
   const B=barScale(TX2,W,H);if(B){dbg.bar=+B.ppm.toFixed(1);}
   const areas=[...(dbg.areasPx||[]),...textAreas(PT||[])];if(PT&&areas.length)dbg.areasPx=areas;
+  const TAB=o._tab&&o._tab.vals&&!PT?o._tab:null;if(TAB){const PFt=globalThis.__PF||{};const add=TAB.vals.filter(v=>!areas.some(a=>Math.abs(a.v-v)<.006)).map(v=>({v,p:[-1e6,-1e6],tab:1}));if(PFt.tabMix)areas.push(...add);dbg.tab=[TAB.vals.length,TAB.tot,add.length];}
   const Rpx=roomPixels(S,W,H,ops),A=!(globalThis.__PF||{}).noArea?areaScale(Rpx,areas,sc.ppm):null;
   dbg.areaSc=[Rpx.length,areas.length,A&&A.n,A&&+A.ppm.toFixed(1)];
+  let TS=null;if(TAB&&!(globalThis.__PF||{}).tabV1){const tA=TAB.vals.filter(v=>!(dbg.areasPx||[]).some(a=>Math.abs(a.v-v)<.006)).length;TS=tabScale(Rpx,TAB.vals,sc.ppm,(globalThis.__PF||{}).tabTol||.05);if(TS)dbg.tabSc=[TS.n,+TS.ppm.toFixed(1),Rpx.length,TAB.vals.length];}
   const sheet=!!(PT||o._chrome);
   if(sheet&&B){sc={ppm:B.ppm,src:'scalebar'};dbg.scale0='scalebar';}
-  else if(sheet&&A&&A.n>=2){const agr=!sc.ppm||(A.ppm/sc.ppm<1.25&&sc.ppm/A.ppm<1.30);if(PT||agr){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';}}
+  else if(sheet&&TS&&TAB.tot===1&&TS.n>=((globalThis.__PF||{}).tabN??3)&&TS.n>=.5*Rpx.length&&TS.n>=.5*TAB.vals.length&&!(A&&A.n>=2)&&!(D&&D.n>=1)&&sc.src!=='roomdims'&&(!sc.ppm||(TS.ppm/sc.ppm<((globalThis.__PF||{}).tabR??1.6)&&sc.ppm/TS.ppm<((globalThis.__PF||{}).tabR??1.6)))){sc={ppm:TS.ppm*((globalThis.__PF||{}).tabK??1.03),src:'areas'};dbg.scale0='areas';dbg.tabScale=1;}
+  else if(sheet&&A&&A.n>=2){const agr=!sc.ppm||(A.ppm/sc.ppm<1.25&&sc.ppm/A.ppm<1.30);const PFt=globalThis.__PF||{},tR=PFt.tabR??1.6,tabOK=PFt.tabRelax&&TAB&&TAB.tot&&A.n>=(PFt.tabN??3)&&(!sc.ppm||(A.ppm/sc.ppm<tR&&sc.ppm/A.ppm<tR));if(PT||agr||tabOK){sc={ppm:A.ppm,src:'areas'};dbg.scale0='areas';if(!agr&&tabOK)dbg.tabScale=1;}}
   if(D)dbg.dimVia=D.via;dbg.dimLog=dimScale.log.filter(t=>+t.split(":").pop()>.7).slice(0,40);if(D){dbg.dims=D.dims;dbg.dimN=D.n;if(D.n>=1&&sc.src!=='scalebar'&&sc.src!=='areas'){const agree=!sc.ppm||(D.ppm/sc.ppm<1.2&&sc.ppm/D.ppm<1.2);if(D.n>=2||agree||!o._chrome)sc={ppm:D.ppm,src:'dims'};}
    // dimension lines drawn like walls ("<--- 32'6\" --->") are not walls
    if(D.lines&&D.lines.length){const n0=S.length,cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2;
