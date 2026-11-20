@@ -539,7 +539,7 @@ const add=(geom,mat,x,y,z,ry=0,nc)=>{if(mat===FLATM){if(!FLATW){FLATW=FLATM.clon
       if(isEnt){piv.userData.door={closed:closedRot,open:openR,u:doorMode==='closed'?0:1,cx:G.x0+G.u[0]*(a+b)/2,cz:G.z0+G.u[1]*(a+b)/2};doorPivs.push(piv);}
       root.add(piv);return piv;};
     const leafI=(hs,lw,dir,openRot,sd2,sw)=>{const lf=new THREE.Mesh(new THREE.BoxGeometry(lw,o.height-.06,.04),mat);lf.castShadow=true;lf.position.set(dir*lw/2,(o.height-.06)/2,0);const piv=new THREE.Group();piv.position.set(G.x0+G.u[0]*hs-G.u[1]*sd2*(w.thickness/2),e,G.z0+G.u[1]*hs+G.u[0]*sd2*(w.thickness/2));piv.rotation.y=ang+openRot;piv.add(lf);piv.userData.noCol=true;piv.userData.doorLeaf=1;piv.userData.doorH=o.height||2.05;piv.userData.sw=Object.assign({w:w.id,T:w.thickness||.3},sw);root.add(piv);return piv;};
-    const lw=o.width-.1,oa=(o.open!=null?o.open:90)*Math.PI/180;if(kd==='double'){leaf(a+.05,lw/2,1,-oa*sd);leaf(b-.05,lw/2,-1,oa*sd);}else if(kd==='sliding'||(kd==='terrace'&&w._ext)){
+    const lw=o.width-.1,oa=(o.open!=null?o.open:90)*Math.PI/180;if(kd==='garage'){/* v18e: sectional garage door - closed panel inside the opening with horizontal ribs */const GM=std({color:0x6a6f75,roughness:.5,metalness:.25});const pn=box(w,a+.06,b-.06,e+.01,e+o.height-.06,GM,.05,0,1);if(pn&&pn.userData)pn.userData.garageDoor=1;for(let k=1;k<5;k++){const y=e+k*(o.height-.06)/5;box(w,a+.08,b-.08,y-.012,y+.012,M.frame,.065,0,1);}}else if(kd==='double'){leaf(a+.05,lw/2,1,-oa*sd);leaf(b-.05,lw/2,-1,oa*sd);}else if(kd==='sliding'||(kd==='terrace'&&w._ext)){
       /* v20261117g RULE (glazed exterior doors stay INSIDE the opening): sliding / terrace doors are framed lift-slide units within the wall thickness - fixed glazed half +
          sliding glazed half parked in front of it (half open), anthracite jambs/head; never a solid leaf standing in front of the facade. audit: door-leaf-outside */
       const m=(a+b)/2,y0=e+.05,y1=e+o.height-.06,fr=(s0,s1,off)=>{box(w,s0,s0+.06,y0,y1,M.frame,.06,off,1);box(w,s1-.06,s1,y0,y1,M.frame,.06,off,1);box(w,s0,s1,y0,y0+.07,M.frame,.06,off,1);box(w,s0,s1,y1-.06,y1,M.frame,.06,off,1);box(w,s0+.05,s1-.05,y0+.06,y1-.05,M.glass,.015,off,1);};
@@ -814,12 +814,14 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
  const P=H.plot;const xMinP=xs.length?Math.min(...xs)-6: -4,xMaxP=xs.length?Math.max(...xs)+6:20,zMinP=zs.length?Math.min(...zs)-6:-5,zMaxP=zs.length?Math.max(...zs)+6:15;
  // soft neighbouring ground (large disc under everything)
  {const gw=Math.max(40,xMaxP-xMinP+24),gd=Math.max(40,zMaxP-zMinP+24);const gnd=add(new THREE.CylinderGeometry(gw*.55,gw*.55,.04,48),M.ground,(xMinP+xMaxP)/2,-.04,(zMinP+zMaxP)/2,0,1);gnd.receiveShadow=true;gnd.castShadow=false;gnd.userData.noCol=true;}
- if(P&&P.pts&&P.pts.length>2){const sh=new THREE.Shape(P.pts.map(p=>new THREE.Vector2(p[0],-p[1])));const lg=new THREE.ShapeGeometry(sh).rotateX(-Math.PI/2);const lm=new THREE.Mesh(lg,M.lawn);if(M.lawn.map)M.lawn.map.repeat.set(.35,.35);lm.position.y=-.01;lm.receiveShadow=true;lm.userData.noCol=true;root.add(lm);
+ if(P&&P.pts&&P.pts.length>2){const sh=new THREE.Shape(P.pts.map(p=>new THREE.Vector2(p[0],-p[1])));const lg=new THREE.ShapeGeometry(sh).rotateX(-Math.PI/2);const lm=new THREE.Mesh(lg,M.lawn);lm.userData.lawn=1;if(M.lawn.map)M.lawn.map.repeat.set(.35,.35);lm.position.y=-.01;lm.receiveShadow=true;lm.userData.noCol=true;root.add(lm);
   const zMin=Math.min(...P.pts.map(p=>p[1])),zMax=Math.max(...P.pts.map(p=>p[1])),xMin=Math.min(...P.pts.map(p=>p[0])),xMax=Math.max(...P.pts.map(p=>p[0]));
-  const hx=(xs.length?(Math.min(...xs)+Math.max(...xs))/2: (xMin+xMax)/2), hz=zs.length?Math.min(...zs):zMin+2;let DRX=hx+4.2;
+  const hx=(xs.length?(Math.min(...xs)+Math.max(...xs))/2: (xMin+xMax)/2), hz=zs.length?Math.min(...zs):zMin+2;/* v18e RULE (garage): a plan with a garage gets its driveway from the street to the garage door (no carport). audit: garage-door, garage-drive */
+  const GA=P.garage||null;let DRX=GA?(GA.n[1]<-.5?GA.x:Math.max(xMin+1.8,Math.min(xMax-1.8,GA.x+(GA.n[0]||1)*3.6))):hx+4.2;
   // driveway with jointed paving
   // driveway on EAST side (away from west entrance) so walk-to-door stays clear
-  const dLen=Math.max(4.5,hz-zMin+1.2),drive=add(new THREE.BoxGeometry(3.2,.025,dLen),M.path,hx+4.2,.008,(zMin+hz)/2-.1,0,1);drive.receiveShadow=true;drive.userData.noCol=true;
+  const dEnd=GA?(GA.n[1]<-.5?GA.z+.05:GA.z+1.6):hz,dW=GA?Math.max(3.2,(GA.w||2.5)+.7):3.2,dLen=Math.max(4.5,dEnd-zMin+1.2),drive=add(new THREE.BoxGeometry(dW,.025,dLen),M.path,DRX,.008,(zMin+dEnd)/2-.1,0,1);drive.userData.drive=1;
+  if(GA&&!(GA.n[1]<-.5)){/* side/back garage door: paved apron from the door to the driveway */const ax=Math.abs(GA.n[0])>.5,L=ax?Math.abs(DRX-GA.x)+dW/2:3.2;const ap=add(new THREE.BoxGeometry(ax?L:dW,.026,ax?dW:L),M.path,ax?(GA.x+DRX)/2+(DRX>GA.x?dW/4:-dW/4):GA.x,.009,ax?GA.z:GA.z+GA.n[1]*1.6,0,1);ap.userData.noCol=true;ap.userData.drive=1;}drive.receiveShadow=true;drive.userData.noCol=true;
   // prem8: outward frames of the entrance / terrace doors (door centre, outward normal, along-wall)
   const hcx=(Math.min(...xs)+Math.max(...xs))/2,hcz=(Math.min(...zs)+Math.max(...zs))/2;const dOut=k=>{let r=null;(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(r||op.type!=='door'||op.kind!==k||(H.levels&&H.levels.length>1&&w.level!==H.levels[0].name))return;const g=geo(w),m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}r={cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3};});});return r;};
   const ENT=dOut('entrance'),TER=dOut('terrace');
@@ -859,13 +861,17 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   // path lamps (2)
   const lamp=(x,z)=>{add(new THREE.CylinderGeometry(.04,.05,1.1,6),M.frame,x,.55,z,0,1);const cap=add(new THREE.SphereGeometry(.1,6,4),std({color:0xf5e6c8,roughness:.4,emissive:0x665533,emissiveIntensity:.35}),x,1.15,z,0,1);cap.castShadow=false;};
   lamp(hx-4.2,hz-1.5);lamp(hx+1.5,hz-1.2);
-  // car removed (prem7) — driveway kept clear
+  // v18e: a car from the asset pack stands in the garage (or in front of its door when the garage is too short for it)
+  if(GA){const car=makeCar('#5f6f7e'),ax=Math.abs(GA.n[0])>.5,dep=GA.bb?(ax?GA.bb[2]-GA.bb[0]:GA.bb[3]-GA.bb[1]):0,ins=dep>=4.7;const e0=(H.levels[0]&&H.levels[0].elevation)||0;
+   const px=ins?GA.c[0]:GA.x+GA.n[0]*3.2,pz=ins?GA.c[1]:GA.z+GA.n[1]*3.2;car.position.set(px,ins?e0+.02:0,pz);car.rotation.y=ax?Math.PI/2:0;car.userData.noCol=true;car.userData.car=1;root.add(car);}
   // hedge soft strips (not walls)
   const hedgeMat=std({color:0x4a6340,roughness:1,map:grass});
   const mkHedge=(x0,z0,x1,z1)=>{const L=Math.hypot(x1-x0,z1-z0),ang=-Math.atan2(z1-z0,x1-x0);const m=add(new THREE.BoxGeometry(L,.7,.28),hedgeMat,(x0+x1)/2,.38,(z0+z1)/2,ang,1);m.castShadow=false;};
   mkHedge(xMin+.5,zMin+.5,xMin+.5,zMax-.5);mkHedge(xMax-.5,zMin+.5,xMax-.5,zMax-.5);mkHedge(xMin+.5,zMax-.5,xMax-.5,zMax-.5);
   // CC0-style trees/shrubs from kit
-  const tree=(x,z,s=1)=>{const t=makeTree(s);t.position.set(x,0,z);root.add(t);};
+  const tree=(x,z,s=1)=>{const t=makeTree(s);t.position.set(x,0,z);t.userData.site=1;root.add(t);};
+  /* v18e: the demo's context (tree line, neighbours) is laid out around the demo plot [-4,21]x[-6,13]; an automatic plot moves it with its own edges */
+  const RX=x=>P.auto?(x<8.5?x+xMin+4:x+xMax-21):x,RZ=z=>P.auto?(z<3.5?z+zMin+6:z+zMax-13):z;
   const shrub=(x,z,s=.5)=>{const t=makeShrub(s);t.position.set(x,0,z);root.add(t);};
   const seed=(a,b)=>{let h=Math.sin(a*12.9898+b*78.233)*43758.5453;return h-Math.floor(h);};
   const hx0=Math.min(...xs)-1,hx1=Math.max(...xs)+1,hz0=Math.min(...zs)-1,hz1=Math.max(...zs)+1;
@@ -873,13 +879,13 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
    if(t[0]>hx0&&t[0]<hx1&&t[1]>hz0&&t[1]<hz1)return;if([ENT,TER].some(D=>{if(!D)return false;const tt=(t[0]-D.cx)*D.nx+(t[1]-D.cz)*D.nz,la=Math.abs((t[0]-D.cx)*D.ux+(t[1]-D.cz)*D.uz);return tt>0&&tt<9&&la<(D===TER?3.4:2.2);}))return;tree(t[0],t[1],t[2]);});
   // surrounding context: distant tree line + neighbour silhouettes (hides empty green field)
   {const sil=std({color:0x8a9488,roughness:1});
-   [[-18,8,1.2],[-16,-6,1.0],[28,4,1.3],[26,-8,0.9],[8,-22,1.1],[-6,24,1.0],[22,22,1.2]].forEach(([x,z,s])=>tree(x,z,s));
+   [[-18,8,1.2],[-16,-6,1.0],[28,4,1.3],[26,-8,0.9],[8,-22,1.1],[-6,24,1.0],[22,22,1.2]].forEach(([x,z,s])=>tree(RX(x),RZ(z),s));
    // prem8 h5: neighbour houses = rendered body + gable or flat/parapet roof + dark windows (+ wood panel on flat ones); shared materials, ~12 meshes each.
    // Houses that would sit on the street move across it.
    const NB={w:std({color:0xece8e0,map:plaster,roughness:.92}),r:std({color:0x4b5057,roughness:.8}),g:std({color:0x2b3238,roughness:.25,metalness:.35}),c:M.frame};
-   [[-14,6,8,3.0,7,0],[-12,-10,6,3.0,9,1],[-26,18,9,3.2,8,1],[34,20,7,3.0,10,0]].forEach(([x,z,ww,hh,dd,fl],ni)=>{/* v20261117c: designed flat-roof villa - neighbours get pitched roofs so nothing flat-topped reads as a box on our roof */if(H.roofEdge==='parapet')fl=0;
+   [[-14,6,8,3.0,7,0],[-12,-10,6,3.0,9,1],[-26,18,9,3.2,8,1],[34,20,7,3.0,10,0]].forEach(([x,z,ww,hh,dd,fl],ni)=>{x=RX(x);z=RZ(z);/* v20261117c: designed flat-roof villa - neighbours get pitched roofs so nothing flat-topped reads as a box on our roof */if(H.roofEdge==='parapet')fl=0;
     if(P.fence!==false&&z+dd/2>zMin-9.5&&z-dd/2<zMin+.5)z=zMin-9.5-dd/2;
-    const m=add(new THREE.BoxGeometry(ww,hh,dd),NB.w,x,hh/2,z,0,1);m.castShadow=false;
+    const m=add(new THREE.BoxGeometry(ww,hh,dd),NB.w,x,hh/2,z,0,1);m.castShadow=false;m.userData.site=1;
     if(fl){add(new THREE.BoxGeometry(ww+.06,.5,dd+.06),NB.w,x,hh+.25,z,0,1).castShadow=false;add(new THREE.BoxGeometry(ww+.12,.06,dd+.12),NB.c,x,hh+.53,z,0,1).castShadow=false;
      const wp=add(new THREE.BoxGeometry(Math.min(3,ww*.35),hh+.5,.04),FCM.wood.m,x+ww*.25,(hh+.5)/2,z+dd/2+.02,0,1);boxUV(wp.geometry,0,0);wp.castShadow=false;}
     else{const lng=ww>=dd,along=lng?ww:dd,span=(lng?dd:ww)+.6,rh=span*.28,sh=new THREE.Shape([new THREE.Vector2(-span/2,0),new THREE.Vector2(span/2,0),new THREE.Vector2(0,rh)]);
@@ -1044,6 +1050,12 @@ function extPipeAudit(P,world,bb,r2){if(!world)return;
    mg.forEach(p=>{const s0=p[1],s1=p[2],y0=p[3];if(nf>=6||y0<base+1.2)return;
     const sup=s=>mg.some(q=>q!==p&&q[3]<y0-.3&&q[4]>=y0-.05&&q[1]-.06<=s&&q[2]+.06>=s)||((s<tw+.15||s>L-tw-.15)&&joins(Math.max(0,Math.min(L,s))));
     if(!sup(s0)||!sup(s1)){nf++;const s=(s0+s1)/2;P.push({rule:'lintel-floating',p:[r2(g.x0+g.u[0]*s),r2(g.z0+g.u[1]*s)],w:w.id,s:[r2(s0),r2(s1)],y0:r2(y0)});}});});}
+ /* v18e RULES (site + garage): every house with a plot has its lawn; context (trees, neighbours) never stands on the house or the driveway;
+    a garage has a garage door on an outside wall, a driveway reaching that door and a car. audit: site-present, site-clear, garage-door, garage-drive */
+ if(H.plot&&H.plot.pts){let lawn=0;const DR=[],ST=[];world.traverse(o=>{const u=o.userData||{};if(u.lawn)lawn=1;if(u.drive)DR.push(bb(o));if(u.site)ST.push(o);});if(!lawn)P.push({rule:'site-present',why:'lawn'});
+  const W0=(H.walls||[]).filter(w=>w.level===H.levels[0].name),hxs=W0.flatMap(w=>[w.start[0],w.end[0]]),hzs=W0.flatMap(w=>[w.start[1],w.end[1]]),hb=[Math.min(...hxs)-.3,Math.min(...hzs)-.3,Math.max(...hxs)+.3,Math.max(...hzs)+.3];let nc=0;ST.forEach(o=>{if(nc>=4)return;const b=bb(o);const hit=r=>b.max.x>r[0]&&b.min.x<r[2]&&b.max.z>r[1]&&b.min.z<r[3];if(hit(hb)||DR.some(d=>hit([d.min.x,d.min.z,d.max.x,d.max.z]))){nc++;P.push({rule:'site-clear',p:[r2((b.min.x+b.max.x)/2),r2((b.min.z+b.max.z)/2)]});}});
+  const GA=H.plot.garage;if(GA){let gd=0,car=0;world.traverse(o=>{if(o.userData&&o.userData.car)car=1;});(H.walls||[]).forEach(w=>(w.openings||[]).forEach(o=>{if(o.kind==='garage')gd=1;}));if(!gd)P.push({rule:'garage-door'});
+   if(!DR.some(d=>GA.x>d.min.x-.6&&GA.x<d.max.x+.6&&GA.z>d.min.z-.6&&GA.z<d.max.z+.6)||!car)P.push({rule:'garage-drive',car});}}
  const pipes=[],hops=[],guts=[],copes=[];world.traverse(o=>{const u=o.userData||{};if(!o.isMesh)return;if(u.dpipe&&o.geometry&&/Cylinder/.test(o.geometry.type||''))pipes.push(o);if(u.hopper)hops.push(o);if(u.gutter)guts.push(o);if(u.cope)copes.push(o);});
  pipes.forEach(p=>{const b=bb(p),c=b.getCenter(new THREE.Vector3()),top=b.max.y,bot=b.min.y;
   const nearH=hops.some(h=>{const a=bb(h);return Math.hypot(c.x-(a.min.x+a.max.x)/2,c.z-(a.min.z+a.max.z)/2)<.4&&Math.abs((a.min.y+a.max.y)/2-top)<.45;});
