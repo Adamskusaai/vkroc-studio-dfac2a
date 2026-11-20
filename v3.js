@@ -849,15 +849,31 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   // terrace (south / max z of house)
   const tw=Math.min(7.5,(xs.length?Math.max(...xs)-Math.min(...xs):6)-.6), terrZ=(zs.length?Math.max(...zs):zMax-2)+1.55;
   let terr;if(TER){// slab in front of the terrace door, shifted away from the entrance
-   const tl=4.6,dp=2.9;let sh=tl/2-.7;if(ENT){const se=(ENT.cx-TER.cx)*TER.ux+(ENT.cz-TER.cz)*TER.uz;if(se>0)sh=-sh;}
+   const tl=6.0,dp=3.4;let sh=tl/2-.8;if(ENT){const se=(ENT.cx-TER.cx)*TER.ux+(ENT.cz-TER.cz)*TER.uz;if(se>0)sh=-sh;}
    const cx=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*sh,cz=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*sh,ew=Math.abs(TER.nx)>.9;
-   terr=add(new THREE.BoxGeometry(ew?dp:tl,.035,ew?tl:dp),M.deck,cx,.018,cz,0,1);}
-  else terr=add(new THREE.BoxGeometry(tw,.035,2.8),M.deck,hx,.018,terrZ,0,1);terr.receiveShadow=true;terr.userData.noCol=true;
-  // terrace accents (lightweight)
-  if(!(H.furn||[]).some(f=>f.t==='otable'))
-  {const woodAcc=M.wood2||M.door;add(new THREE.BoxGeometry(1.5,.06,.75),woodAcc,hx-1.5,.28,terrZ+.15,0,1);
-   [[-0.6,-0.25],[0.6,-0.25],[-0.6,0.25],[0.6,0.25]].forEach(([a,b])=>add(new THREE.BoxGeometry(.07,.4,.07),woodAcc,hx-1.5+a,.22,terrZ+.15+b,0,1));
-   add(new THREE.BoxGeometry(.5,.05,.5),woodAcc,hx+1.6,.28,terrZ+.1,0,1);}
+   terr=add(new THREE.BoxGeometry(ew?dp:tl,.12,ew?tl:dp),M.deck,cx,.06,cz,0,1);terr.userData.tf={cx,cz,ux:TER.ux,uz:TER.uz,nx:TER.nx,nz:TER.nz,L:tl,D:dp,door:-sh,dw:TER.w||1.6,liv:1};}
+  else{terr=add(new THREE.BoxGeometry(tw,.12,3.2),M.deck,hx,.06,terrZ+.2,0,1);terr.userData.tf={cx:hx,cz:terrZ+.2,ux:1,uz:0,nx:0,nz:1,L:tw,D:3.2,door:null,liv:0};}terr.receiveShadow=true;terr.userData.noCol=true;terr.userData.terrace=1;
+  /* v18j RULES (terrace = the demo villa's terrace, generic): the deck sits 12 cm above the lawn with a stone edge (one step down),
+     carries the villa set from the furniture kit/asset pack (outdoor table + 4 chairs, lounger, potted plants in planters on the
+     outer corners), a wall light by the door and - in front of a terrace door - a slim pergola. A 1.2 m path straight out of the door
+     and 0.6 m in front of the wall stay free. audit: terrace-furnished, terrace-clear */
+  {const T=terr.userData.tf;try{window.__terrT=T;}catch(e){}if(T&&T.L>=3.2&&T.D>=2.6&&!(H.furn||[]).some(f=>f.t==='otable')){const S=STY[H.style]||{},cols={wood:S.wood||'#b08a62',fab:'#6d6a5f',sty:H.style||''};const W=(u,n)=>[T.cx+T.ux*u+T.nx*n,T.cz+T.uz*u+T.nz*n];
+   const edge=std({color:0x8d877d,roughness:.85});const ew=Math.abs(T.nx)>.5;const bx=(u0,u1,n0,n1,h,m,y)=>{const a=W((u0+u1)/2,(n0+n1)/2),lu=Math.abs(u1-u0),ln=Math.abs(n1-n0);const o=add(new THREE.BoxGeometry(ew?ln:lu,h,ew?lu:ln),m,a[0],y,a[1],0,1);o.userData.noCol=true;o.userData.terrE=1;return o;};
+   const hL=T.L/2,hD=T.D/2;bx(-hL-.06,hL+.06,hD,hD+.12,.13,edge,.065);bx(-hL-.12,-hL,-hD,hD+.12,.13,edge,.065);bx(hL,hL+.12,-hD,hD+.12,.13,edge,.065);
+   bx(-hL-.06,hL+.06,hD+.12,hD+.42,.06,edge,.03);/* step down to the lawn */
+   const kit=(t,u,n,fx,fz,F)=>{const FF=F||FUR[t];if(!FF)return null;const g=makeFurn(t,FF,cols);const p=W(u,n);g.position.set(p[0],.12,p[1]);const dx=T.ux*fx+T.nx*fz,dz=T.uz*fx+T.nz*fz;g.rotation.y=Math.atan2(dx,dz);g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});g.userData.terrF=t;g.userData.kit=1;g.userData.noCol=true;root.add(g);return g;};
+   const du=T.door==null?-9:T.door,free=(u,r)=>Math.abs(u-du)>.6+r;/* door path */
+   let tu=T.door==null?-hL*.25:(du<0?Math.min(hL-1.4,du+1.9):Math.max(-hL+1.4,du-1.9));const tn=.15;
+   kit('otable',tu,tn,0,1,{...FUR.otable,w:1.4,d:.85});[[-.95,0,1,0],[.95,0,-1,0],[0,-.75,0,1],[0,.75,0,-1]].forEach(([a,b,fx,fz])=>{if(tn+b<-hD+.55)return;kit('chair',tu+a,tn+b,fx,fz);});
+   const lu=T.door==null?hL*.6:(du<0?hL-.75:-hL+.75);if(free(lu,.5))kit('lounge',lu,hD-.9,0,-1);
+   {let np=0;[[-hL+.3,hD-.3],[hL-.3,hD-.3],[-hL+.3,-hD+.35],[hL-.3,-hD+.35],[0,hD-.3]].forEach(([u,n])=>{if(np>=2||!free(u,.3))return;np++;const pl=bx(u-.22,u+.22,n-.22,n+.22,.42,std({color:0x6f6a62,roughness:.9}),.12+.21);pl.userData.planter=1;kit('plant',u,n,0,1).position.y=.54;});}
+   const shrub=(u,n,sc)=>{const m=makeShrub(sc);const p=W(u,n);m.position.set(p[0],0,p[1]);m.userData.noCol=true;m.userData.terrS=1;root.add(m);};for(let u=-hL+.9;u<hL-.6;u+=1.4)if(free(u,.4))shrub(u,hD+.75,.45);
+   if(T.door!=null){/* wall light beside the door */const p=W(du+(du<0?.95:-.95),-hD+.06);const wl=add(new THREE.BoxGeometry(.12,.22,.1),std({color:0x2c2c2c,roughness:.5}),p[0],2.1,p[1],0,1);wl.userData.noCol=true;wl.userData.terrL=1;const gl=add(new THREE.BoxGeometry(.08,.12,.02),std({color:0xfff1d0,emissive:0xffd9a0,emissiveIntensity:.8}),p[0]+T.nx*.06,2.1,p[1]+T.nz*.06,0,1);gl.castShadow=false;gl.userData.noCol=true;}
+   if(T.liv&&T.door!=null){/* slim pergola over the deck: 2 outer posts, beams to the wall, slats */const PM=std({color:0x3b3a37,roughness:.6,metalness:.3}),h=2.55;
+    [[-hL+.12,hD-.12],[hL-.12,hD-.12]].forEach(([u,n])=>{const p=W(u,n);const po=add(new THREE.BoxGeometry(.1,h,.1),PM,p[0],.12+h/2,p[1],0,1);po.userData.pergola=1;});
+    bx(-hL+.07,hL-.07,hD-.17,hD-.07,.14,PM,.12+h-.07).userData.pergola=1;[-hL+.12,hL-.12].forEach(u=>{bx(u-.05,u+.05,-hD+.02,hD-.07,.14,PM,.12+h-.07).userData.pergola=1;});
+    for(let u=-hL+.5;u<hL-.3;u+=.45)bx(u-.025,u+.025,-hD+.02,hD-.12,.1,PM,.12+h+.05).userData.pergola=1;}
+  }}
   // path lamps (2)
   const lamp=(x,z)=>{add(new THREE.CylinderGeometry(.04,.05,1.1,6),M.frame,x,.55,z,0,1);const cap=add(new THREE.SphereGeometry(.1,6,4),std({color:0xf5e6c8,roughness:.4,emissive:0x665533,emissiveIntensity:.35}),x,1.15,z,0,1);cap.castShadow=false;};
   lamp(hx-4.2,hz-1.5);lamp(hx+1.5,hz-1.2);
@@ -1050,6 +1066,16 @@ function extPipeAudit(P,world,bb,r2){if(!world)return;
    mg.forEach(p=>{const s0=p[1],s1=p[2],y0=p[3];if(nf>=6||y0<base+1.2)return;
     const sup=s=>mg.some(q=>q!==p&&q[3]<y0-.3&&q[4]>=y0-.05&&q[1]-.06<=s&&q[2]+.06>=s)||((s<tw+.15||s>L-tw-.15)&&joins(Math.max(0,Math.min(L,s))));
     if(!sup(s0)||!sup(s1)){nf++;const s=(s0+s1)/2;P.push({rule:'lintel-floating',p:[r2(g.x0+g.u[0]*s),r2(g.z0+g.u[1]*s)],w:w.id,s:[r2(s0),r2(s1)],y0:r2(y0)});}});});}
+ /* v18j RULE (furniture-from-pack): every furniture piece - interior and terrace - is built by the shared furniture kit (makeFurn, asset-pack
+    models swapped in where the pack has them), never a raw placeholder box. audit: furn-from-kit */
+ {const bad=(H.furn||[]).filter(f=>!FUR[f.t]).map(f=>f.t);world.traverse(o=>{const u=o.userData||{};if(u.terrF&&!u.kit)bad.push(u.terrF);});if(bad.length)P.push({rule:'furn-from-kit',types:[...new Set(bad)]});}
+ /* v18j RULES (terrace): terrace-furnished = the deck carries an outdoor table, >=2 seats and >=2 plants from the kit; terrace-clear = none of them
+    reaches into a wall or the 1.2 m path out of the terrace door */
+ {const TS=[];world.traverse(o=>{if(o.userData&&o.userData.terrace)TS.push(o);});TS.forEach(t=>{const T=t.userData.tf;if(!T||T.L<3.2||T.D<2.6||(H.furn||[]).some(f=>f.t==='otable'))return;/* designed houses carry their own terrace set */const cnt={};const FB=[];world.traverse(o=>{const u=o.userData||{};if(u.terrF){cnt[u.terrF]=(cnt[u.terrF]||0)+1;FB.push([u.terrF,bb(o)]);}});
+  if(!cnt.otable||((cnt.chair||0)+(cnt.lounge||0))<2||(cnt.plant||0)<2)P.push({rule:'terrace-furnished',got:cnt});
+  const WB=[];(H.walls||[]).filter(w=>w.level===(H.levels[0]&&H.levels[0].name)).forEach(w=>{const g=geo(w),t2=(w.thickness||.3)/2;WB.push([Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2]);});
+  FB.forEach(([k,b])=>{const q=[b.min.x+.03,b.min.z+.03,b.max.x-.03,b.max.z-.03];if(WB.some(w=>q[0]<w[2]&&q[2]>w[0]&&q[1]<w[3]&&q[3]>w[1]))P.push({rule:'terrace-clear',what:k,why:'wall'});
+   if(T.door!=null){const c=[T.cx+T.ux*T.door,T.cz+T.uz*T.door],e=[c[0]+T.nx*T.D,c[1]+T.nz*T.D],pb=[Math.min(c[0],e[0])-(Math.abs(T.ux)*.6),Math.min(c[1],e[1])-(Math.abs(T.uz)*.6),Math.max(c[0],e[0])+(Math.abs(T.ux)*.6),Math.max(c[1],e[1])+(Math.abs(T.uz)*.6)];if(q[0]<pb[2]&&q[2]>pb[0]&&q[1]<pb[3]&&q[3]>pb[1])P.push({rule:'terrace-clear',what:k,why:'door-path'});}});});}
  /* v18e RULES (site + garage): every house with a plot has its lawn; context (trees, neighbours) never stands on the house or the driveway;
     a garage has a garage door on an outside wall, a driveway reaching that door and a car. audit: site-present, site-clear, garage-door, garage-drive */
  if(H.plot&&H.plot.pts){let lawn=0;const DR=[],ST=[];world.traverse(o=>{const u=o.userData||{};if(u.lawn)lawn=1;if(u.drive)DR.push(bb(o));if(u.site)ST.push(o);});if(!lawn)P.push({rule:'site-present',why:'lawn'});
