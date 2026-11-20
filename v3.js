@@ -824,7 +824,22 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   if(GA&&!(GA.n[1]<-.5)){/* side/back garage door: paved apron from the door to the driveway */const ax=Math.abs(GA.n[0])>.5,L=ax?Math.abs(DRX-GA.x)+dW/2:3.2;const ap=add(new THREE.BoxGeometry(ax?L:dW,.026,ax?dW:L),M.path,ax?(GA.x+DRX)/2+(DRX>GA.x?dW/4:-dW/4):GA.x,.009,ax?GA.z:GA.z+GA.n[1]*1.6,0,1);ap.userData.noCol=true;ap.userData.drive=1;}drive.receiveShadow=true;drive.userData.noCol=true;
   // prem8: outward frames of the entrance / terrace doors (door centre, outward normal, along-wall)
   const hcx=(Math.min(...xs)+Math.max(...xs))/2,hcz=(Math.min(...zs)+Math.max(...zs))/2;const dOut=k=>{let r=null;(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(r||op.type!=='door'||op.kind!==k||(H.levels&&H.levels.length>1&&w.level!==H.levels[0].name))return;const g=geo(w),m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}r={cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3};});});return r;};
-  const ENT=dOut('entrance'),TER=dOut('terrace');
+  const ENT=dOut('entrance');let TER=dOut('terrace');
+  /* v18k RULE (terrace where the plan draws it): a printed area OUTSIDE the walls (4-60 m2, the largest one) is the terrace. The deck goes on
+     the exterior wall facing it - in front of that wall's door when it has one (living-room exit -> pergola), else centred on the label.
+     audit: terrace-placed */
+  const THint=(()=>{const L0=H.levels&&H.levels[0]&&H.levels[0].name;if(!xs.length)return null;const X0=Math.min(...xs),X1=Math.max(...xs),Z0=Math.min(...zs),Z1=Math.max(...zs);
+   const A=(H.rarea||[]).filter(a=>a.level===L0&&a.p&&a.v>=4&&a.v<=60&&(a.p[0]<X0-.3||a.p[0]>X1+.3||a.p[1]<Z0-.3||a.p[1]>Z1+.3)&&a.p[0]>X0-8&&a.p[0]<X1+8&&a.p[1]>Z0-8&&a.p[1]<Z1+8).sort((a,b)=>b.v-a.v);if(!A.length)return null;const p=A[0].p;
+   let best=null;(H.walls||[]).filter(w=>w.level===L0).forEach(w=>{const g=geo(w);if(g.L<1.5)return;const t=(p[0]-g.x0)*g.u[0]+(p[1]-g.z0)*g.u[1];if(t<.3||t>g.L-.3)return;const fx=g.x0+g.u[0]*t,fz=g.z0+g.u[1]*t;let nx=-g.u[1],nz=g.u[0];if(nx*(fx-hcx)+nz*(fz-hcz)<0){nx=-nx;nz=-nz;}
+    const d=(p[0]-fx)*nx+(p[1]-fz)*nz;if(d<.2||d>7)return;if(Math.abs((p[0]-fx)*g.u[0]+(p[1]-fz)*g.u[1])>.01)return;if(!best||d<best.d)best={w,g,t,fx,fz,nx,nz,d};});
+   if(!best)return null;const{w,g}=best;let dr=null;(w.openings||[]).forEach(op=>{if(op.type!=='door'||op.kind==='entrance'||op.kind==='garage')return;const m=op.offset+op.width/2;if(Math.abs(m-best.t)<3.5&&(!dr||Math.abs(m-best.t)<Math.abs(dr.m-best.t)))dr={m,op};});
+   const m=dr?dr.m:best.t;return{p,v:A[0].v,f:{cx:g.x0+g.u[0]*m,cz:g.z0+g.u[1]*m,nx:best.nx,nz:best.nz,ux:g.u[0],uz:g.u[1],w:dr?dr.op.width:0,t:w.thickness||.3,nodoor:!dr}};})();
+  if(THint)TER=THint.f;
+  /* v18k: no readable label and no terrace door -> the paved area the plan draws against a facade (app.js terrInk) */
+  let TInk=null;if(!THint&&!TER&&H.terrInk&&xs.length&&(!H.levels||H.terrInk.level===H.levels[0].name)){const k=H.terrInk,X0=Math.min(...xs),X1=Math.max(...xs),Z0=Math.min(...zs),Z1=Math.max(...zs),hz=k.s%2===0,n=[[0,-1],[-1,0],[0,1],[1,0]][k.s],e=[Z0,X0,Z1,X1][k.s],mid=(k.a+k.b)/2;
+   let dr=null;(H.walls||[]).filter(w=>w.level===H.levels[0].name).forEach(w=>{const g=geo(w);if(hz?Math.abs(g.u[1])>.05||Math.abs(g.z0-e)>.45:Math.abs(g.u[0])>.05||Math.abs(g.x0-e)>.45)return;(w.openings||[]).forEach(op=>{if(op.type!=='door'||op.kind==='entrance'||op.kind==='garage'||op.width<.75)return;const m=op.offset+op.width/2,p=hz?g.x0+g.u[0]*m:g.z0+g.u[1]*m;if(p<k.a-.5||p>k.b+.5)return;if(!dr||Math.abs(p-mid)<Math.abs(dr.p-mid))dr={p,w:op.width,t:w.thickness||.3};});});
+   const tl=Math.max(4,Math.min(8,k.b-k.a)),c=dr?dr.p:mid,sh=dr?Math.max(-(tl/2-.5),Math.min(tl/2-.5,mid-c)):0;
+   TER={cx:hz?c:e,cz:hz?e:c,nx:n[0],nz:n[1],ux:hz?1:0,uz:hz?0:1,w:dr?dr.w:0,t:dr?dr.t:.3,nodoor:!dr,tl,sh};TInk=[hz?mid:e+n[0]*1.9,hz?e+n[1]*1.9:mid];}try{window.__terrHint=THint&&{p:THint.p,v:THint.v,door:!THint.f.nodoor};}catch(e){}
 
   // distance from a door to the plot edge along its outward normal
   const toEdge=D=>{const tx=D.nx>0?(xMax-D.cx)/D.nx:D.nx<0?(xMin-D.cx)/D.nx:1e9,tz=D.nz>0?(zMax-D.cz)/D.nz:D.nz<0?(zMin-D.cz)/D.nz:1e9;return Math.max(1.5,Math.min(tx,tz));};
@@ -849,9 +864,13 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   // terrace (south / max z of house)
   const tw=Math.min(7.5,(xs.length?Math.max(...xs)-Math.min(...xs):6)-.6), terrZ=(zs.length?Math.max(...zs):zMax-2)+1.55;
   let terr;if(TER){// slab in front of the terrace door, shifted away from the entrance
-   const tl=6.0,dp=3.4;let sh=tl/2-.8;if(ENT){const se=(ENT.cx-TER.cx)*TER.ux+(ENT.cz-TER.cz)*TER.uz;if(se>0)sh=-sh;}
+   const tl=TER.tl||6.0,dp=3.4;let sh=TER.sh!=null?TER.sh:TER.nodoor?0:tl/2-.8;if(TER.sh==null&&ENT){const se=(ENT.cx-TER.cx)*TER.ux+(ENT.cz-TER.cz)*TER.uz;if(se>0)sh=-sh;}
+   /* v18k: the deck slides along its wall (door kept on it) until it hits no other wall - an L-corner or a wing never cuts through the set */
+   {const L0n=H.levels&&H.levels[0]&&H.levels[0].name,WBt=(H.walls||[]).filter(w=>w.level===L0n).map(w=>{const t2=(w.thickness||.3)/2;return[Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2];});
+    const hit=s=>{const x=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*s,z=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*s,ew=Math.abs(TER.nx)>.9,hx=(ew?dp:tl)/2-.06,hz=(ew?tl:dp)/2-.06;return WBt.some(b=>x-hx<b[2]&&x+hx>b[0]&&z-hz<b[3]&&z+hz>b[1]);};
+    if(hit(sh)){const lim=TER.nodoor?tl/2:tl/2-.5;const C=[-sh];for(let d=.25;d<=lim;d+=.25)C.push(sh>0?sh-d:sh+d,sh>0?sh+d:sh-d);const f=C.find(s=>Math.abs(s)<=lim+1e-6&&!hit(s));if(f!=null)sh=f;}}
    const cx=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*sh,cz=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*sh,ew=Math.abs(TER.nx)>.9;
-   terr=add(new THREE.BoxGeometry(ew?dp:tl,.12,ew?tl:dp),M.deck,cx,.06,cz,0,1);terr.userData.tf={cx,cz,ux:TER.ux,uz:TER.uz,nx:TER.nx,nz:TER.nz,L:tl,D:dp,door:-sh,dw:TER.w||1.6,liv:1};}
+   terr=add(new THREE.BoxGeometry(ew?dp:tl,.12,ew?tl:dp),M.deck,cx,.06,cz,0,1);terr.userData.tf={cx,cz,ux:TER.ux,uz:TER.uz,nx:TER.nx,nz:TER.nz,L:tl,D:dp,door:TER.nodoor?null:-sh,dw:TER.w||1.6,liv:TER.nodoor?0:1,hint:THint?THint.p:TInk};}
   else{terr=add(new THREE.BoxGeometry(tw,.12,3.2),M.deck,hx,.06,terrZ+.2,0,1);terr.userData.tf={cx:hx,cz:terrZ+.2,ux:1,uz:0,nx:0,nz:1,L:tw,D:3.2,door:null,liv:0};}terr.receiveShadow=true;terr.userData.noCol=true;terr.userData.terrace=1;
   /* v18j RULES (terrace = the demo villa's terrace, generic): the deck sits 12 cm above the lawn with a stone edge (one step down),
      carries the villa set from the furniture kit/asset pack (outdoor table + 4 chairs, lounger, potted plants in planters on the
@@ -878,8 +897,8 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   const lamp=(x,z)=>{add(new THREE.CylinderGeometry(.04,.05,1.1,6),M.frame,x,.55,z,0,1);const cap=add(new THREE.SphereGeometry(.1,6,4),std({color:0xf5e6c8,roughness:.4,emissive:0x665533,emissiveIntensity:.35}),x,1.15,z,0,1);cap.castShadow=false;};
   lamp(hx-4.2,hz-1.5);lamp(hx+1.5,hz-1.2);
   // v18e: a car from the asset pack stands in the garage (or in front of its door when the garage is too short for it)
-  if(GA){const car=makeCar('#5f6f7e'),ax=Math.abs(GA.n[0])>.5,dep=GA.bb?(ax?GA.bb[2]-GA.bb[0]:GA.bb[3]-GA.bb[1]):0,ins=dep>=4.7;const e0=(H.levels[0]&&H.levels[0].elevation)||0;
-   const px=ins?GA.c[0]:GA.x+GA.n[0]*3.2,pz=ins?GA.c[1]:GA.z+GA.n[1]*3.2;car.position.set(px,ins?e0+.02:0,pz);car.rotation.y=ax?Math.PI/2:0;car.userData.noCol=true;car.userData.car=1;root.add(car);}
+  if(GA){const car=makeCar('#5f6f7e'),ax=Math.abs(GA.n[0])>.5,dep=GA.bb?(ax?GA.bb[2]-GA.bb[0]:GA.bb[3]-GA.bb[1]):0,bw=GA.bb?Math.min(GA.bb[2]-GA.bb[0],GA.bb[3]-GA.bb[1]):0,bl=GA.bb?Math.max(GA.bb[2]-GA.bb[0],GA.bb[3]-GA.bb[1]):0,ins=dep>=4.7,side=!ins&&bl>=4.6&&bw>=2.4/* v18k: a garage the car fits in keeps it inside, along its long axis, even when the door sits on the long side - never parked across the door */,lx=GA.bb&&(GA.bb[2]-GA.bb[0])>=(GA.bb[3]-GA.bb[1]);const e0=(H.levels[0]&&H.levels[0].elevation)||0;
+   const ii=ins||side,px=ii?GA.c[0]:GA.x+GA.n[0]*3.2,pz=ii?GA.c[1]:GA.z+GA.n[1]*3.2;car.position.set(px,ii?e0+.02:0,pz);car.rotation.y=side?(lx?Math.PI/2:0):ax?Math.PI/2:0;car.userData.noCol=true;car.userData.car=1;root.add(car);}
   // hedge soft strips (not walls)
   const hedgeMat=std({color:0x4a6340,roughness:1,map:grass});
   const mkHedge=(x0,z0,x1,z1)=>{const L=Math.hypot(x1-x0,z1-z0),ang=-Math.atan2(z1-z0,x1-x0);const m=add(new THREE.BoxGeometry(L,.7,.28),hedgeMat,(x0+x1)/2,.38,(z0+z1)/2,ang,1);m.castShadow=false;};
@@ -1073,6 +1092,7 @@ function extPipeAudit(P,world,bb,r2){if(!world)return;
     reaches into a wall or the 1.2 m path out of the terrace door */
  {const TS=[];world.traverse(o=>{if(o.userData&&o.userData.terrace)TS.push(o);});TS.forEach(t=>{const T=t.userData.tf;if(!T||T.L<3.2||T.D<2.6||(H.furn||[]).some(f=>f.t==='otable'))return;/* designed houses carry their own terrace set */const cnt={};const FB=[];world.traverse(o=>{const u=o.userData||{};if(u.terrF){cnt[u.terrF]=(cnt[u.terrF]||0)+1;FB.push([u.terrF,bb(o)]);}});
   if(!cnt.otable||((cnt.chair||0)+(cnt.lounge||0))<2||(cnt.plant||0)<2)P.push({rule:'terrace-furnished',got:cnt});
+  if(T.hint&&Math.hypot(T.cx-T.hint[0],T.cz-T.hint[1])>4.5)P.push({rule:'terrace-placed',p:[r2(T.cx),r2(T.cz)],printed:T.hint});
   const WB=[];(H.walls||[]).filter(w=>w.level===(H.levels[0]&&H.levels[0].name)).forEach(w=>{const g=geo(w),t2=(w.thickness||.3)/2;WB.push([Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2]);});
   FB.forEach(([k,b])=>{const q=[b.min.x+.03,b.min.z+.03,b.max.x-.03,b.max.z-.03];if(WB.some(w=>q[0]<w[2]&&q[2]>w[0]&&q[1]<w[3]&&q[3]>w[1]))P.push({rule:'terrace-clear',what:k,why:'wall'});
    if(T.door!=null){const c=[T.cx+T.ux*T.door,T.cz+T.uz*T.door],e=[c[0]+T.nx*T.D,c[1]+T.nz*T.D],pb=[Math.min(c[0],e[0])-(Math.abs(T.ux)*.6),Math.min(c[1],e[1])-(Math.abs(T.uz)*.6),Math.max(c[0],e[0])+(Math.abs(T.ux)*.6),Math.max(c[1],e[1])+(Math.abs(T.uz)*.6)];if(q[0]<pb[2]&&q[2]>pb[0]&&q[1]<pb[3]&&q[3]>pb[1])P.push({rule:'terrace-clear',what:k,why:'door-path'});}});});}
@@ -1081,7 +1101,9 @@ function extPipeAudit(P,world,bb,r2){if(!world)return;
  if(H.plot&&H.plot.pts){let lawn=0;const DR=[],ST=[];world.traverse(o=>{const u=o.userData||{};if(u.lawn)lawn=1;if(u.drive)DR.push(bb(o));if(u.site)ST.push(o);});if(!lawn)P.push({rule:'site-present',why:'lawn'});
   const W0=(H.walls||[]).filter(w=>w.level===H.levels[0].name),hxs=W0.flatMap(w=>[w.start[0],w.end[0]]),hzs=W0.flatMap(w=>[w.start[1],w.end[1]]),hb=[Math.min(...hxs)-.3,Math.min(...hzs)-.3,Math.max(...hxs)+.3,Math.max(...hzs)+.3];let nc=0;ST.forEach(o=>{if(nc>=4)return;const b=bb(o);const hit=r=>b.max.x>r[0]&&b.min.x<r[2]&&b.max.z>r[1]&&b.min.z<r[3];if(hit(hb)||DR.some(d=>hit([d.min.x,d.min.z,d.max.x,d.max.z]))){nc++;P.push({rule:'site-clear',p:[r2((b.min.x+b.max.x)/2),r2((b.min.z+b.max.z)/2)]});}});
   const GA=H.plot.garage;if(GA){let gd=0,car=0;world.traverse(o=>{if(o.userData&&o.userData.car)car=1;});(H.walls||[]).forEach(w=>(w.openings||[]).forEach(o=>{if(o.kind==='garage')gd=1;}));if(!gd)P.push({rule:'garage-door'});
-   if(!DR.some(d=>GA.x>d.min.x-.6&&GA.x<d.max.x+.6&&GA.z>d.min.z-.6&&GA.z<d.max.z+.6)||!car)P.push({rule:'garage-drive',car});}}
+   if(!DR.some(d=>GA.x>d.min.x-.6&&GA.x<d.max.x+.6&&GA.z>d.min.z-.6&&GA.z<d.max.z+.6)||!car)P.push({rule:'garage-drive',car});
+   /* v18k audit car-clear: the car is inside the garage or on the drive, never in the 5 m in front of the garage door */
+   {let cp=null;world.traverse(o=>{if(o.userData&&o.userData.car&&!cp)cp=o.position;});if(cp&&GA.bb){const inG=cp.x>GA.bb[0]&&cp.x<GA.bb[2]&&cp.z>GA.bb[1]&&cp.z<GA.bb[3];const d=(cp.x-GA.x)*GA.n[0]+(cp.z-GA.z)*GA.n[1],s=Math.abs((cp.x-GA.x)*GA.n[1]-(cp.z-GA.z)*GA.n[0]);if(!inG&&d>0&&d<5&&s<1.6)P.push({rule:'car-clear',p:[r2(cp.x),r2(cp.z)]});}}}}
  const pipes=[],hops=[],guts=[],copes=[];world.traverse(o=>{const u=o.userData||{};if(!o.isMesh)return;if(u.dpipe&&o.geometry&&/Cylinder/.test(o.geometry.type||''))pipes.push(o);if(u.hopper)hops.push(o);if(u.gutter)guts.push(o);if(u.cope)copes.push(o);});
  pipes.forEach(p=>{const b=bb(p),c=b.getCenter(new THREE.Vector3()),top=b.max.y,bot=b.min.y;
   const nearH=hops.some(h=>{const a=bb(h);return Math.hypot(c.x-(a.min.x+a.max.x)/2,c.z-(a.min.z+a.max.z)/2)<.4&&Math.abs((a.min.y+a.max.y)/2-top)<.45;});
