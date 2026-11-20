@@ -63,3 +63,29 @@ export function tableAreas(img,PF={}){tableAreas.dump=null;const T0=performance.
  if(best){res=anal(best.vals);tot=res.tot;if(!tot&&best.rows.length<=10){let bs=null;const R=best.rows,k=R.map(()=>0);const rec=i=>{if(i===R.length){const v=R.map((r,j)=>r[k[j]][0]),A=anal(v);if(A.tot){const sc=R.reduce((s,r,j)=>s+r[k[j]][1],0);if(!bs||sc>bs.sc)bs={sc,A};}return;}for(let c=0;c<R[i].length;c++){k[i]=c;rec(i+1);}k[i]=0;};rec(0);if(bs){res=bs.A;tot=2;}}}
  tableAreas.dbg={nc:comps.length,nt:toks.length,ncand:cand.length,ncol:cols.length,nO,t:Math.round(performance.now()-T0),cols:out.slice(0,3).map(c=>c.txt.join(' ')),rows:best&&best.rows.map(r=>r.map(q=>q[0]).join('/')),dump:tableAreas.dump};
  return best?{vals:res.rooms,tots:res.tots,tot,n:best.n}:null;}
+
+/* v18d (ATL-1): printed room areas INSIDE the plan ("22,44 m²") with their positions, read by the same tiny CNN, so that each printed
+   area can be matched to the room polygon that contains it (rules room-merged / area-label-mismatch / rooms-vs-labels).
+   G: grey 0..255 (paper light) in the reader's working frame; bb: plan bbox [x0,y0,x1,y1]. A number counts only when a short
+   "m²"-like token follows it on the same line (dimension numbers have none). */
+export function labelAreas(G,W,H,bb,PF={}){const T0=performance.now(),hist=new Uint32Array(256);for(let i=0;i<W*H;i++)hist[Math.max(0,Math.min(255,G[i]|0))]++;
+ let acc=0,p95=255;for(let v=0;v<256;v++){acc+=hist[v];if(acc>=.95*W*H){p95=v;break;}}const thr=Math.min(200,p95*.78);
+ const lab=new Int32Array(W*H),comps=[];let id=0;
+ for(let i=0;i<W*H;i++){if(lab[i]||G[i]>=thr)continue;id++;const st=[i];lab[i]=id;let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0;
+  while(st.length){const k=st.pop(),px=k%W,py=(k/W)|0;n++;if(px<x0)x0=px;if(px>x1)x1=px;if(py<y0)y0=py;if(py>y1)y1=py;
+   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const qx=px+dx,qy=py+dy;if(qx<0||qy<0||qx>=W||qy>=H)continue;const q=qy*W+qx;if(!lab[q]&&G[q]<thr){lab[q]=id;st.push(q);}}
+   if(n>1500)break;}
+  if(n>1500){while(st.length)st.pop();continue;}const w=x1-x0+1,h=y1-y0+1;if(h<=30&&w<=2*h+4&&(x0+x1)/2>bb[0]&&(x0+x1)/2<bb[2]&&(y0+y1)/2>bb[1]&&(y0+y1)/2<bb[3])comps.push({x0,y0,x1:x1+1,y1:y1+1,h,w,n});}
+ comps.sort((a,b)=>a.x0-b.x0);const toks=[],GF=PF.laGap??.3;
+ for(const q of comps){let best=null;for(let j=toks.length-1;j>=0&&j>=toks.length-60;j--){const t=toks[j],th=t.th,gap=q.x0-t.x1;if(gap>Math.max(1,GF*th)||gap<-th)continue;
+   const ov=Math.min(q.y1,t.y1)-Math.max(q.y0,t.y0);const big=q.h>=.6*th&&q.h<=1.6*th&&ov>=.5*Math.min(q.h,th),small=q.h<.6*th&&q.y0>=t.y0+.25*th-1&&q.y1<=t.y1+.45*th+1;if(big||small){best=t;break;}}
+  if(best){best.x0=Math.min(best.x0,q.x0);best.x1=Math.max(best.x1,q.x1);best.y0=Math.min(best.y0,q.y0);best.y1=Math.max(best.y1,q.y1);if(q.h>=.6*best.th){best.th=Math.max(best.th,q.h);best.ty0=Math.min(best.ty0,q.y0);best.ty1=Math.max(best.ty1,q.y1);}best.k++;}
+  else toks.push({x0:q.x0,x1:q.x1,y0:q.y0,y1:q.y1,ty0:q.y0,ty1:q.y1,th:q.h,k:1});}
+ const unit=t=>toks.some(u=>u!==t&&u.x0-t.x1>=0&&u.x0-t.x1<=1.6*t.th&&Math.min(u.y1,t.ty1)-Math.max(u.y0,t.ty0)>=.4*t.th&&u.x1-u.x0<=2.4*t.th&&u.x1-u.x0>=.5*t.th&&u.y1-u.y0<=1.7*t.th&&u.k>=1&&u.k<=3);
+ const cand=toks.filter(t=>PF.laAll?t.th>=4&&t.th<=30&&t.k>=2&&(t.x1-t.x0)>=1.2*t.th&&(t.x1-t.x0)<=8*t.th:t.th>=4&&t.th<=30&&t.k>=2&&t.k<=7&&(t.x1-t.x0)>=1.3*t.th&&(t.x1-t.x0)<=5*t.th&&unit(t));const LOG=[];
+ const out=[];let nO=0;const MAXO=PF.laMax||150,VAR=[[0,0,0],[1,0,0],[0,-1,0],[0,0,1]];
+ for(const t of cand){if(nO>=MAXO)break;const h=t.y1-t.y0,p=Math.round(.25*h)+1;const vote=new Map();
+  for(const [a,b,c] of VAR){const X0=Math.max(0,t.x0-p-c),X1=Math.min(W,t.x1+p+c),Y0=Math.max(0,t.y0-p+a),Y1=Math.min(H,t.y1+p+b);if(Y1-Y0<3)continue;
+   const P=ocrPrep(G,W,X0,Y0,X1,Y1,p);const R=ocrRead(P.v,P.W);nO++;const m=/^(\d{1,3})[,.](\d{1,2})$/.exec(R.s);if(m&&R.conf>.3){const v=+(m[1]+'.'+m[2]);vote.set(v,(vote.get(v)||0)+R.conf);}}
+  const cs=[...vote.entries()].sort((x,y)=>y[1]-x[1]);if(PF.laAll)LOG.push([t.x0,t.y0,t.x1-t.x0,t.th,t.k,unit(t)?1:0,cs.map(c=>c[0]+':'+c[1].toFixed(2)).join('|')]);if(cs.length&&cs[0][1]>=(PF.laVote??1.5)&&cs[0][0]>=.8&&cs[0][0]<400)out.push({v:cs[0][0],p:[(t.x0+t.x1)/2,(t.y0+t.y1)/2]});}
+ labelAreas.dbg={log:LOG,nc:comps.length,nt:toks.length,ncand:cand.length,nO,n:out.length,t:Math.round(performance.now()-T0)};return out;}

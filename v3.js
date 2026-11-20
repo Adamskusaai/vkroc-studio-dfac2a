@@ -1035,6 +1035,15 @@ function extPipeAudit(P,world,bb,r2){if(!world)return;
  let ne=0;world.traverse(o=>{if(!o.isMesh||ne>=6)return;const u=o.userData||{};if(u.furn||u.doorLeaf||u.wm||u.rug)return;
   const mats=[].concat(o.material||[]),isFl=u.floor||mats.some(m=>m&&(floorMats.has(m)||(m.userData&&m.userData.floor)));
   if(!isFl)return;const b=bb(o);if(b.max.y>.5&&past(b,.10)){ne++;P.push({rule:'ext-material',p:[r2(b.min.x),r2(b.min.z)],why:'floor-outside'});}});
+ /* v18d RULE (ATL-1): no wall geometry floats across a room - a wall piece that starts well above the floor (a lintel/header over an opening)
+    rests at both ends on a lower piece of the same wall, or that end meets another wall. audit: lintel-floating */
+ {const WP=new Map();world.traverse(o=>{const u=o.userData||{};if(o.isMesh&&u.wp){const w=u.wp[0];if(!WP.has(w))WP.set(w,[]);WP.get(w).push(u.wp);}});let nf=0;
+  WP.forEach((ps,w)=>{if(!w||!w.start)return;const g=geo(w),L=g.L,tw=(w.thickness||.3)/2;const joins=s=>{const x=g.x0+g.u[0]*s,z=g.z0+g.u[1]*s;return H.walls.some(q=>{if(q===w||q.level!==w.level)return false;const h=geo(q),px=x-h.x0,pz=z-h.z0,t=Math.max(0,Math.min(h.L,px*h.u[0]+pz*h.u[1]));return Math.hypot(px-h.u[0]*t,pz-h.u[1]*t)<(q.thickness||.3)/2+tw+.08;});};
+   const base=Math.min(...ps.map(q=>q[3]));/* facade zones split one header into several boxes: merge touching pieces of the same height band first */
+   const mg=[];ps.slice().sort((a,b)=>a[3]-b[3]||a[4]-b[4]||a[1]-b[1]).forEach(q=>{const l=mg[mg.length-1];if(l&&Math.abs(l[3]-q[3])<.02&&Math.abs(l[4]-q[4])<.02&&q[1]<=l[2]+.03)l[2]=Math.max(l[2],q[2]);else mg.push([q[0],q[1],q[2],q[3],q[4]]);});
+   mg.forEach(p=>{const s0=p[1],s1=p[2],y0=p[3];if(nf>=6||y0<base+1.2)return;
+    const sup=s=>mg.some(q=>q!==p&&q[3]<y0-.3&&q[4]>=y0-.05&&q[1]-.06<=s&&q[2]+.06>=s)||((s<tw+.15||s>L-tw-.15)&&joins(Math.max(0,Math.min(L,s))));
+    if(!sup(s0)||!sup(s1)){nf++;const s=(s0+s1)/2;P.push({rule:'lintel-floating',p:[r2(g.x0+g.u[0]*s),r2(g.z0+g.u[1]*s)],w:w.id,s:[r2(s0),r2(s1)],y0:r2(y0)});}});});}
  const pipes=[],hops=[],guts=[],copes=[];world.traverse(o=>{const u=o.userData||{};if(!o.isMesh)return;if(u.dpipe&&o.geometry&&/Cylinder/.test(o.geometry.type||''))pipes.push(o);if(u.hopper)hops.push(o);if(u.gutter)guts.push(o);if(u.cope)copes.push(o);});
  pipes.forEach(p=>{const b=bb(p),c=b.getCenter(new THREE.Vector3()),top=b.max.y,bot=b.min.y;
   const nearH=hops.some(h=>{const a=bb(h);return Math.hypot(c.x-(a.min.x+a.max.x)/2,c.z-(a.min.z+a.max.z)/2)<.4&&Math.abs((a.min.y+a.max.y)/2-top)<.45;});
