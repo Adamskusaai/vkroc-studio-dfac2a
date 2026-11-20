@@ -997,7 +997,16 @@ function doorChoose(w,o,G,e){const a0=o.offset,b0=o.offset+o.width,lw=o.width-.1
  return best;}
 
 /* v20261117t: rainwater — a hopper sits on the roof-edge / gutter (outside the coping), a pipe runs down the wall to the ground and never bores through a slab or cornice. audit: downpipe-connected, downpipe-pierce */
-function installDownpipes(root){if(!root||roof==='none')return;
+/* v18c RULE (downpipe top = eave): the roof edge height at (x,z) is the highest roof point CLOSE to that spot (vertices within 0.8 m),
+   not the bounding box of the whole roof mesh - a pitched roof's box reaches the ridge, which made bungalow downpipes start at 2nd-floor height. audit: downpipe-eave */
+function eaveAt(root,x,z,R=.8){let y=null;const v=new THREE.Vector3();root.traverse(o=>{const u=o.userData||{};if(!o.isMesh||!(u.cope||u.lroof||u.roof)||u.dpipe||u.gutter||u.rail||u.hopper||u.flash)return;
+  o.updateWorldMatrix(true,false);const b=new THREE.Box3().setFromObject(o);if(x<b.min.x-R||x>b.max.x+R||z<b.min.z-R||z>b.max.z+R)return;
+  const pos=o.geometry&&o.geometry.attributes&&o.geometry.attributes.position;let yy=null;
+  if(pos&&pos.count<=20000&&!(u.cope&&o.geometry.type==='BoxGeometry')){for(let i=0;i<pos.count;i++){v.fromBufferAttribute(pos,i).applyMatrix4(o.matrixWorld);if(Math.abs(v.x-x)<=R&&Math.abs(v.z-z)<=R&&(yy===null||v.y>yy))yy=v.y;}
+   if(yy===null){/* big faces with no vertex nearby: sample the box only if the box is flat (slab/coping) */if(b.max.y-b.min.y<.35)yy=b.max.y;}}
+  else yy=b.max.y;
+  if(yy!==null&&(y===null||yy>y))y=yy;});return y;}
+function installDownpipes(root){window.__dpInfo=[];if(!root||roof==='none')return;
  const boxes=[];root.traverse(o=>{const u=o.userData||{};if(!o.isMesh)return;if(u.cope||u.lroof||(u.roof&&o.geometry&&o.geometry.type==='BoxGeometry'&&o.material!==M.glass&&!u.dpipe&&!u.gutter&&!u.rail&&!u.flash)){o.updateWorldMatrix(true,false);boxes.push(new THREE.Box3().setFromObject(o));}});
  const hits=(x,z,y0,y1)=>{for(const b of boxes){if(x>b.min.x-.02&&x<b.max.x+.02&&z>b.min.z-.02&&z<b.max.z+.02&&y1>b.min.y+.02&&y0<b.max.y-.02)return b;}return null;};
  const XW=(H.walls||[]).filter(w=>w._ext);if(!XW.length)return;
@@ -1007,11 +1016,11 @@ function installDownpipes(root){if(!root||roof==='none')return;
   const ns=n.map(q=>{const g=geo(q);return[-g.u[1]*q._ext,g.u[0]*q._ext];});const bx=ns[0][0]+ns[1][0],bz=ns[0][1]+ns[1][1],bl=Math.hypot(bx,bz)||1;
   const tx=p[0]+(bx/bl)*.45,tz=p[1]+(bz/bl)*.45,inside=(H.levels||[]).some(l=>(dcells(l.name)||[]).some(r=>tx>r[0]&&tx<r[2]&&tz>r[1]&&tz<r[3]));if(inside)return;corners.push({x:p[0],z:p[1],nx:bx/bl,nz:bz/bl});});});
  /* roof-edge height at a corner: top of the nearest coping / lower-roof / top slab */
- const edgeY=(x,z)=>{let y=null;root.traverse(o=>{const u=o.userData||{};if(!o.isMesh||!(u.cope||u.lroof||u.roof)||u.dpipe||u.gutter||u.rail)return;const b=new THREE.Box3().setFromObject(o);if(x<b.min.x-.35||x>b.max.x+.35||z<b.min.z-.35||z>b.max.z+.35)return;const yy=u.cope?b.max.y:b.max.y;if(y===null||yy>y)y=yy;});return y;};
+ const edgeY=(x,z)=>eaveAt(root,x,z);
  corners.forEach(c=>{let y=edgeY(c.x,c.z);if(y===null||y<1.2)return;
   /* sit the pipe outside the coping: start 12 cm out, push further until the run is clear of slabs */
   let off=.18,x=c.x+c.nx*off,z=c.z+c.nz*off;for(let k=0;k<8;k++){if(!hits(x,z,.2,y-.15))break;off+=.06;x=c.x+c.nx*off;z=c.z+c.nz*off;}
-  const top=y-.04,pt=Math.max(.4,top-.2);
+  const top=y-.04,pt=Math.max(.4,top-.2);(window.__dpInfo=window.__dpInfo||[]).push({x:+c.x.toFixed(2),z:+c.z.toFixed(2),top:+top.toFixed(2)});
   const hd=new THREE.Mesh(new THREE.BoxGeometry(.22,.16,.16),M.frame);hd.position.set(x-c.nx*.04,top-.1,z-c.nz*.04);hd.castShadow=true;hd.userData.roof=1;hd.userData.noCol=true;hd.userData.dpipe=1;hd.userData.hopper=1;root.add(hd);
   const armL=Math.max(.08,off-.04),arm=new THREE.Mesh(new THREE.BoxGeometry(armL,.05,.05),M.frame);arm.position.set(c.x+c.nx*(off-armL/2),top-.08,c.z+c.nz*(off-armL/2));arm.userData.roof=1;arm.userData.noCol=true;arm.userData.dpipe=1;arm.userData.gutter=1;root.add(arm);
   const pm=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,pt,12),M.frame);pm.position.set(x,pt/2,z);pm.castShadow=true;pm.userData.roof=1;pm.userData.noCol=true;pm.userData.dpipe=1;root.add(pm);
@@ -1031,6 +1040,7 @@ function extPipeAudit(P,world,bb,r2){if(!world)return;
   const nearH=hops.some(h=>{const a=bb(h);return Math.hypot(c.x-(a.min.x+a.max.x)/2,c.z-(a.min.z+a.max.z)/2)<.4&&Math.abs((a.min.y+a.max.y)/2-top)<.45;});
   const nearG=guts.concat(copes).some(h=>{const a=bb(h);return Math.hypot(c.x-(a.min.x+a.max.x)/2,c.z-(a.min.z+a.max.z)/2)<.55&&a.min.y-.2<=top&&top<=a.max.y+.45;});
   if(bot>.4||!(nearH||nearG))P.push({rule:'downpipe-connected',p:[r2(c.x),r2(c.z)],bot:+bot.toFixed(2)});
+  {const e=eaveAt(world,c.x,c.z,1.0);if(e!==null&&top>e+.35)P.push({rule:'downpipe-eave',p:[r2(c.x),r2(c.z)],top:+top.toFixed(2),eave:+e.toFixed(2)});}
   let hit=0;world.traverse(o=>{if(hit||!o.isMesh)return;const u=o.userData||{};if(!(u.cope||u.lroof||(u.roof&&u.slab))&&!u.cope)return;if(u.dpipe||u.gutter||u.hopper||u.rail||u.flash)return;
    if(!(u.cope||u.lroof))return;const a=bb(o),ox=Math.min(b.max.x,a.max.x)-Math.max(b.min.x,a.min.x),oz=Math.min(b.max.z,a.max.z)-Math.max(b.min.z,a.min.z),oy=Math.min(b.max.y-.22,a.max.y)-Math.max(b.min.y,a.min.y);
    if(ox>.02&&oz>.02&&oy>.02){hit=1;P.push({rule:'downpipe-pierce',p:[r2(c.x),r2(c.z)]});}});});
