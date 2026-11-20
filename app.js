@@ -445,6 +445,8 @@ async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)to
  if(R&&R.mode==='plan')inkFilter(R,lv.name);
  if(R&&R.mode==='plan')cleanOutline(lv.name);
  if(R&&R.mode==='plan')closeGaps(lv.name);
+ if(R&&R.mode==='plan')try{labelSplit(lv.name);}catch(e){console.warn('labelSplit',e);}
+ if(R&&R.mode==='plan')setTimeout(()=>{try{carGarage(lv.name);}catch(e){console.warn('carGarage',e);}},60);
  save();const u=H.underlay;bgW=u.w;$('imw').value=bgW;if(!bg.src.endsWith(u.src.slice(-40))){bg=new Image();bg.onload=()=>{fit();};bg.src=u.src;}else fit();banner();
  const md=R?R.mode:'none';window.__mode=md;
  const nAuto=H.walls.filter(w=>w.auto&&w.level===lv.name).length,nOp=H.walls.filter(w=>w.auto&&w.level===lv.name).reduce((s,w)=>s+(w.openings||[]).length,0);
@@ -458,8 +460,10 @@ async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)to
   else{const xs=ws.flatMap(w=>[w.start[0],w.end[0]]),zs=ws.flatMap(w=>[w.start[1],w.end[1]]);H.plot=plotAround(Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs));window.__parcel=0;}
   save();fit();}
  if(md==='site'&&!quiet2.v&&!H.underlay.cal&&!man){quiet2.v=1;dlg('Situácia pozemku','<p>Toto vyzerá ako situácia pozemku – nakreslil som obvod domu. Vnútorné steny dokresli alebo nahraj pôdorys.</p><p>Aká dlhá je dlhšia strana domu (v metroch)? Nájdete ju na kóte, napr. „14400“ = 14,4 m.</p><input type="text" inputmode="decimal" placeholder="napr. 14,4">',[['Neskôr',null],['Nastaviť','ok','go']]).then(r=>{quiet2.v=0;const v=parseFloat(((r&&r.name)||'').replace(',','.'));if(r&&v>2&&v<100)scaleBy(v/(R.longPx/R.ppm));});}
- if(md==='plan'&&R.scaleSrc&&!quiet2.v&&!H.underlay.cal&&!H.underlay.asked&&!man&&ws.length){H.underlay.asked=1;save();banner();const xs=ws.flatMap(w=>[w.start[0],w.end[0]]),zs=ws.flatMap(w=>[w.start[1],w.end[1]]),lx=Math.max(...xs)-Math.min(...xs),lz=Math.max(...zs)-Math.min(...zs),L=Math.max(lx,lz)+ (ws[0].thickness||.3),f1=v=>(Math.round(v*100)/100).toFixed(2).replace('.',',');
-  if(R.scaleSrc==='dims'){toast('Mierka podľa kót na výkrese: dom '+f1(L)+' m.','ok');}
+ /* v18h: a guessed scale (no scaleSrc) is also refereed by the printed room areas */if(md==='plan'&&(R.scaleSrc||areaFit())&&!quiet2.v&&!H.underlay.cal&&!H.underlay.asked&&!man&&ws.length){H.underlay.asked=1;save();banner();const xs=ws.flatMap(w=>[w.start[0],w.end[0]]),zs=ws.flatMap(w=>[w.start[1],w.end[1]]),lx=Math.max(...xs)-Math.min(...xs),lz=Math.max(...zs)-Math.min(...zs),L=Math.max(lx,lz)+ (ws[0].thickness||.3),f1=v=>(Math.round(v*100)/100).toFixed(2).replace('.',',');
+  const afD=R.scaleSrc==='dims'&&areaFit();/* v18h referee: dimension text misread vs >=5 printed room areas that agree with each other -> the areas win */
+  if(afD&&(afD.n>=5&&Math.abs(afD.f-1)>.12||afD.n>=3&&Math.abs(afD.f-1)>.25)){scaleBy(afD.f);toast('Mierka podľa plôch miestností z výkresu ('+afD.n+' miestností, kóty nesedeli): dom '+f1(L*afD.f)+' m. Ak nesedí, použite Mierka.','ok',5000);}
+  else if(R.scaleSrc==='dims'){toast('Mierka podľa kót na výkrese: dom '+f1(L)+' m.','ok');}
   else if(areaFit()){const af=areaFit();scaleBy(af.f);toast('Mierka podľa plôch miestností z výkresu ('+af.n+' miestností): dom '+f1(L*af.f)+' m. Ak nesedí, použite Mierka.','ok',5000);}
   else{quiet2.v=1;/* scale hint from the doors: interior leaves are 80-90 cm in practice */const DW=ws.flatMap(w=>(w.openings||[]).filter(o=>o.type==='door'&&o.kind!=='entrance'&&o.kind!=='terrace'&&o.width>.5&&o.width<1.3).map(o=>o.width)).sort((a,b)=>a-b),dm=DW.length?DW[DW.length>>1]:0,dOff=dm&&(dm<.78||dm>.95);
   const dTxt=dm?'<p>Pomôcka: vnútorné dvere teraz merajú asi <b>'+Math.round(dm*100)+' cm</b> (bežne 80–90 cm)'+(dOff?' – mierka asi nesedí, dom podľa dverí by mal <b>'+f1(L*.85/dm)+' m</b>.':' – mierka vyzerá v poriadku.')+'</p>':'';
@@ -467,9 +471,9 @@ async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)to
  window.__rec=ws.length;try{window.vkA&&window.vkA(ws.length?'plan_read_ok':'plan_read_fail',ws.length?rooms().length:undefined)}catch(e){};window.__nw=H.walls.length;window.__ops=H.walls.reduce((s,w)=>s+(w.openings||[]).length,0);window.__need=!!(R&&R.needTrace);}
 const quiet2={v:0};
 /* v12b: Slovak plans print every room's net area ('12,10 m²'). Rooms whose own printed area agrees (±6 %) with the others fix the scale: f = sqrt(printed/detected), median of the agreeing ones */
-function areaFit(){const R=RC[lvl];const RS=rooms();if(!R||RS.length<3)return null;const A=(H.rarea||[]).filter(a=>a.level===lvl);const by={};A.forEach(a=>{const id=roomAt(R,a.p);if(id>1)(by[id]=by[id]||[]).push(a.v);});const fs=[];RS.forEach(r=>{const v=by[r.id];if(v&&v.length===1&&r.a>=1.5)fs.push(Math.sqrt(v[0]/r.a));});if(fs.length<3)return null;fs.sort((a,b)=>a-b);let best=null;for(const c of fs){const g=fs.filter(x=>Math.abs(x/c-1)<.06);if(!best||g.length>best.length)best=g;}if(best.length<Math.max(3,Math.ceil(fs.length*.5)))return null;const f=best[Math.floor((best.length-1)*.25)];/* low quartile: detected partitions are drawn thicker than printed, so rooms read small and ratios run high */if(f<.5||f>2||Math.abs(f-1)<.02)return null;return{f,n:best.length};}
+function areaFit(){const R=RC[lvl];const RS=rooms();if(!R||RS.length<3)return null;const A=(H.rarea||[]).filter(a=>a.level===lvl);const by={};A.forEach(a=>{const id=roomAt(R,a.p);if(id>1)(by[id]=by[id]||[]).push(a.v);});const fs=[];RS.forEach(r=>{const v=by[r.id];if(v&&v.length===1&&r.a>=1.5)fs.push(Math.sqrt(v[0]/r.a));});if(fs.length<3)return null;fs.sort((a,b)=>a-b);let best=null;for(const c of fs){const g=fs.filter(x=>Math.abs(x/c-1)<.06);if(!best||g.length>best.length)best=g;}if(best.length<Math.max(3,Math.ceil(fs.length*.5)))return null;const f=best[Math.floor((best.length-1)*.25)];/* low quartile: detected partitions are drawn thicker than printed, so rooms read small and ratios run high */if(f<.5||f>2||Math.abs(f-1)<.02)return null;return{f,f50:best[best.length>>1],n:best.length,all:fs.map(x=>+x.toFixed(3))};}
 window.__areaFit=areaFit;
-function scaleBy(f){snap();bgW=Math.round(bgW*f*100)/100;H.underlay.w=bgW;H.underlay.cal=1;$('imw').value=bgW;H.walls.forEach(w=>{w.start=w.start.map(c=>Math.round(c*f*100)/100);w.end=w.end.map(c=>Math.round(c*f*100)/100);});if(H.plot&&H.plot.pts)H.plot.pts=H.plot.pts.map(p=>[Math.round(p[0]*f*100)/100,Math.round(p[1]*f*100)/100]);const sp=o=>{o.p=[Math.round(o.p[0]*f*100)/100,Math.round(o.p[1]*f*100)/100];};(H.rlab||[]).forEach(sp);(H.rn||[]).forEach(sp);(H.furn||[]).forEach(sp);save();fit();banner();}
+function scaleBy(f){snap();bgW=Math.round(bgW*f*100)/100;H.underlay.w=bgW;H.underlay.cal=1;$('imw').value=bgW;H.walls.forEach(w=>{w.start=w.start.map(c=>Math.round(c*f*100)/100);w.end=w.end.map(c=>Math.round(c*f*100)/100);});if(H.plot&&H.plot.pts)H.plot.pts=H.plot.pts.map(p=>[Math.round(p[0]*f*100)/100,Math.round(p[1]*f*100)/100]);const sp=o=>{o.p=[Math.round(o.p[0]*f*100)/100,Math.round(o.p[1]*f*100)/100];};(H.rlab||[]).forEach(sp);(H.rn||[]).forEach(sp);(H.rarea||[]).forEach(o=>{if(o.p)sp(o);});(H.furn||[]).forEach(sp);save();fit();banner();}
 $('rec').onclick=()=>recog();$('recx').onclick=()=>{const n=H.walls.filter(w=>w.auto&&w.level===lvl).length;if(!n)return;snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));save();draw();$('hint').textContent='Rozpoznané steny vymazané ('+n+'). Späť ich vráti.';toast('Vymazaných '+n+' rozpoznaných stien.','ok');};let sT;$('sens').oninput=()=>{clearTimeout(sT);sT=setTimeout(()=>H.underlay&&recog(1),350);};$('banc').onclick=()=>$('cal').click();
 function afterImg(ns){const go=()=>{fit();recog(1,ns===2);};bg.complete&&bg.width?go():bg.onload=()=>{draw();go();};}
 const pickImg=m=>{imgMode=m;$('img').value='';$('img').click();};
@@ -735,6 +739,45 @@ function dropFurnBoxes(words,L){let n=0,cut=0;dropFurnBoxes.ws=[];const seen=new
  if(n)H.boxFix={boxes:n,walls:cut,ws:dropFurnBoxes.ws};}
 // prem8 u: after recognition (and furniture-box cuts) tidy the wall graph: drop dead-end stubs, then close a room where a wall
 // ends in front of another wall: gap ≤ 0.5 m -> extend the wall; 0.5–1.2 m -> a wall piece with a door. Logged in H.gapFix.
+/* v18h RULE (one printed area = one room): a room polygon holding two or more different printed areas lost a wall piece - usually a door
+   gap where a wall stops short of another. Try closing each short gap (wall end -> nearest wall straight ahead, <= 1.3 m) inside that room
+   with a door; keep the one that separates the labels with room sizes closest to the printed areas. audit: room-merged */
+/* v18h RULE (garage from the drawing): catalogue plans print no room names - a room on the outside wall, 13-45 m2, at least 2.6 x 4.6 m,
+   holding one drawn car outline (ink component about 1.5-2.5 x 3.6-5.6 m) is a garage: it is named Garáž, which gives it the
+   sectional door, driveway and car (rules garage-door, garage-drive). */
+function carGarage(L){if((globalThis.__PF||{}).noCar||!bg||!H.underlay)return;if(!bg.complete||!bg.naturalWidth){bg.addEventListener('load',()=>carGarage(L),{once:true});return;}
+ const RS=rooms(L),R=RC[L];if(!R||RS.some(r=>/gar/i.test(r.n||'')))return;const iw=bg.naturalWidth,ih=bg.naturalHeight,ppm=iw/bgW;if(ppm<8)return;
+ const cv=document.createElement('canvas');cv.width=iw;cv.height=ih;const cx=cv.getContext('2d');cx.drawImage(bg,0,0);const D=cx.getImageData(0,0,iw,ih).data;
+ const hits=[];for(const r of RS){const bb=r.bb;if(!bb)continue;const bw=bb[2]-bb[0],bh=bb[3]-bb[1];if(r.a<13||r.a>45||Math.min(bw,bh)<2.6||Math.max(bw,bh)<4.6)continue;
+  const m=.3,x0=Math.max(0,Math.floor((bb[0]+m)*ppm)),y0=Math.max(0,Math.floor((bb[1]+m)*ppm)),x1=Math.min(iw,Math.ceil((bb[2]-m)*ppm)),y1=Math.min(ih,Math.ceil((bb[3]-m)*ppm)),W=x1-x0,Hh=y1-y0;if(W<10||Hh<10)continue;
+  const ink=new Uint8Array(W*Hh);for(let y=0;y<Hh;y++)for(let x=0;x<W;x++){const k=((y+y0)*iw+x+x0)*4,g=(D[k]+D[k+1]+D[k+2])/3,sat=Math.max(D[k],D[k+1],D[k+2])-Math.min(D[k],D[k+1],D[k+2]);
+   const wx=(x+x0)/ppm,wz=(y+y0)/ppm;if(g<205&&sat<60&&roomAt(R,[wx,wz])===r.id)ink[y*W+x]=1;}
+  /* components with 1 px dilation (outlines are thin and broken) */const lab=new Int32Array(W*Hh);let n=0;const comps=[];
+  for(let i=0;i<W*Hh;i++){if(!ink[i]||lab[i])continue;n++;const st=[i];lab[i]=n;let a=0,mx=1e9,my=1e9,Mx=-1,My=-1;while(st.length){const j=st.pop(),x=j%W,y=(j/W)|0;a++;if(x<mx)mx=x;if(x>Mx)Mx=x;if(y<my)my=y;if(y>My)My=y;
+    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=W||yy>=Hh)continue;const q=yy*W+xx;if(ink[q]&&!lab[q]){lab[q]=n;st.push(q);}}}
+   comps.push({a,w:(Mx-mx+1)/ppm,h:(My-my+1)/ppm});}
+    const car=comps.filter(c=>{const s=Math.min(c.w,c.h),l=Math.max(c.w,c.h);return s>=1.5&&s<=2.5&&l>=3.6&&l<=5.6&&c.a/(c.w*c.h*ppm*ppm)<.45;});
+  const big=comps.filter(c=>Math.max(c.w,c.h)>=1.2);if(car.length===1&&big.length<=3)hits.push({r,c:car[0]});}
+ if(hits.length!==1)return;const r=hits[0].r,p=[(r.bb[0]+r.bb[2])/2,(r.bb[1]+r.bb[3])/2];const id=roomAt(R,p)===r.id?p:null;if(!id)return;
+ H.rn=(H.rn||[]).filter(e=>!(e.level===L&&roomAt(R,e.p)===r.id));H.rn.push({level:L,p,n:'Garáž'});delete RC[L];H.carFix=[r.a,hits[0].c];save();try{draw();}catch(e){}}
+function labelSplit(L){if((globalThis.__PF||{}).noSplit)return;const A=(H.rarea||[]).filter(a=>a.level===L&&a.p&&a.v>=.8&&a.v<200);if(A.length<3)return;const log=[];
+ const G=q=>{const dx=q.end[0]-q.start[0],dz=q.end[1]-q.start[1],l=Math.hypot(dx,dz)||1e-9;return{l,u:[dx/l,dz/l]};};
+ const dist=(p,q)=>{const{l,u}=G(q),t=Math.max(0,Math.min(l,(p[0]-q.start[0])*u[0]+(p[1]-q.start[1])*u[1]));return Math.hypot(p[0]-q.start[0]-u[0]*t,p[1]-q.start[1]-u[1]*t)-q.thickness/2;};
+ const multi=()=>{const RS=rooms(L),R=RC[L],by={};A.forEach(a=>{const id=roomAt(R,a.p);if(RS.some(q=>q.id===id))(by[id]=by[id]||[]).push(a);});return {RS,R,by};};
+ for(let it=0;it<6;it++){const {RS,R,by}=multi();const bad=RS.filter(r=>by[r.id]&&new Set(by[r.id].map(a=>a.v.toFixed(1))).size>=2);if(!bad.length)break;let done=0;
+  for(const r of bad){if(/kuchy|obýv/i.test(r.n||''))continue;/* open-plan kitchen+living: the dashed boundary is no wall */const la=by[r.id],bb=r.bb;const cand=[];
+   for(const q of H.walls.filter(w=>w.level===L)){const{u}=G(q);for(const[e,sg]of[[q.end,1],[q.start,-1]]){if(e[0]<bb[0]-.4||e[0]>bb[2]+.4||e[1]<bb[1]-.4||e[1]>bb[3]+.4)continue;const free=!H.walls.some(o=>o!==q&&o.level===L&&dist(e,o)<=.06);
+     /* free end: straight ahead (door gap); any end: also both perpendicular directions (a whole missing partition, up to 5 m) */
+     for(const[d0,mx]of[[[u[0]*sg,u[1]*sg],free?1.3:0],[[-u[1],u[0]],5],[[u[1],-u[0]],5]]){if(!mx)continue;for(let s=.1;s<=mx;s+=.05){const p=[e[0]+d0[0]*s,e[1]+d0[1]*s];const o=H.walls.find(o=>o!==q&&o.level===L&&dist(p,o)<=.02);if(o){cand.push({q,e:[...e],d0,len:s+o.thickness/2});break;}}}}}
+   let best=null;const k0=H.walls.length,oks=[];const hard=()=>{try{return (window.__rulesCheck()||[]).filter(p=>p.sev==='hard').length;}catch(e){return 1e9;}},h0=hard();
+   for(const c of cand){const p1=[+(c.e[0]+c.d0[0]*c.len).toFixed(3),+(c.e[1]+c.d0[1]*c.len).toFixed(3)],w=Math.min(.9,c.len-.1);
+    const nw={id:'ls'+Date.now().toString(36)+cand.indexOf(c),auto:1,level:L,start:c.e,end:p1,thickness:Math.min(.15,c.q.thickness),base:0,height:c.q.height,openings:w>=.6?[{type:'door',offset:+((c.len-w)/2).toFixed(3),width:+w.toFixed(2),height:2.05,auto:1}]:[]};
+    H.walls.push(nw);const T=multi();const ids=la.map(a=>roomAt(T.R,a.p));if(new Set(ids).size>=2&&ids.every(i=>T.RS.some(q=>q.id===i))){/* sizes vs printed */let err=0;/* scale-free: compare the ratios of the new rooms with the ratios of the printed areas */const rs=la.map((a,j)=>Math.log(T.RS.find(q=>q.id===ids[j]).a/a.v)),mu=rs.reduce((x,y)=>x+y,0)/rs.length;rs.forEach(v=>err+=Math.abs(v-mu));err/=la.length;err+=.01*c.len;oks.push({nw,err});}
+    H.walls.splice(k0);}
+   /* the new partition must not create a hard problem (a door into the wall, an unreachable room) */oks.sort((a,b)=>a.err-b.err);for(const ok of oks.filter(o=>o.err<.25).slice(0,4)){H.walls.push(ok.nw);const h=hard();H.walls.splice(k0);if(h<=h0){best=ok;break;}}
+   if(best&&best.err<.25){H.walls.push(best.nw);log.push([r.n,la.map(a=>a.v),+best.err.toFixed(2)]);done=1;break;}}
+  if(!done)break;}
+ if(log.length)H.splitFix=log;}
 function closeGaps(L){closeGaps.log=[];const ws=()=>H.walls.filter(q=>q.level===L&&q.auto);const G=q=>{const dx=q.end[0]-q.start[0],dz=q.end[1]-q.start[1],l=Math.hypot(dx,dz)||1e-9;return{l,u:[dx/l,dz/l]};};
  const dist=(p,q)=>{const{l,u}=G(q),t=Math.max(0,Math.min(l,(p[0]-q.start[0])*u[0]+(p[1]-q.start[1])*u[1]));return Math.hypot(p[0]-q.start[0]-u[0]*t,p[1]-q.start[1]-u[1]*t)-q.thickness/2;};
  const free=(q,e)=>!H.walls.some(o=>o!==q&&o.level===L&&dist(e,o)<=.12);let st=0,ex=0,dr=0;
