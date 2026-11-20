@@ -1,5 +1,5 @@
 import {LTJ} from './ltpl.js?v=20261112i';
-import {tableAreas,labelAreas} from './ocr.js?v=20261118d';
+import {tableAreas,labelAreas} from './ocr.js?v=20261118e';
 import {segPlan} from './seg.js?v=20261118b';
 // plan.js — robust floor-plan reader (plain JS, no deps). prem8.
 // readPlan(img,{rect}) -> {walls:[{start,end,thickness,op:[]}], canvas, w, guess, mode:'plan', conf, scaleSrc, dbg} | null
