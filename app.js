@@ -449,7 +449,9 @@ async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)to
  const md=R?R.mode:'none';window.__mode=md;
  const nAuto=H.walls.filter(w=>w.auto&&w.level===lv.name).length,nOp=H.walls.filter(w=>w.auto&&w.level===lv.name).reduce((s,w)=>s+(w.openings||[]).length,0);
  const hm=md==='site'?(R&&R.parcel?'Toto vyzerá ako situácia pozemku – nakreslil som obvod domu a pozemok. Vnútorné steny dokreslite alebo nahrajte pôdorys.':'Toto vyzerá ako situácia pozemku – nakreslil som obvod domu. Vnútorné steny dokreslite alebo nahrajte pôdorys.'):ws.length?'Rozpoznaných '+nAuto+' stien'+(nOp?' a '+nOp+(nOp==1?' otvor':nOp<5?' otvory':' otvorov')+' (dvere/okná)':'')+'. Ak niečo chýba alebo prebýva, posuňte „Citlivosť“. Opravy: Posunúť, Zmazať, Späť.':(R&&R.needTrace)?'Pôdorys sa nepodarilo spoľahlivo prečítať. Označte 4 rohy domu, alebo steny nakreslite ručne.':'Na obrázku sme nenašli steny ani obrys domu. Výkres zostáva ako podklad – steny nakreslite ručne alebo nahrajte pôdorys.';
- $('hint').textContent=hm;if(!quiet||md!=='plan')toast(hm.split('. ')[0]+'.',ws.length?'ok':'warn');
+ /* v18g: raster uploads with a guessed scale get the customer hint (original PDF is exact; on a screenshot zoom so the room areas / area table are readable) */
+ const hm2=(md==='plan'&&ws.length&&u&&!u.pdfW&&u.guess)?hm+' Tip: najpresnejšie je pôvodné PDF. Ak nahrávate snímku obrazovky, priblížte pôdorys aj tabuľku plôch, aby boli čísla čitateľné.':hm;
+ $('hint').textContent=hm2;if(!quiet||md!=='plan')toast(hm.split('. ')[0]+'.',ws.length?'ok':'warn');
  if(R&&R.needTrace&&!quiet){setTimeout(()=>offerTrace(!!ws.length),200);}
  if(md==='site'&&!H.plot&&ws.length){
   if(R&&R.parcel&&R.parcel.pts&&R.parcel.pts.length>=3){H.plot={pts:R.parcel.pts.map(p=>[p[0],p[1]]),fence:R.parcel.fence!==0?1:0};window.__parcel=1;window.__parcelConf=R.parcel.conf||0;}
