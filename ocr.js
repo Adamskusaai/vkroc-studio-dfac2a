@@ -35,8 +35,8 @@ export function tableAreas(img,PF={}){tableAreas.dump=null;const T0=performance.
  comps.sort((a,b)=>a.x0-b.x0);const toks=[];
  for(const q of comps){let best=null;for(let j=toks.length-1;j>=0&&j>=toks.length-60;j--){const t=toks[j],th=t.th,gap=q.x0-t.x1;if(gap>Math.max(1.5,.55*th)||gap<-th)continue;
    const ov=Math.min(q.y1,t.y1)-Math.max(q.y0,t.y0);const big=q.h>=.6*th&&q.h<=1.6*th&&ov>=.5*Math.min(q.h,th),small=q.h<.6*th&&q.y0>=t.y0+.25*th-1&&q.y1<=t.y1+.45*th+1;if(big||small){best=t;break;}}
-  if(best){best.x0=Math.min(best.x0,q.x0);best.x1=Math.max(best.x1,q.x1);best.y0=Math.min(best.y0,q.y0);best.y1=Math.max(best.y1,q.y1);if(q.h>=.6*best.th){best.th=Math.max(best.th,q.h);best.ty0=Math.min(best.ty0,q.y0);best.ty1=Math.max(best.ty1,q.y1);}best.k++;}
-  else toks.push({x0:q.x0,x1:q.x1,y0:q.y0,y1:q.y1,ty0:q.y0,ty1:q.y1,th:q.h,k:1});}
+  if(best){best.x0=Math.min(best.x0,q.x0);best.x1=Math.max(best.x1,q.x1);best.y0=Math.min(best.y0,q.y0);best.y1=Math.max(best.y1,q.y1);if(q.h>=.6*best.th){best.th=Math.max(best.th,q.h);best.ty0=Math.min(best.ty0,q.y0);best.ty1=Math.max(best.ty1,q.y1);}best.k++;best.cs.push(q);}
+  else toks.push({x0:q.x0,x1:q.x1,y0:q.y0,y1:q.y1,ty0:q.y0,ty1:q.y1,th:q.h,k:1,cs:[q]});}
  const cand=toks.filter(t=>t.th>=3&&t.th<=36&&(t.x1-t.x0)>=1.2*t.th&&(t.x1-t.x0)<=7*t.th);
  /* columns: right edges aligned, similar height, stacked at a near-constant pitch */
  const used=new Set(),cols=[];cand.sort((a,b)=>a.ty0-b.ty0);
@@ -46,7 +46,7 @@ export function tableAreas(img,PF={}){tableAreas.dump=null;const T0=performance.
  const out=[];let nO=0;const MAXO=PF.ocrMax||160;
  const VAR=PF.ocrVar||[[0,0,0],[1,0,0],[0,-1,0],[1,-1,0],[0,0,1],[-1,1,0]];
  for(const col of cols){const rows=[];for(const t of col){if(nO>=MAXO)break;const h=t.y1-t.y0,p=Math.round(.25*h)+1;if(h<2)continue;const vote=new Map();let txt='';
-   for(const [a,b,c] of VAR){const X0=Math.max(0,t.x0-p-c),X1=Math.min(W,t.x1+p+c),Y0=Math.max(0,t.y0-p+a),Y1=Math.min(H,t.y1+p+b);if(Y1-Y0<3)continue;
+   for(const [a,b,c] of (VAR)){const X0=Math.max(0,t.x0-p-c),X1=Math.min(W,t.x1+p+c),Y0=Math.max(0,t.y0-p+a),Y1=Math.min(H,t.y1+p+b);if(Y1-Y0<3)continue;
     const P=ocrPrep(G,W,X0,Y0,X1,Y1,p);const R=ocrRead(P.v,P.W);nO++;if(!txt)txt=R.s;if(PF.ocrDump)(tableAreas.dump=tableAreas.dump||[]).push({W:P.W,v:Array.from(P.v,z=>Math.round(z*255)),s:R.s,c:+R.conf.toFixed(3),b:[X0,Y0,X1,Y1]});
     const m=/^(\d{1,3})[,.](\d{1,2})$/.exec(R.s);if(m&&R.conf>(PF.ocrConf??.3)){const v=+(m[1]+'.'+m[2]);vote.set(v,(vote.get(v)||0)+R.conf);}}
    t.txt=txt;const cs=[...vote.entries()].sort((x,y)=>y[1]-x[1]);if(cs.length&&cs[0][1]>=(PF.ocrVote??.9))rows.push(cs.slice(0,3));}
@@ -79,13 +79,15 @@ export function labelAreas(G,W,H,bb,PF={}){const T0=performance.now(),hist=new U
  comps.sort((a,b)=>a.x0-b.x0);const toks=[],GF=PF.laGap??.5;
  for(const q of comps){let best=null;for(let j=toks.length-1;j>=0&&j>=toks.length-60;j--){const t=toks[j],th=t.th,gap=q.x0-t.x1;if(gap>Math.max(1,GF*th)||gap<-th)continue;
    const ov=Math.min(q.y1,t.y1)-Math.max(q.y0,t.y0);const big=q.h>=.6*th&&q.h<=1.6*th&&ov>=.5*Math.min(q.h,th),small=q.h<.6*th&&q.y0>=t.y0+.25*th-1&&q.y1<=t.y1+.45*th+1;if(big||small){best=t;break;}}
-  if(best){best.x0=Math.min(best.x0,q.x0);best.x1=Math.max(best.x1,q.x1);best.y0=Math.min(best.y0,q.y0);best.y1=Math.max(best.y1,q.y1);if(q.h>=.6*best.th){best.th=Math.max(best.th,q.h);best.ty0=Math.min(best.ty0,q.y0);best.ty1=Math.max(best.ty1,q.y1);}best.k++;}
-  else toks.push({x0:q.x0,x1:q.x1,y0:q.y0,y1:q.y1,ty0:q.y0,ty1:q.y1,th:q.h,k:1});}
+  if(best){best.x0=Math.min(best.x0,q.x0);best.x1=Math.max(best.x1,q.x1);best.y0=Math.min(best.y0,q.y0);best.y1=Math.max(best.y1,q.y1);if(q.h>=.6*best.th){best.th=Math.max(best.th,q.h);best.ty0=Math.min(best.ty0,q.y0);best.ty1=Math.max(best.ty1,q.y1);}best.k++;best.cs.push(q);}
+  else toks.push({x0:q.x0,x1:q.x1,y0:q.y0,y1:q.y1,ty0:q.y0,ty1:q.y1,th:q.h,k:1,cs:[q]});}
  const unit=t=>toks.some(u=>u!==t&&u.x0-t.x1>=0&&u.x0-t.x1<=1.6*t.th&&Math.min(u.y1,t.ty1)-Math.max(u.y0,t.ty0)>=.4*t.th&&u.x1-u.x0<=2.4*t.th&&u.x1-u.x0>=.5*t.th&&u.y1-u.y0<=1.7*t.th&&u.k>=1&&u.k<=3);
  const cand=toks.filter(t=>PF.laAll?t.th>=4&&t.th<=30&&t.k>=2&&(t.x1-t.x0)>=1.2*t.th&&(t.x1-t.x0)<=8*t.th:t.th>=4&&t.th<=30&&t.k>=2&&t.k<=7&&(t.x1-t.x0)>=1.3*t.th&&(t.x1-t.x0)<=5*t.th);cand.forEach(t=>t.u=unit(t));const LOG=[];
  const out=[];let nO=0;const MAXO=PF.laMax||150,VAR=[[0,0,0],[1,0,0],[0,-1,0],[0,0,1]];
  for(const t of cand){if(nO>=MAXO)break;const h=t.y1-t.y0,p=Math.round(.25*h)+1;const vote=new Map();
   for(const [a,b,c] of VAR){const X0=Math.max(0,t.x0-p-c),X1=Math.min(W,t.x1+p+c),Y0=Math.max(0,t.y0-p+a),Y1=Math.min(H,t.y1+p+b);if(Y1-Y0<3)continue;
    const P=ocrPrep(G,W,X0,Y0,X1,Y1,p);const R=ocrRead(P.v,P.W);nO++;const m=/^(\d{1,3})[,.](\d{1,2})$/.exec(R.s);if(m&&R.conf>.3){const v=+(m[1]+'.'+m[2]);vote.set(v,(vote.get(v)||0)+R.conf);}}
-  const cs=[...vote.entries()].sort((x,y)=>y[1]-x[1]);if(PF.laAll)LOG.push([t.x0,t.y0,t.x1-t.x0,t.th,t.k,unit(t)?1:0,cs.map(c=>c[0]+':'+c[1].toFixed(2)).join('|')]);/* catalogue plans print bare areas ('32,84', no unit): accepted with a near-unanimous vote and two decimals */const bare=!t.u,two=cs.length&&/\.\d\d$/.test(cs[0][0].toFixed(2))&&Math.round(cs[0][0]*100)%10!==0||cs.length&&cs[0][0].toFixed(2).length>=4;if(cs.length&&cs[0][1]>=(bare?(PF.laVoteB??2.6):(PF.laVote??1.5))&&cs[0][0]>=.8&&cs[0][0]<400)out.push({v:cs[0][0],p:[(t.x0+t.x1)/2,(t.y0+t.y1)/2]});}
+  const cs=[...vote.entries()].sort((x,y)=>y[1]-x[1]);/* v21d: narrow fonts print '1' as a bare stroke the net skips ('18,6' read '8,6'): one more full-height glyph than digits read, and the leftmost one a thin bar -> a leading 1 */
+  if(cs.length&&!PF.noLead1){const tall=t.cs.filter(q=>q.h>=.75*t.th).sort((a,b)=>a.x0-b.x0),ds=cs[0][0].toFixed(cs[0][0]%1?(Math.round(cs[0][0]*100)%10?2:1):0).replace('.','');const f=tall[0];if(f&&tall.length===ds.length+1&&f.w<=.3*f.h&&f.n<=f.h*Math.max(2,.3*f.h)){const v=+('1'+cs[0][0].toString());if(v<400)cs[0][0]=v;}}
+  if(PF.laAll)LOG.push([t.x0,t.y0,t.x1-t.x0,t.th,t.k,unit(t)?1:0,cs.map(c=>c[0]+':'+c[1].toFixed(2)).join('|')]);/* catalogue plans print bare areas ('32,84', no unit): accepted with a near-unanimous vote and two decimals */const bare=!t.u,two=cs.length&&/\.\d\d$/.test(cs[0][0].toFixed(2))&&Math.round(cs[0][0]*100)%10!==0||cs.length&&cs[0][0].toFixed(2).length>=4;if(cs.length&&cs[0][1]>=(bare?(PF.laVoteB??2.6):(PF.laVote??1.5))&&cs[0][0]>=.8&&cs[0][0]<400)out.push({v:cs[0][0],p:[(t.x0+t.x1)/2,(t.y0+t.y1)/2]});}
  labelAreas.dbg={log:LOG,nc:comps.length,nt:toks.length,ncand:cand.length,nO,n:out.length,t:Math.round(performance.now()-T0)};return out;}
