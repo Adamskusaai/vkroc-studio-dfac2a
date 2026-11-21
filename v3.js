@@ -497,7 +497,7 @@ function build(){KCH={};const root=new THREE.Group(),lv={};H.levels.forEach(l=>l
  const Rroof=(H&&H.roof)||roof; if(Rroof&&Rroof!==roof) roof=Rroof;
  /* v20261117g RULE (flat roofs): every gravel/membrane slab gets world-space UVs (no per-piece stretching), so overlapping slab pieces render one identical
    surface (no visible z-fight, no hairline steps); sky-exposed roof slabs are not lightmapped (live light only). audit: coplanar-overlap */
-const add=(geom,mat,x,y,z,ry=0,nc)=>{if(mat===FLATM){if(!FLATW){FLATW=FLATM.clone();FLATW.map=FLATM.map.clone();FLATW.map.repeat.set(.5,.5);FLATW.map.needsUpdate=true;FLATW.color.set(0xa4a8ae);}boxUV(geom,x,z);mat=FLATW;}const m=new THREE.Mesh(geom,mat);m.position.set(x,y,z);m.rotation.y=ry;m.castShadow=m.receiveShadow=mat!==M.glass;if(nc)m.userData.noCol=true;root.add(m);return m;};
+const add=(geom,mat,x,y,z,ry=0,nc)=>{if(mat===FLATM){if(!FLATW){FLATW=FLATM.clone();FLATW.map=FLATM.map.clone();FLATW.map.repeat.set(.5,.5);FLATW.map.needsUpdate=true;FLATW.color.set(0xa4a8ae);FLATW.userData.flatw=1;}boxUV(geom,x,z);mat=FLATW;}const m=new THREE.Mesh(geom,mat);m.position.set(x,y,z);m.rotation.y=ry;m.castShadow=m.receiveShadow=mat!==M.glass;if(nc)m.userData.noCol=true;root.add(m);return m;};
  FGE=null;CELLS={};for(const k of Object.keys(_dc))delete _dc[k];const FS=FSTY[(H.mat&&H.mat.fasada)||'mix']||FSTY.mix,FZ=new Map();
  // accent zones on exterior walls: around the entrance door (ent) and around terrace / sliding doors (ter); slivers < 0.6 m snap to the wall end
  H.walls.forEach(w=>{if(!w._ext)return;const L=geo(w).L,Z=[];[...(w.openings||[])].sort((p,q)=>(q.kind==='entrance')-(p.kind==='entrance')).forEach(o=>{const c=o.offset+o.width/2;let k=null,r=0;
@@ -827,8 +827,10 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   /* v21n: a plan whose front door was read as a plain door (no 'entrance' kind) still has an entrance: the outer-wall door (not terrace /
      garage) facing the street (-z) first, then a side, then the back. audit: path-to-street */
   const dOutExt=()=>{if((globalThis.__PF||{}).noEntExt)return null;const L0=H.levels[0].name,ws=(H.walls||[]).filter(w=>w.level===L0),X0=Math.min(...xs),X1=Math.max(...xs),Z0=Math.min(...zs),Z1=Math.max(...zs);let best=null;
-   ws.forEach(w=>{const g=geo(w),hz2=Math.abs(g.u[1])<.05,vt=Math.abs(g.u[0])<.05;if(!hz2&&!vt)return;const edge=hz2?(Math.abs(g.z0-Z0)<.45||Math.abs(g.z0-Z1)<.45):(Math.abs(g.x0-X0)<.45||Math.abs(g.x0-X1)<.45);if(!edge)return;
+   ws.forEach(w=>{const g=geo(w),hz2=Math.abs(g.u[1])<.05,vt=Math.abs(g.u[0])<.05;if(!hz2&&!vt)return;const edge=hz2?(Math.abs(g.z0-Z0)<.45||Math.abs(g.z0-Z1)<.45):(Math.abs(g.x0-X0)<.45||Math.abs(g.x0-X1)<.45);const CR0=CELLS[L0],lab=(x,z)=>CR0&&CR0.labelAt?!!CR0.labelAt(x,z):null;
     (w.openings||[]).forEach(op=>{if(op.type!=='door'||op.kind==='terrace'||op.kind==='garage'||op.width>1.6)return;const m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}
+     /* v21o: a recessed front door (porch / entrance niche) is not on the outline: it counts when one side is a room and the other is outside */
+     if(!edge){const A=lab(cx+nx*.7,cz+nz*.7),B=lab(cx-nx*.7,cz-nz*.7);if(A===null||A===B||(globalThis.__PF||{}).noRecessEnt)return;if(A){nx=-nx;nz=-nz;}}
      const sc=(nz<-.5?3:Math.abs(nx)>.5?2:1)-Math.abs(op.width-.9);if(!best||sc>best.sc)best={sc,r:{cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3,ext:1}};});});return best?best.r:null;};
   const ENT=dOut('entrance')||dOutExt();let TER=dOut('terrace');
   /* v18k RULE (terrace where the plan draws it): a printed area OUTSIDE the walls (4-60 m2, the largest one) is the terrace. The deck goes on
@@ -1235,7 +1237,7 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
    if(u.doorLeaf&&!u.door){const a=bb(o),c=a.getCenter(new THREE.Vector3());if(c.x<fp[0]-.3||c.x>fp[2]+.3||c.z<fp[1]-.3||c.z>fp[3]+.3)P.push({rule:'door-leaf-outside',p:[r2(c.x),r2(c.z)]});}
    if((u.roof||u.lroof)&&o.isMesh&&o.geometry&&o.geometry.type==='BoxGeometry'&&o.material!==M.glass&&!u.dpipe&&!u.hopper&&!u.gutter&&!u.flash&&!u.rail)RF.push([bb(o),o]);});
   let nc=0;for(let i=0;i<RF.length&&nc<5;i++)for(let j=i+1;j<RF.length&&nc<5;j++){const A=RF[i][0],B=RF[j][0];if(Math.abs(A.max.y-B.max.y)>.0004)continue;
-   if(RF[i][1].material===FLATW&&RF[j][1].material===FLATW)continue;const ox=Math.min(A.max.x,B.max.x)-Math.max(A.min.x,B.min.x),oz=Math.min(A.max.z,B.max.z)-Math.max(A.min.z,B.min.z);if(ox>.02&&oz>.02){nc++;P.push({rule:'coplanar-overlap',y:r2(A.max.y),p:[r2(Math.max(A.min.x,B.min.x)),r2(Math.max(A.min.z,B.min.z))]});}}
+   /* v21o: roof materials are cloned when the roof is hidden / faded (Bez strechy) - same flat-roof surface is recognised by its flag, not by identity */const isFW=m=>m===FLATW||!!(m&&m.userData&&m.userData.flatw&&!(globalThis.__PF||{}).noFlatFlag);if(isFW(RF[i][1].material)&&isFW(RF[j][1].material))continue;const ox=Math.min(A.max.x,B.max.x)-Math.max(A.min.x,B.min.x),oz=Math.min(A.max.z,B.max.z)-Math.max(A.min.z,B.min.z);if(ox>.02&&oz>.02){nc++;const dsc=k=>{const o=RF[k][1],b=RF[k][0];return [Object.keys(o.userData||{}).join('.'),(o.material&&(o.material.name||o.material.type))||'',r2(b.max.x-b.min.x),r2(b.max.y-b.min.y),r2(b.max.z-b.min.z)];};P.push({rule:'coplanar-overlap',y:r2(A.max.y),p:[r2(Math.max(A.min.x,B.min.x)),r2(Math.max(A.min.z,B.min.z))],a:dsc(i),b:dsc(j)});}}
   {let nh=0;world.traverse(o=>{if(o.userData&&o.userData.hobPlate)nh++;});const kl=new Set((H.furn||[]).filter(f=>f.t==='kitch').map(f=>f.level)).size;if(nh>kl)P.push({rule:'kitchen-multi-hob',hobs:nh,kitchens:kl});}
   // v20261117h: slab-edge flashing band max 6 cm proud of the wall (was a 20 cm fascia that wrapped past the corners)
   world.traverse(o=>{const u=o.userData||{};if(u.flash&&u.flash>.06)P.push({rule:'flashing-too-proud',d:u.flash});
