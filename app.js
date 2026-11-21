@@ -1,6 +1,6 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
 import {readPlan} from './plan.js?v=20261121d';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261121j';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261121k';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -925,7 +925,9 @@ function furnish(op){const dm=!!(op&&op.demo===1);const RS=rooms();if(!RS.length
  const R=RC[lvl],ids=new Set(RS.map(r=>r.id));const fixes=sanitizeOpenings(H.walls.filter(w=>w.level===lvl),p=>{const v=roomAt(R,p);return v===-1?-1:ids.has(v)?v:0;});H.fixLog=fixes;
  const T=assignTypes(R,lvl);addMissingDoors(R,lvl,RS,T,fixes);try{addEntrance(R,lvl,RS,fixes);}catch(e){console.warn('entrance',e);}wetDoors(R,lvl,RS,T,fixes);if(!dm)try{rulesFix({noFix:1});}catch(e){console.warn('rulesFix',e);}/* door/opening fixes BEFORE layout so furniture respects the final door spots */H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
  const OPS=layoutOps(R,lvl),WS=layoutWalls(lvl),hasWC=RS.some(q=>/^WC/.test(T[q.id]||''));const t0=performance.now();
- RS.forEach(r=>{const G=stairNoGo(makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim),lvl);const items=layoutRoom(G,roomType(r,T,R,lvl),{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});
+ /* v21k RULE (open plan, kitchen-aisle): kitchens are furnished first; a kitchen too small to hold a table outside its work aisle hands the dining table to the living room. audit: kitchen-aisle */
+ const isK=r=>/^Kuchyň/.test(roomType(r,T,R,lvl)||'');let dine=0;
+ RS.slice().sort((a,b)=>isK(b)-isK(a)).forEach(r=>{const G=stairNoGo(makeRoom(R,r,OPS.filter(o=>o.room===r.id),WS,ldim),lvl);const ty=roomType(r,T,R,lvl);const items=layoutRoom(G,ty,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC,dine:dine&&/^Obývačka/.test(ty||'')&&!/kuchyň|jedál/i.test(ty||'')});if(isK(r)&&items.some(i=>i.t==='kitch')&&!items.some(i=>i.t==='table'))dine=1;
   let its=items;/* v12b fallback: a room whose own template found no valid spot gets the most fitting generic set that does fit */if(!its.length&&r.a>=1.5){const tq=roomType(r,T,R,lvl);for(const alt of r.a>=7?['Izba','Pracovňa','Chodba','Komora']:/^(WC|Kúpeľ)/.test(tq)?['WC','Komora']:['Komora','Chodba']){if(alt===tq)continue;its=layoutRoom(G,alt,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});if(its.length)break;}}
   its.forEach(it=>{H.furn.push({...it,level:lvl,rid:r.id});n++;});if(!its.length)empty.push(r.n);});
  if(!dm&&!window.__rfOff)try{rulesFix({noDoors:1});}catch(e){console.warn("rulesFix",e);}/* plausibility auto-fixes right after furnishing, so Kontrola shows what is really left */
