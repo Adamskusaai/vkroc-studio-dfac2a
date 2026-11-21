@@ -824,7 +824,13 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   if(GA&&!(GA.n[1]<-.5)){/* side/back garage door: paved apron from the door to the driveway */const ax=Math.abs(GA.n[0])>.5,L=ax?Math.abs(DRX-GA.x)+dW/2:3.2;const ap=add(new THREE.BoxGeometry(ax?L:dW,.026,ax?dW:L),M.path,ax?(GA.x+DRX)/2+(DRX>GA.x?dW/4:-dW/4):GA.x,.009,ax?GA.z:GA.z+GA.n[1]*1.6,0,1);ap.userData.noCol=true;ap.userData.drive=1;}drive.receiveShadow=true;drive.userData.noCol=true;
   // prem8: outward frames of the entrance / terrace doors (door centre, outward normal, along-wall)
   const hcx=(Math.min(...xs)+Math.max(...xs))/2,hcz=(Math.min(...zs)+Math.max(...zs))/2;const dOut=k=>{let r=null;(H.walls||[]).forEach(w=>{(w.openings||[]).forEach(op=>{if(r||op.type!=='door'||op.kind!==k||(H.levels&&H.levels.length>1&&w.level!==H.levels[0].name))return;const g=geo(w),m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}r={cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3};});});return r;};
-  const ENT=dOut('entrance');let TER=dOut('terrace');
+  /* v21n: a plan whose front door was read as a plain door (no 'entrance' kind) still has an entrance: the outer-wall door (not terrace /
+     garage) facing the street (-z) first, then a side, then the back. audit: path-to-street */
+  const dOutExt=()=>{if((globalThis.__PF||{}).noEntExt)return null;const L0=H.levels[0].name,ws=(H.walls||[]).filter(w=>w.level===L0),X0=Math.min(...xs),X1=Math.max(...xs),Z0=Math.min(...zs),Z1=Math.max(...zs);let best=null;
+   ws.forEach(w=>{const g=geo(w),hz2=Math.abs(g.u[1])<.05,vt=Math.abs(g.u[0])<.05;if(!hz2&&!vt)return;const edge=hz2?(Math.abs(g.z0-Z0)<.45||Math.abs(g.z0-Z1)<.45):(Math.abs(g.x0-X0)<.45||Math.abs(g.x0-X1)<.45);if(!edge)return;
+    (w.openings||[]).forEach(op=>{if(op.type!=='door'||op.kind==='terrace'||op.kind==='garage'||op.width>1.6)return;const m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}
+     const sc=(nz<-.5?3:Math.abs(nx)>.5?2:1)-Math.abs(op.width-.9);if(!best||sc>best.sc)best={sc,r:{cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3,ext:1}};});});return best?best.r:null;};
+  const ENT=dOut('entrance')||dOutExt();let TER=dOut('terrace');
   /* v18k RULE (terrace where the plan draws it): a printed area OUTSIDE the walls (4-60 m2, the largest one) is the terrace. The deck goes on
      the exterior wall facing it - in front of that wall's door when it has one (living-room exit -> pergola), else centred on the label.
      audit: terrace-placed */
@@ -843,11 +849,21 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
 
   // distance from a door to the plot edge along its outward normal
   const toEdge=D=>{const tx=D.nx>0?(xMax-D.cx)/D.nx:D.nx<0?(xMin-D.cx)/D.nx:1e9,tz=D.nz>0?(zMax-D.cz)/D.nz:D.nz<0?(zMin-D.cz)/D.nz:1e9;return Math.max(1.5,Math.min(tx,tz));};
+  /* v21m RULE (path-to-street): the entrance path always reaches the street edge (-z): straight out of a street-facing door; out of a side
+     door 1 m then down to the street; out of a back door 1 m, round the nearer side of the house and down. Each run is checked against the
+     house walls and the plot; a run that would cut the house falls back to the other side, then to the old straight path. audit: path-to-street */
+  const PATHR=(()=>{const W2=.75,L0n=H.levels[0].name,WB2=(H.walls||[]).filter(w=>w.level===L0n).map(w=>{const t2=(w.thickness||.3)/2;return[Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2];});
+   const HX0=Math.min(...xs),HX1=Math.max(...xs),clear=r=>r[0]>=xMin+.15&&r[2]<=xMax-.15&&r[1]>=zMin-.01&&r[3]<=zMax-.15&&!WB2.some(b=>r[0]<b[2]-.02&&r[2]>b[0]+.02&&r[1]<b[3]-.02&&r[3]>b[1]+.02);
+   const ok=L=>L.every(clear)?L:null;if((globalThis.__PF||{}).noStreetPath||!ENT)return null;const cx=ENT.cx,cz=ENT.cz,t2=ENT.t/2;
+   if(ENT.nz<-.5)return ok([[cx-W2,zMin,cx+W2,cz-t2]]);
+   if(Math.abs(ENT.nx)>.9){const e=cx+ENT.nx*t2,xo=e+ENT.nx*(1.0+W2);return ok([[Math.min(e,xo),cz-W2,Math.max(e,xo),cz+W2],[xo-W2,zMin,xo+W2,cz+W2]]);}
+   const e=cz+t2,zo=e+1.0+W2;for(const sd of (cx-HX0<HX1-cx?[-1,1]:[1,-1])){const xo=sd<0?HX0-1.0-W2:HX1+1.0+W2,L=ok([[cx-W2,e,cx+W2,zo+W2],[Math.min(cx,xo)-W2,zo-W2,Math.max(cx,xo)+W2,zo+W2],[xo-W2,zMin,xo+W2,zo+W2]]);if(L)return L;}return null;})();
+  try{window.__entPath={ent:ENT?{cx:ENT.cx,cz:ENT.cz,nx:ENT.nx,nz:ENT.nz}:null,rects:PATHR,zMin};}catch(e){}
   // prem8 h5: carport (slim dark steel posts, flat dark roof) over the driveway. Candidates: current driveway, then beside the house (E/W).
   // A candidate is rejected if it leaves the plot, touches the house, covers a path, or comes within 1.2 m of any door/window; the driveway follows the pick.
   {const X0=Math.min(...xs),X1=Math.max(...xs),Z0=Math.min(...zs),Z1=Math.max(...zs),OP=[];
    (H.walls||[]).forEach(w=>(w.openings||[]).forEach(op=>{const g=geo(w);for(const f of[0,.5,1]){const m=op.offset+op.width*f;OP.push([g.x0+g.u[0]*m,g.z0+g.u[1]*m]);}}));
-   const PR=[[X0+1.7-.75,X0+1.7+.75,zMin,hz]];if(ENT){const Lp=toEdge(ENT);const ex=ENT.cx+ENT.nx*Lp,ez=ENT.cz+ENT.nz*Lp;PR.push([Math.min(ENT.cx,ex)-.75-Math.abs(ENT.nz)*0,Math.max(ENT.cx,ex)+.75,Math.min(ENT.cz,ez)-.75,Math.max(ENT.cz,ez)+.75]);}
+   const PR=[[X0+1.7-.75,X0+1.7+.75,zMin,hz]];if(PATHR)PATHR.forEach(r=>PR.push([r[0],r[2],r[1],r[3]]));if(ENT){const Lp=toEdge(ENT);const ex=ENT.cx+ENT.nx*Lp,ez=ENT.cz+ENT.nz*Lp;PR.push([Math.min(ENT.cx,ex)-.75-Math.abs(ENT.nz)*0,Math.max(ENT.cx,ex)+.75,Math.min(ENT.cz,ez)-.75,Math.max(ENT.cz,ez)+.75]);}
    const hw=1.5,ok=(cx,z0,z1)=>{const x0=cx-hw,x1=cx+hw;if(x0<xMin+.2||x1>xMax-.2||z0<zMin+.2||z1>zMax-.2)return false;if(x1>X0-.3&&x0<X1+.3&&z1>Z0-.3&&z0<Z1+.3)return false;
     if(OP.some(([x,z])=>x>x0-1.2&&x<x1+1.2&&z>z0-1.2&&z<z1+1.2))return false;if(PR.some(r=>x1>r[0]&&x0<r[1]&&z1>r[2]&&z0<r[3]))return false;if((H.balc||[]).some(B=>x1>B.r[0]-.3&&x0<B.r[2]+.3&&z1>B.r[1]-.3&&z0<B.r[3]+.3))return false;return true;};
    const C=[[hx+4.2,zMin+.4,Math.min(zMin+.4+5.5,hz-.4)],[X1+.4+hw,zMin+.4,zMin+5.4],[X0-.4-hw,zMin+.4,zMin+5.4]].filter(c=>c[2]-c[1]>=4.4);const pick=C.find(c=>ok(...c));window.__cp={C,pick:pick||null};
@@ -856,7 +872,14 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
     [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{add(new THREE.BoxGeometry(.1,2.3,.1),cm,dX+sx*(hw-.15),1.15,cy+sz*(L/2-.2),0,1);});
     const rf=add(new THREE.BoxGeometry(2*hw+.2,.16,L+.3),cm,dX,2.38,cy,0,1);rf.castShadow=true;rf.userData.noCol=true;
     add(new THREE.BoxGeometry(2*hw-.1,.04,L),M.frame,dX,2.29,cy,0,1).userData.noCol=true;}}
-  if(ENT&&Math.abs(ENT.nx)>.9){// path to a door on an east/west facade
+  if(PATHR)PATHR.forEach(r=>{add(new THREE.BoxGeometry(r[2]-r[0],.02,r[3]-r[1]),M.path,(r[0]+r[2])/2,.01,(r[1]+r[3])/2,0,1).userData.noCol=true;});
+  /* v21m front garden: Stani kit plants in pots flank the entrance door and the street end of the path (kept off every paved run and
+     inside the plot). audit: path-to-street, site-clear */
+  if(PATHR&&ENT&&!(globalThis.__PF||{}).noFrontPlants){const onPave=(x,z)=>PATHR.some(r=>x>r[0]-.3&&x<r[2]+.3&&z>r[1]-.3&&z<r[3]+.3),inPlot=(x,z)=>x>xMin+.4&&x<xMax-.4&&z>zMin+.4&&z<zMax-.4;
+   const pot=(x,z,h)=>{if(onPave(x,z)||!inPlot(x,z))return;const g=makeFurn('plant',{w:.5,d:.5,h},{sty:H.style||''});g.position.set(x,0,z);g.userData.outdoor=1;g.userData.noCol=true;root.add(g);};
+   const tx=-ENT.nz,tz=ENT.nx,o0=ENT.t/2+.4,s0=.75+.45;[-1,1].forEach(sg=>pot(ENT.cx+ENT.nx*o0+tx*s0*sg,ENT.cz+ENT.nz*o0+tz*s0*sg,1.0));
+   const L=PATHR[PATHR.length-1],mx=(L[0]+L[2])/2;[-1,1].forEach(sg=>pot(mx+sg*(.75+.45),zMin+.8,.8));}
+  else if(ENT&&Math.abs(ENT.nx)>.9){// path to a door on an east/west facade
    const Lp=toEdge(ENT)-.1;add(new THREE.BoxGeometry(Lp,.02,1.5),M.path,ENT.cx+ENT.nx*(ENT.t/2+Lp/2),.01,ENT.cz,0,1).userData.noCol=true;}
   else if(ENT){const Lp=toEdge(ENT)-.1;add(new THREE.BoxGeometry(1.5,.02,Lp),M.path,ENT.cx,.01,ENT.cz+ENT.nz*(ENT.t/2+Lp/2),0,1).userData.noCol=true;}
   else // front path to door (center-west)
@@ -989,7 +1012,7 @@ function streetTurn(h){SR=null;const st=h&&h.plot&&h.plot.auto&&h.plot.st;if(!st
 function roomsAllS(){return (window.__roomsAll?window.__roomsAll():[]).map(x=>SR?{...x,bb:srB(x.bb),c:srP(x.c)}:x);}
 export function kindsAgree(){const bad=[];(H.levels||[]).forEach(l=>{const RK=roomKinds[l.name],PK=KCH[l.name];if(!RK||!PK)return;Object.keys(RK.kindOf).forEach(k=>{if(RK.kindOf[k]==='hall'&&PK[k]!=='hall')bad.push([l.name,k,RK.kindOf[k],PK[k]||null]);});});return bad;}
 export function streetInfo(){return SR&&{st:SR.st,dr:SR.dr,c:SR.c};}
-export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=streetTurn(h);init();const keep=(walk&&!anim&&rig)?{x:rig.position.x,y:rig.position.y,z:rig.position.z,yaw,pitch}:null;doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}DECKS=[];LROOF=[];world=build();doGrow=false;if(!world)return false;interiorFinish(world);backsplash(world);world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
+export function gen(h,anim){try{window.__entPath=null;}catch(e){}DIRTY=Math.max(DIRTY,90);H=streetTurn(h);init();const keep=(walk&&!anim&&rig)?{x:rig.position.x,y:rig.position.y,z:rig.position.z,yaw,pitch}:null;doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}DECKS=[];LROOF=[];world=build();doGrow=false;if(!world)return false;interiorFinish(world);backsplash(world);world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
  try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  walk=walk&&!anim;
@@ -1132,7 +1155,8 @@ function extPipeAudit(P,world,bb,r2){if(!world)return;
   const rc=f=>{const D=FUR[f.t],w=f.w||D.w,d=f.d||D.d,q=((f.r||0)%2)?[d,w]:[w,d];return[f.p[0]-q[0]/2,f.p[1]-q[1]/2,f.p[0]+q[0]/2,f.p[1]+q[1]/2];};
   F.filter(f=>f.t==='kitch').forEach(k=>{const v=F4[((k.r||0)%4+4)%4],q=rc(k),S=v[1]>0?[q[0],q[3],q[2],q[3]+AIS]:v[0]>0?[q[2],q[1],q[2]+AIS,q[3]]:v[1]<0?[q[0],q[1]-AIS,q[2],q[1]]:[q[0]-AIS,q[1],q[0],q[3]],lk=RK.labelAt(k.p[0],k.p[1]);
    F.filter(f=>(f.t==='table'||f.t==='chair')&&RK.labelAt(f.p[0],f.p[1])===lk).forEach(f=>{const r=rc(f),ox=Math.min(r[2],S[2])-Math.max(r[0],S[0]),oz=Math.min(r[3],S[3])-Math.max(r[1],S[1]);if(ox>.05&&oz>.05)P.push({rule:'kitchen-aisle',level:l.name,t:f.t,p:f.p,gap:+(v[1]>0?r[1]-q[3]:v[0]>0?r[0]-q[2]:v[1]<0?q[1]-r[3]:q[0]-r[2]).toFixed(2)});});});});}
-/* v21g audit street-side: the scene was built with the plot's street side turned to the generator's street edge (-z) */if(H.plot&&H.plot.auto&&H.plot.st&&!(H.plot.st[0]===0&&H.plot.st[1]===-1))P.push({rule:'street-side',st:H.plot.st});if(H.plot&&H.plot.pts){let lawn=0;const DR=[],ST=[];world.traverse(o=>{const u=o.userData||{};if(u.lawn)lawn=1;if(u.drive)DR.push(bb(o));if(u.site)ST.push(o);});if(!lawn)P.push({rule:'site-present',why:'lawn'});
+/* v21g audit street-side: the scene was built with the plot's street side turned to the generator's street edge (-z) */if(H.plot&&H.plot.auto&&H.plot.st&&!(H.plot.st[0]===0&&H.plot.st[1]===-1))P.push({rule:'street-side',st:H.plot.st});/* v21m audit path-to-street: the entrance path is a chain of paved runs from the entrance door to the street edge */try{const EP=window.__entPath;if(H.plot&&H.plot.pts&&EP&&EP.ent){const Rr=EP.rects;if(!Rr||!Rr.length)P.push({rule:'path-to-street',why:'none'});else{const d=EP.ent,ins=(r,x,z,m)=>x>=r[0]-m&&x<=r[2]+m&&z>=r[1]-m&&z<=r[3]+m;const touch=(A,B)=>A[0]<=B[2]+.01&&A[2]>=B[0]-.01&&A[1]<=B[3]+.01&&A[3]>=B[1]-.01;
+ if(!ins(Rr[0],d.cx,d.cz,.5))P.push({rule:'path-to-street',why:'door'});else if(Rr.slice(1).some((r,i)=>!touch(Rr[i],r)))P.push({rule:'path-to-street',why:'gap'});else if(Rr[Rr.length-1][1]>EP.zMin+.05)P.push({rule:'path-to-street',why:'street',z:Rr[Rr.length-1][1]});}}}catch(e){}if(H.plot&&H.plot.pts){let lawn=0;const DR=[],ST=[];world.traverse(o=>{const u=o.userData||{};if(u.lawn)lawn=1;if(u.drive)DR.push(bb(o));if(u.site)ST.push(o);});if(!lawn)P.push({rule:'site-present',why:'lawn'});
   const W0=(H.walls||[]).filter(w=>w.level===H.levels[0].name),hxs=W0.flatMap(w=>[w.start[0],w.end[0]]),hzs=W0.flatMap(w=>[w.start[1],w.end[1]]),hb=[Math.min(...hxs)-.3,Math.min(...hzs)-.3,Math.max(...hxs)+.3,Math.max(...hzs)+.3];let nc=0;ST.forEach(o=>{if(nc>=4)return;const b=bb(o);const hit=r=>b.max.x>r[0]&&b.min.x<r[2]&&b.max.z>r[1]&&b.min.z<r[3];if(hit(hb)||DR.some(d=>hit([d.min.x,d.min.z,d.max.x,d.max.z]))){nc++;P.push({rule:'site-clear',p:[r2((b.min.x+b.max.x)/2),r2((b.min.z+b.max.z)/2)]});}});
   const GA=H.plot.garage;if(GA){let gd=0,car=0;world.traverse(o=>{if(o.userData&&o.userData.car)car=1;});(H.walls||[]).forEach(w=>(w.openings||[]).forEach(o=>{if(o.kind==='garage')gd=1;}));if(!gd)P.push({rule:'garage-door'});
    if(!DR.some(d=>GA.x>d.min.x-.6&&GA.x<d.max.x+.6&&GA.z>d.min.z-.6&&GA.z<d.max.z+.6)||!car)P.push({rule:'garage-drive',car});
