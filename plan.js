@@ -1,5 +1,5 @@
 import {LTJ} from './ltpl.js?v=20261112i';import {DTJ} from './dtpl.js?v=20261121c';
-import {tableAreas,labelAreas} from './ocr.js?v=20261121d';
+import {tableAreas,labelAreas,barLadder} from './ocr.js?v=20261121l';
 import {segPlan} from './seg.js?v=20261118b';
 // plan.js — robust floor-plan reader (plain JS, no deps). prem8.
 // readPlan(img,{rect}) -> {walls:[{start,end,thickness,op:[]}], canvas, w, guess, mode:'plan', conf, scaleSrc, dbg} | null
@@ -472,17 +472,25 @@ export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)r
  if(!(share>=.6&&(x1-x0)>=.25*W&&(y1-y0)>=.2*H&&((asp>=1.6&&area<=.5)||area<=.2)))return null;
  const pad=.05*Math.max(x1-x0,y1-y0),X0=Math.max(0,Math.floor((x0-pad)/s)),Y0=Math.max(0,Math.floor((y0-pad)/s)),X1=Math.min(W0,Math.ceil((x1+pad)/s)),Y1=Math.min(H0,Math.ceil((y1+pad)/s));
  const o=mk(X1-X0,Y1-Y0),ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(img,X0,Y0,X1-X0,Y1-Y0,0,0,o.width,o.height);info.crop=[X0,Y0,X1,Y1];return o;}
+/* v21l RULE (scale bar on screenshots): when the reading has no printed scale (dimensions / scale bar / room sizes), look for a scale-bar
+   label ladder on the whole upload - also outside the plan crop - and rescale the reading to it (within 2.5x of the guess). bench: PDF desk / phone */
+function barFix(R,im,crop,cr){try{if(!R||!R.dbg||(globalThis.__PF||{}).noBarL||/^(dims|roomdims|scalebar|user)$/.test(R.scaleSrc||''))return;const W=im.width,H=im.height;if(W*H>9e6)return;
+ const c=mk(W,H),x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0);const d=x.getImageData(0,0,W,H).data,G=new Float32Array(W*H);for(let i=0;i<W*H;i++)G[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];
+ const B=barLadder(G,W,H,globalThis.__PF||{});R.dbg.barL=B?[+B.ppm.toFixed(2),B.n,B.ax,B.at]:null;R.dbg.barLd=barLadder.dbg;if(!B||!(R.w>0))return;
+ const srcW=crop?(crop[2]-crop[0]):W,wNew=srcW/B.ppm,k=wNew/R.w;R.dbg.barK=+k.toFixed(3);if(!(k>.4&&k<2.5)||Math.abs(k-1)<.02)return;
+ const s=v=>Math.round(v*k*100)/100;(R.walls||[]).forEach(w=>{w.start=w.start.map(s);w.end=w.end.map(s);(w.openings||[]).forEach(o=>{if(o.offset!=null)o.offset=s(o.offset);if(o.width!=null)o.width=s(o.width);});});
+ (R.labels||[]).forEach(l=>{if(l.p)l.p=l.p.map(s);});R.w=Math.round(wNew*100)/100;R.scaleSrc='scalebar';R.guess=false;R.dbg.scale='scalebar';}catch(e){if(R&&R.dbg)R.dbg.barErr=String(e).slice(0,80);}}
 export function readPlan(img,o={}){/* v18: area table read once on the full upload by the tiny CNN reader (ocr.js) */if(o._tab===undefined&&!(globalThis.__PF||{}).noTab){let T=0;try{T=tableAreas(img,globalThis.__PF||{})||0;}catch(e){T=0;}o={...o,_tab:T};}
  if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);
  let src=img,ch=null,page=0;try{if(!(globalThis.__PF||{}).noChrome){const pg=cropPage(img);if(pg){src=pg;ch=pg;page=1;o=Object.assign({},o);o._chrome=cropPage.info;}else{ch=cropChrome(img);if(ch){src=ch;o=Object.assign({},o);o._chrome=cropChrome.info;}}}}catch(e){}
  const qual=R=>{if(!R||!R.dbg)return -1e9;const d=R.dbg;return (d.Q||0)+1.2*(d.nR||0)+(/^(room)?dims|scalebar$/.test(d.scale||'')?.6:0);};
  const run=im=>{let cr=null;try{cr=uploadRegion(im);}catch(e){cr=null;}const ci=uploadRegion.info;
-  if(!cr)return readPlanX(im,o);
+  if(!cr){const F0=readPlanX(im,o);if(F0)barFix(F0,im,null,null);return F0;}
   let R=readPlanX(cr,o);
   /* v18: a small region crop (plan inside a sheet) is upsampled up to 2.5x, blurring thin strokes; also read it at a capped scale and keep the better reading */
   const PFc=(globalThis.__PF||{}).noCropCap?0:((globalThis.__PF||{}).cropCap||1.5);if(PFc&&R&&R.dbg&&MAXD/Math.max(cr.width,cr.height)>((globalThis.__PF||{}).cropUp||1.6)){let N=null;try{N=readPlanX(cr,{...o,upCap:PFc});}catch(e){N=null;}const qa=qual(R),qn=qual(N);R.dbg.capQ=[+qa.toFixed(2),+qn.toFixed(2)];if(N&&N.dbg&&N.walls&&N.walls.length>=4&&qn>qa+((globalThis.__PF||{}).cropM??.5)){N.dbg.capQ=R.dbg.capQ;N.dbg.capped=PFc;R=N;}}
-  if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;return R;}
-  const F=readPlanX(im,o);if(F&&F.dbg)F.dbg.cropFail=ci;return F||R;};
+  if(R&&R.dbg&&R.walls&&R.walls.length>=4){R.dbg.crop=ci;barFix(R,im,ci&&ci.crop,cr);return R;}
+  const F=readPlanX(im,o);if(F&&F.dbg)F.dbg.cropFail=ci;if(F)barFix(F,im,null,null);return F||R;};
  let A=run(src);if(A&&A.dbg&&o._chrome)A.dbg.chrome=o._chrome;
  /* v18a: a letterbox page crop of a small phone screenshot gets upsampled ~1.5-2x, which blurs thin strokes into 4-5 px lines; also read it at native resolution and keep the better reading */
  if(page&&!(globalThis.__PF||{}).noNative&&MAXD/Math.max(src.width,src.height)>1.3){const A0=A,qA=qual(A0),mg=(globalThis.__PF||{}).natM??.5,nq=[+qA.toFixed(2)];for(const cap of (globalThis.__PF||{}).natCaps||[1]){let N=null;try{N=readPlanX(src,{...o,upCap:cap});}catch(e){N=null;}const qN=qual(N);nq.push(+qN.toFixed(2));if(N&&N.dbg&&qN>qA+mg&&qN>qual(A)){N.dbg.native=cap;N.dbg.chrome=o._chrome;A=N;}}if(A&&A.dbg)A.dbg.natQ=nq;}

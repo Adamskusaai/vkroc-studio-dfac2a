@@ -91,3 +91,27 @@ export function labelAreas(G,W,H,bb,PF={}){const T0=performance.now(),hist=new U
   if(cs.length&&!PF.noLead1){const tall=t.cs.filter(q=>q.h>=.75*t.th).sort((a,b)=>a.x0-b.x0),ds=cs[0][0].toFixed(cs[0][0]%1?(Math.round(cs[0][0]*100)%10?2:1):0).replace('.','');const f=tall[0];if(f&&tall.length===ds.length+1&&f.w<=.3*f.h&&f.n<=f.h*Math.max(2,.3*f.h)){const v=+('1'+cs[0][0].toString());if(v<400)cs[0][0]=v;}}
   if(PF.laAll)LOG.push([t.x0,t.y0,t.x1-t.x0,t.th,t.k,unit(t)?1:0,cs.map(c=>c[0]+':'+c[1].toFixed(2)).join('|')]);/* catalogue plans print bare areas ('32,84', no unit): accepted with a near-unanimous vote and two decimals */const bare=!t.u,two=cs.length&&/\.\d\d$/.test(cs[0][0].toFixed(2))&&Math.round(cs[0][0]*100)%10!==0||cs.length&&cs[0][0].toFixed(2).length>=4;if(cs.length&&cs[0][1]>=(bare?(PF.laVoteB??2.6):(PF.laVote??1.5))&&cs[0][0]>=.8&&cs[0][0]<400)out.push({v:cs[0][0],p:[(t.x0+t.x1)/2,(t.y0+t.y1)/2]});}
  labelAreas.dbg={log:LOG,nc:comps.length,nt:toks.length,ncand:cand.length,nO,n:out.length,t:Math.round(performance.now()-T0)};return out;}
+/* v21l scale-bar ladder: the tick labels of a scale bar (0 1 2 3 4 5 m), read straight from the raster with the CRNN, wherever the bar sits
+   (also outside the plan crop and at screenshot / phone resolution, where the dimension OCR misses single digits). A ladder = 4+ small
+   number tokens in one aligned column or row, values 0, d, 2d ... (with 0), positions linear in the value; px per unit = the slope. */
+export function barLadder(G,W,H,PF={}){const T0=performance.now(),hist=new Uint32Array(256);for(let i=0;i<W*H;i++)hist[Math.max(0,Math.min(255,G[i]|0))]++;
+ let acc=0,p95=255;for(let v=0;v<256;v++){acc+=hist[v];if(acc>=.95*W*H){p95=v;break;}}const thr=Math.min(200,p95*.8);
+ const lab=new Int32Array(W*H),C=[];let id=0;
+ for(let i=0;i<W*H;i++){if(lab[i]||G[i]>=thr)continue;id++;const st=[i];lab[i]=id;let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0,big=0;
+  while(st.length){const k=st.pop(),px=k%W,py=(k/W)|0;n++;if(px<x0)x0=px;if(px>x1)x1=px;if(py<y0)y0=py;if(py>y1)y1=py;if(n>500){big=1;}
+   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const qx=px+dx,qy=py+dy;if(qx<0||qy<0||qx>=W||qy>=H)continue;const q=qy*W+qx;if(!lab[q]&&G[q]<thr){lab[q]=id;st.push(q);}}}
+  if(big)continue;const w=x1-x0+1,h=y1-y0+1;if(h>=5&&h<=30&&w<=1.1*h+2&&n>=4)C.push({x0,y0,x1,y1,h});}
+ if(C.length>4000)return null;C.sort((a,b)=>a.x0-b.x0);const TK=[];
+ for(const c of C){let t=null;for(let j=TK.length-1;j>=0&&j>=TK.length-60;j--){const q=TK[j];if(q.n>=2)continue;const ov=Math.min(q.y1,c.y1)-Math.max(q.y0,c.y0),hh=Math.max(q.y1-q.y0+1,c.h);if(ov<.6*hh||Math.max(q.y1-q.y0+1,c.h)/Math.min(q.y1-q.y0+1,c.h)>1.35)continue;const gap=c.x0-q.x1;if(gap>=-1&&gap<=.35*hh){t=q;break;}}
+  if(t){t.x1=Math.max(t.x1,c.x1);t.y0=Math.min(t.y0,c.y0);t.y1=Math.max(t.y1,c.y1);t.n++;}else TK.push({x0:c.x0,y0:c.y0,x1:c.x1,y1:c.y1,n:1});}
+ if(TK.length>2500)return null;const R=[];
+ for(const t of TK){const p=2,X0=Math.max(0,t.x0-p),X1=Math.min(W,t.x1+1+p),Y0=Math.max(0,t.y0-p),Y1=Math.min(H,t.y1+1+p);if(Y1-Y0<4)continue;const P=ocrPrep(G,W,X0,Y0,X1,Y1,p),r=ocrRead(P.v,P.W);const m=/^(\d{1,2})$/.exec(r.s);if(!m||r.conf<(PF.blConf??.5))continue;
+  R.push({v:+m[1],cx:(t.x0+t.x1)/2,cy:(t.y0+t.y1)/2,x0:t.x0,h:t.y1-t.y0+1});}
+ let best=null;
+ for(const ax of['v','h']){const pos=t=>ax==='v'?t.cy:t.cx,al=(a,b)=>ax==='v'?(Math.abs(a.x0-b.x0)<=Math.max(2,.6*a.h)||Math.abs(a.cx-b.cx)<=.6*a.h):Math.abs(a.cy-b.cy)<=.45*a.h;
+  for(const z of R){if(z.v!==0)continue;const G2=R.filter(u=>al(z,u)&&Math.abs(u.h/z.h-1)<.4);if(G2.length<4)continue;
+   for(const e of G2){if(e.v<=0)continue;const b=(pos(e)-pos(z))/e.v;if(Math.abs(b)<1.5*z.h)continue;const used=new Map();
+    for(const u of G2){const d=Math.abs(pos(u)-(pos(z)+b*u.v));if(d<=.12*Math.abs(b)&&(!used.has(u.v)||d<used.get(u.v).d))used.set(u.v,{d});}
+    const vs=[...used.keys()].sort((a,b)=>a-b);if(vs.length<4||vs[0]!==0)continue;const st=vs[1];if(!vs.every((v,i)=>v%st===0)||vs[vs.length-1]>30)continue;
+    const span=vs[vs.length-1]/st+1;if(vs.length<.75*span)continue;const sc=vs.length;if(!best||sc>best.n)best={ppm:Math.abs(b),n:sc,vals:vs,ax,at:[Math.round(z.cx),Math.round(z.cy)]};}}}
+ barLadder.dbg={nC:C.length,nT:TK.length,nR:R.length,t:Math.round(performance.now()-T0)};return best;}
