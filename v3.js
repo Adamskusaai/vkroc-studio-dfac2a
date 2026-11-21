@@ -839,7 +839,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   let TInk=null;if(!THint&&!TER&&H.terrInk&&xs.length&&(!H.levels||H.terrInk.level===H.levels[0].name)){const k=H.terrInk,X0=Math.min(...xs),X1=Math.max(...xs),Z0=Math.min(...zs),Z1=Math.max(...zs),hz=k.s%2===0,n=[[0,-1],[-1,0],[0,1],[1,0]][k.s],e=[Z0,X0,Z1,X1][k.s],mid=(k.a+k.b)/2;
    let dr=null;(H.walls||[]).filter(w=>w.level===H.levels[0].name).forEach(w=>{const g=geo(w);if(hz?Math.abs(g.u[1])>.05||Math.abs(g.z0-e)>.45:Math.abs(g.u[0])>.05||Math.abs(g.x0-e)>.45)return;(w.openings||[]).forEach(op=>{if(op.type!=='door'||op.kind==='entrance'||op.kind==='garage'||op.width<.75)return;const m=op.offset+op.width/2,p=hz?g.x0+g.u[0]*m:g.z0+g.u[1]*m;if(p<k.a-.5||p>k.b+.5)return;if(!dr||Math.abs(p-mid)<Math.abs(dr.p-mid))dr={p,w:op.width,t:w.thickness||.3};});});
    const tl=Math.max(4,Math.min(8,k.b-k.a)),c=dr?dr.p:mid,sh=dr?Math.max(-(tl/2-.5),Math.min(tl/2-.5,mid-c)):0;
-   TER={cx:hz?c:e,cz:hz?e:c,nx:n[0],nz:n[1],ux:hz?1:0,uz:hz?0:1,w:dr?dr.w:0,t:dr?dr.t:.3,nodoor:!dr,tl,sh};TInk=[hz?mid:e+n[0]*1.9,hz?e+n[1]*1.9:mid];}try{window.__terrHint=THint&&{p:THint.p,v:THint.v,door:!THint.f.nodoor};}catch(e){}
+   TER={cx:hz?c:e,cz:hz?e:c,nx:n[0],nz:n[1],ux:hz?1:0,uz:hz?0:1,w:dr?dr.w:0,t:dr?dr.t:.3,nodoor:!dr,tl,sh,liv:!!k.liv};TInk=[hz?mid:e+n[0]*1.9,hz?e+n[1]*1.9:mid];}try{window.__terrHint=THint&&{p:THint.p,v:THint.v,door:!THint.f.nodoor};}catch(e){}
 
   // distance from a door to the plot edge along its outward normal
   const toEdge=D=>{const tx=D.nx>0?(xMax-D.cx)/D.nx:D.nx<0?(xMin-D.cx)/D.nx:1e9,tz=D.nz>0?(zMax-D.cz)/D.nz:D.nz<0?(zMin-D.cz)/D.nz:1e9;return Math.max(1.5,Math.min(tx,tz));};
@@ -870,7 +870,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
     const hit=s=>{const x=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*s,z=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*s,ew=Math.abs(TER.nx)>.9,hx=(ew?dp:tl)/2-.06,hz=(ew?tl:dp)/2-.06;return WBt.some(b=>x-hx<b[2]&&x+hx>b[0]&&z-hz<b[3]&&z+hz>b[1]);};
     if(hit(sh)){const lim=TER.nodoor?tl/2:tl/2-.5;const C=[-sh];for(let d=.25;d<=lim;d+=.25)C.push(sh>0?sh-d:sh+d,sh>0?sh+d:sh-d);const f=C.find(s=>Math.abs(s)<=lim+1e-6&&!hit(s));if(f!=null)sh=f;}}
    const cx=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*sh,cz=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*sh,ew=Math.abs(TER.nx)>.9;
-   terr=add(new THREE.BoxGeometry(ew?dp:tl,.12,ew?tl:dp),M.deck,cx,.06,cz,0,1);terr.userData.tf={cx,cz,ux:TER.ux,uz:TER.uz,nx:TER.nx,nz:TER.nz,L:tl,D:dp,door:TER.nodoor?null:-sh,dw:TER.w||1.6,liv:TER.nodoor?0:1,hint:THint?THint.p:TInk};}
+   terr=add(new THREE.BoxGeometry(ew?dp:tl,.12,ew?tl:dp),M.deck,cx,.06,cz,0,1);terr.userData.tf={cx,cz,ux:TER.ux,uz:TER.uz,nx:TER.nx,nz:TER.nz,L:tl,D:dp,door:TER.nodoor?null:-sh,dw:TER.w||1.6,liv:TER.nodoor&&!TER.liv?0:1,hint:THint?THint.p:TInk};}
   else{terr=add(new THREE.BoxGeometry(tw,.12,3.2),M.deck,hx,.06,terrZ+.2,0,1);terr.userData.tf={cx:hx,cz:terrZ+.2,ux:1,uz:0,nx:0,nz:1,L:tw,D:3.2,door:null,liv:0};}terr.receiveShadow=true;terr.userData.noCol=true;terr.userData.terrace=1;
   /* v18j RULES (terrace = the demo villa's terrace, generic): the deck sits 12 cm above the lawn with a stone edge (one step down),
      carries the villa set from the furniture kit/asset pack (outdoor table + 4 chairs, lounger, potted plants in planters on the
@@ -888,7 +888,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
    {let np=0;[[-hL+.3,hD-.3],[hL-.3,hD-.3],[-hL+.3,-hD+.35],[hL-.3,-hD+.35],[0,hD-.3]].forEach(([u,n])=>{if(np>=2||!free(u,.3))return;np++;const pl=bx(u-.22,u+.22,n-.22,n+.22,.42,std({color:0x6f6a62,roughness:.9}),.12+.21);pl.userData.planter=1;kit('plant',u,n,0,1).position.y=.54;});}
    const shrub=(u,n,sc)=>{const m=makeShrub(sc);const p=W(u,n);m.position.set(p[0],0,p[1]);m.userData.noCol=true;m.userData.terrS=1;root.add(m);};for(let u=-hL+.9;u<hL-.6;u+=1.4)if(free(u,.4))shrub(u,hD+.75,.45);
    if(T.door!=null){/* wall light beside the door */const p=W(du+(du<0?.95:-.95),-hD+.06);const wl=add(new THREE.BoxGeometry(.12,.22,.1),std({color:0x2c2c2c,roughness:.5}),p[0],2.1,p[1],0,1);wl.userData.noCol=true;wl.userData.terrL=1;const gl=add(new THREE.BoxGeometry(.08,.12,.02),std({color:0xfff1d0,emissive:0xffd9a0,emissiveIntensity:.8}),p[0]+T.nx*.06,2.1,p[1]+T.nz*.06,0,1);gl.castShadow=false;gl.userData.noCol=true;}
-   if(T.liv&&T.door!=null){/* slim pergola over the deck: 2 outer posts, beams to the wall, slats */const PM=std({color:0x3b3a37,roughness:.6,metalness:.3}),h=2.55;
+   if(T.liv){/* slim pergola over the deck (v21c: also off the living room without a readable door): 2 outer posts, beams to the wall, slats */const PM=std({color:0x3b3a37,roughness:.6,metalness:.3}),h=2.55;
     [[-hL+.12,hD-.12],[hL-.12,hD-.12]].forEach(([u,n])=>{const p=W(u,n);const po=add(new THREE.BoxGeometry(.1,h,.1),PM,p[0],.12+h/2,p[1],0,1);po.userData.pergola=1;});
     bx(-hL+.07,hL-.07,hD-.17,hD-.07,.14,PM,.12+h-.07).userData.pergola=1;[-hL+.12,hL-.12].forEach(u=>{bx(u-.05,u+.05,-hD+.02,hD-.07,.14,PM,.12+h-.07).userData.pergola=1;});
     for(let u=-hL+.5;u<hL-.3;u+=.45)bx(u-.025,u+.025,-hD+.02,hD-.12,.1,PM,.12+h+.05).userData.pergola=1;}
@@ -1093,6 +1093,8 @@ function extPipeAudit(P,world,bb,r2){if(!world)return;
  {const TS=[];world.traverse(o=>{if(o.userData&&o.userData.terrace)TS.push(o);});TS.forEach(t=>{const T=t.userData.tf;if(!T||T.L<3.2||T.D<2.6||(H.furn||[]).some(f=>f.t==='otable'))return;/* designed houses carry their own terrace set */const cnt={};const FB=[];world.traverse(o=>{const u=o.userData||{};if(u.terrF){cnt[u.terrF]=(cnt[u.terrF]||0)+1;FB.push([u.terrF,bb(o)]);}});
   if(!cnt.otable||((cnt.chair||0)+(cnt.lounge||0))<2||(cnt.plant||0)<2)P.push({rule:'terrace-furnished',got:cnt});
   if(T.hint&&Math.hypot(T.cx-T.hint[0],T.cz-T.hint[1])>4.5)P.push({rule:'terrace-placed',p:[r2(T.cx),r2(T.cz)],printed:T.hint});
+  /* v21c audit terrace-pergola: a deck off the living room (door or not) carries the pergola */
+  if(T.liv){let pg=0;world.traverse(o=>{if(o.userData&&o.userData.pergola)pg++;});if(pg<3)P.push({rule:'terrace-pergola',got:pg});}
   const WB=[];(H.walls||[]).filter(w=>w.level===(H.levels[0]&&H.levels[0].name)).forEach(w=>{const g=geo(w),t2=(w.thickness||.3)/2;WB.push([Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2]);});
   FB.forEach(([k,b])=>{const q=[b.min.x+.03,b.min.z+.03,b.max.x-.03,b.max.z-.03];if(WB.some(w=>q[0]<w[2]&&q[2]>w[0]&&q[1]<w[3]&&q[3]>w[1]))P.push({rule:'terrace-clear',what:k,why:'wall'});
    if(T.door!=null){const c=[T.cx+T.ux*T.door,T.cz+T.uz*T.door],e=[c[0]+T.nx*T.D,c[1]+T.nz*T.D],pb=[Math.min(c[0],e[0])-(Math.abs(T.ux)*.6),Math.min(c[1],e[1])-(Math.abs(T.uz)*.6),Math.max(c[0],e[0])+(Math.abs(T.ux)*.6),Math.max(c[1],e[1])+(Math.abs(T.uz)*.6)];if(q[0]<pb[2]&&q[2]>pb[0]&&q[1]<pb[3]&&q[3]>pb[1])P.push({rule:'terrace-clear',what:k,why:'door-path'});}});});}

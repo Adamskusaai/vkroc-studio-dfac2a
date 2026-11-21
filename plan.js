@@ -1,4 +1,4 @@
-import {LTJ} from './ltpl.js?v=20261112i';
+import {LTJ} from './ltpl.js?v=20261112i';import {DTJ} from './dtpl.js?v=20261121c';
 import {tableAreas,labelAreas} from './ocr.js?v=20261118e';
 import {segPlan} from './seg.js?v=20261118b';
 // plan.js — robust floor-plan reader (plain JS, no deps). prem8.
@@ -710,7 +710,10 @@ function wgrid(m,W,x0,y0,x1,y1){const GX=28,GY=7,g=new Float32Array(GX*GY),w=x1-
 function corr(a,b){let ma=0,mb=0;for(let i=0;i<a.length;i++){ma+=a[i];mb+=b[i];}ma/=a.length;mb/=b.length;let sab=0,saa=0,sbb=0;for(let i=0;i<a.length;i++){const p=a[i]-ma,q=b[i]-mb;sab+=p*q;saa+=p*p;sbb+=q*q;}return sab/Math.sqrt(saa*sbb+1e-9);}
 // ---------- dimension OCR (printed digits, template matching; no deps) ----------
 const GW=12,GH=18;let TPL=null;
-function templates(){if(TPL)return TPL;TPL=[];const fams=['Arial','Arial Narrow','Helvetica','DejaVu Sans','Liberation Sans','Liberation Sans Narrow','Verdana','Roboto','Roboto Condensed','Times New Roman','Liberation Serif','Courier New','ISOCPEUR','sans-serif','serif','monospace'];
+/* v21b: digit templates are pre-rendered too (dtpl.js, desktop Chromium) - live fillText digits differ per device/font set, so the same plan read its room areas on desktop and lost them on a phone */
+globalThis.__DTlive=()=>{TPL=null;const t=templatesLive();TPL=null;return t.map(e=>[e.ch,Array.from(e.g,v=>Math.round(v*255)),+e.asp.toFixed(4)]);};
+function templates(){if(TPL)return TPL;if(DTJ&&DTJ.length&&!(globalThis.__PF||{}).liveDT){TPL=DTJ.map(e=>({ch:e[0],g:Float32Array.from(e[1],v=>v/255),asp:e[2]}));return TPL;}return templatesLive();}
+function templatesLive(){TPL=[];const fams=['Arial','Arial Narrow','Helvetica','DejaVu Sans','Liberation Sans','Liberation Sans Narrow','Verdana','Roboto','Roboto Condensed','Times New Roman','Liberation Serif','Courier New','ISOCPEUR','sans-serif','serif','monospace'];
  const c=mk(80,80),x=c.getContext('2d');
  for(const f of fams)for(const wt of['300','normal','bold'])for(const sx of[1,.72])for(const ch of'0123456789'){x.setTransform(1,0,0,1,0,0);x.fillStyle='#fff';x.fillRect(0,0,80,80);x.fillStyle='#000';x.font=`${wt} 56px ${f}`;x.textBaseline='alphabetic';x.setTransform(sx,0,0,1,10,0);x.fillText(ch,0,64);x.setTransform(1,0,0,1,0,0);
   const d=x.getImageData(0,0,80,80).data,m=new Uint8Array(6400);for(let i=0;i<6400;i++)m[i]=d[i*4]<128?1:0;let x0=80,y0=80,x1=-1,y1=-1;for(let y=0;y<80;y++)for(let xx=0;xx<80;xx++)if(m[y*80+xx]){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(y<y0)y0=y;if(y>y1)y1=y;}
