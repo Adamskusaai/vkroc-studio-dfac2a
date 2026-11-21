@@ -493,7 +493,7 @@ function roomKind(types){const has=t=>types.has(t);
  if(has('sofa')||has('tv')||has('table'))return'living';
  if(has('kitch')||has('fridge')||has('island'))return'kitchen';
  if(has('shoe')||has('coat')||has('bench')||has('runner'))return'hall';return'other';}
-function build(){const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.name]=l);let xs=[],zs=[];doorPivs=[];
+function build(){KCH={};const root=new THREE.Group(),lv={};H.levels.forEach(l=>lv[l.name]=l);let xs=[],zs=[];doorPivs=[];
  const Rroof=(H&&H.roof)||roof; if(Rroof&&Rroof!==roof) roof=Rroof;
  /* v20261117g RULE (flat roofs): every gravel/membrane slab gets world-space UVs (no per-piece stretching), so overlapping slab pieces render one identical
    surface (no visible z-fight, no hairline steps); sky-exposed roof slabs are not lightmapped (live light only). audit: coplanar-overlap */
@@ -987,6 +987,7 @@ function streetTurn(h){SR=null;const st=h&&h.plot&&h.plot.auto&&h.plot.st;if(!st
  if(g.terrInk){const k=g.terrInk,N=[[0,-1],[-1,0],[0,1],[1,0]],n=srV(N[k.s]),s=N.findIndex(v=>Math.abs(v[0]-n[0])<.1&&Math.abs(v[1]-n[1])<.1),X0=Math.min(...xs),X1=Math.max(...xs),Z0=Math.min(...zs),Z1=Math.max(...zs),e=[Z0,X0,Z1,X1][k.s],pt=t=>k.s%2?[e,t]:[t,e],A=srP(pt(k.a)),B=srP(pt(k.b)),ax=s%2?1:0;k.s=s;k.a=Math.min(A[ax],B[ax]);k.b=Math.max(A[ax],B[ax]);}
  return g;}
 function roomsAllS(){return (window.__roomsAll?window.__roomsAll():[]).map(x=>SR?{...x,bb:srB(x.bb),c:srP(x.c)}:x);}
+export function kindsAgree(){const bad=[];(H.levels||[]).forEach(l=>{const RK=roomKinds[l.name],PK=KCH[l.name];if(!RK||!PK)return;Object.keys(RK.kindOf).forEach(k=>{if(RK.kindOf[k]==='hall'&&PK[k]!=='hall')bad.push([l.name,k,RK.kindOf[k],PK[k]||null]);});});return bad;}
 export function streetInfo(){return SR&&{st:SR.st,dr:SR.dr,c:SR.c};}
 export function gen(h,anim){DIRTY=Math.max(DIRTY,90);H=streetTurn(h);init();const keep=(walk&&!anim&&rig)?{x:rig.position.x,y:rig.position.y,z:rig.position.z,yaw,pitch}:null;doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}DECKS=[];LROOF=[];world=build();doGrow=false;if(!world)return false;interiorFinish(world);backsplash(world);world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
@@ -1033,7 +1034,11 @@ function stairPads(L){const li=(H.levels||[]).findIndex(l=>l.name===L),out=[];if
  if(li>=0)(H.stairs||[]).filter(st=>st.level===L).forEach(st=>out.push(stairRect(st)));return out;}
 function stairHoles(L){const li=(H.levels||[]).findIndex(l=>l.name===L),out=[];if(li>=1)(H.stairs||[]).filter(st=>st.level===H.levels[li-1].name).forEach(st=>{const r=stairRect(st);out.push([r[0]-.08,r[1]-.08,r[2]+.08,r[3]+.08]);});
  if(li>=0)(H.stairs||[]).filter(st=>st.level===L).forEach(st=>out.push(stairRect(st)));return out;}
-function circLabs(L){const C=dcells(L),labs=new Set(),RK=roomKinds[L],holes=stairHoles(L);
+/* v21i RULE (door-blocked): interior doors are swung while the walls are built, before the floor pass names the room kinds - so the hall test
+   that the door-blocked audit applies afterwards saw no halls at choice time and leaves swung into halls. preKinds(L) gives the same room kinds
+   from the same cells + furniture up front, so the choice and the audit agree. audit: door-blocked */
+function preKinds(L){const CR=dcells(L),byL={};if(!CR||!CR.labelAt)return null;(H.furn||[]).filter(f=>f.level===L).forEach(f=>{const k=CR.labelAt(f.p[0],f.p[1]);if(!k)return;(byL[k]=byL[k]||{t:new Set()}).t.add(f.t);});const kindOf={};Object.keys(byL).forEach(k=>kindOf[k]=roomKind(byL[k].t));return{labelAt:CR.labelAt,kindOf};}
+let KCH={};function circLabs(L){const C=dcells(L),labs=new Set(),RK=roomKinds[L]||((globalThis.__PF||{}).noPreKinds?null:preKinds(L)),_k=(!roomKinds[L]&&!KCH[L])?(KCH[L]=RK?{...RK.kindOf}:{}):0,holes=stairHoles(L);
  const ov=(a,b)=>Math.max(0,Math.min(a[2],b[2])-Math.max(a[0],b[0]))*Math.max(0,Math.min(a[3],b[3])-Math.max(a[1],b[1]));
  C.forEach(r=>{if(RK&&RK.kindOf[r[4]]==='hall')labs.add(r[4]);if(holes.some(p=>ov(r,p)>.2))labs.add(r[4]);});
  (H.rn||[]).forEach(e=>{if(e.level!==L||!/Predsieň|Chodba|Hala|Zádverie|Schodisko/i.test(e.n||''))return;const c=C.find(r=>e.p[0]>r[0]&&e.p[0]<r[2]&&e.p[1]>r[1]&&e.p[1]<r[3]);if(c)labs.add(c[4]);});return labs;}
@@ -1222,7 +1227,7 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
      furn-footprint: a kit piece's real mesh stays inside its catalogue footprint (books in the shelf, no bedside cubes); furn-overlap3d: real bounds of two pieces never interpenetrate;
      furn-out-of-room: real bounds (plants' leaves too) stay inside the room cells (clear of walls/columns); furn-zfight: no two coplanar faces of different material in a piece */
   {const FRc={},CRc=L=>CELLS[L]||[];world.traverse(o=>{const s=o.userData&&o.userData.sw;if(!s)return;const w=H.walls.find(x=>x.id===s.w);if(!w)return;const G=geo(w),FR=FRc[s.L]||(FRc[s.L]=furnRects(s.L)),h=swingHits(w,G,s.hinge,s.dir,s.sd,s.a,s.lw,FR,CRc(s.L),circLabs(s.L));
-    if(s.a<45||s.a>89)P.push({rule:'door-swing',why:'angle',a:s.a,level:s.L});if(h.n||h.out)P.push({rule:'door-swing',level:s.L,wall:s.w,hits:h.n,out:h.out});if(h.near||h.circ||h.stair||h.narrow)P.push({rule:'door-blocked',level:s.L,wall:s.w,why:h.stair?'stair':h.narrow?'walkway':h.circ?'hall': 'furn'});});
+    if(s.a<45||s.a>89)P.push({rule:'door-swing',why:'angle',a:s.a,level:s.L});if(h.n||h.out)P.push({rule:'door-swing',level:s.L,wall:s.w,hits:h.n,out:h.out});/* v21i: a door between two halls opens into a hall either way - that alone is not blocking (narrow / stair / tall piece still are) */const hc=h.circ&&!h.near&&!h.stair&&!h.narrow&&swingHits(w,G,s.hinge,s.dir,-s.sd,s.a,s.lw,FR,CRc(s.L),circLabs(s.L)).circ>0;if((h.near||h.circ||h.stair||h.narrow)&&!hc)P.push({rule:'door-blocked',level:s.L,wall:s.w,why:h.stair?'stair':h.narrow?'walkway':h.circ?'hall': 'furn'});});
    let nd=0;H.walls.forEach(w=>{if(w._ext)return;(w.openings||[]).forEach(o=>{if(o.type!=='door'||(o.kind&&o.kind!=='single'))return;nd++;});});let ns=0;world.traverse(o=>{if(o.userData&&o.userData.sw)ns++;});if(ns<nd)P.push({rule:'door-swing',why:'leaf-missing',doors:nd,leaves:ns});}
   walkAudit(P);
   extPipeAudit(P,world,bb,r2);
