@@ -4,7 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261117s';
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261121m';
 onPhSwap(()=>{DIRTY=Math.max(DIRTY,30);});
 export function phInfo(){return PH_STATS;}
 export function phWait(){return phPending();}
@@ -1023,10 +1023,11 @@ function nudgeFree(p){if(!body||!p)return p;const tryP=(x,z,y)=>{const q=p.clone
  for(let rad=.15;rad<=2.8;rad+=.15){for(let a=0;a<16;a++){const x=p.x+Math.cos(a*Math.PI/8)*rad,z=p.z+Math.sin(a*Math.PI/8)*rad,q=tryP(x,z,p.y);if(q){p.x=q.x;p.y=q.y;p.z=q.z;return p;}}}
  if(body.resolve)body.resolve(p);const y=body.floor(p);if(y!==null)p.y=y;return p;}
 function clipInExt(x0,z0,x1,z1,ws,mode){ (ws||[]).forEach(w=>{if(!w._ext)return;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,ins=(mode==='outer'?0:(+mode||0)),k=mode==='outer'?T:-(T+ins),px=g.x0+nx*k,pz=g.z0+nz*k,near=T+Math.abs(ins)+.12;
+  /* v21m: a wall that only touches a cell corner (side overlap < min(0.3 m, 25 %)) never cuts it - a 0.11 m floor gap in an open plan. */
   /* v20261117u: inset a cell that the inner face actually cuts; never treat a recess wall as an infinite plane. slivers in the wall/yard are dropped later by inExtBand. audit: floor-present, ext-material */
-  if(Math.abs(nx)>.9){const a=g.z0,b=g.z0+g.u[1]*g.L;if(Math.min(z1,Math.max(a,b)+.08)-Math.max(z0,Math.min(a,b)-.08)<=0)return;const wx=g.x0;if(wx+T+near<x0||wx-T-near>x1)return;
+  if(Math.abs(nx)>.9){const a=g.z0,b=g.z0+g.u[1]*g.L;if(Math.min(z1,Math.max(a,b)+.08)-Math.max(z0,Math.min(a,b)-.08)<=((globalThis.__PF||{}).noCornerClip?0:Math.min(.3,.25*(z1-z0))))return;const wx=g.x0;if(wx+T+near<x0||wx-T-near>x1)return;
    if(nx>0){if(x0<px&&px<=x1+near)x1=Math.min(x1,px);}else if(x1>px&&px>=x0-near)x0=Math.max(x0,px);}
-  else if(Math.abs(nz)>.9){const a=g.x0,b=g.x0+g.u[0]*g.L;if(Math.min(x1,Math.max(a,b)+.08)-Math.max(x0,Math.min(a,b)-.08)<=0)return;const wz=g.z0;if(wz+T+near<z0||wz-T-near>z1)return;
+  else if(Math.abs(nz)>.9){const a=g.x0,b=g.x0+g.u[0]*g.L;if(Math.min(x1,Math.max(a,b)+.08)-Math.max(x0,Math.min(a,b)-.08)<=((globalThis.__PF||{}).noCornerClip?0:Math.min(.3,.25*(x1-x0))))return;const wz=g.z0;if(wz+T+near<z0||wz-T-near>z1)return;
    if(nz>0){if(z0<pz&&pz<=z1+near)z1=Math.min(z1,pz);}else if(z1>pz&&pz>=z0-near)z0=Math.max(z0,pz);}});return[x0,z0,x1,z1];}
 function inExtBand(x,z,ws){return (ws||[]).some(w=>{if(!w._ext)return false;const g=geo(w),T=(w.thickness||.3)/2,nx=-g.u[1]*w._ext,nz=g.u[0]*w._ext,px=x-g.x0,pz=z-g.z0,q=px*g.u[0]+pz*g.u[1];if(q<-.05||q>g.L+.05)return false;const d=(x-(g.x0+g.u[0]*q))*nx+(z-(g.z0+g.u[1]*q))*nz;return d>-T+.02&&d<T+.08;});}
 function shrinkIn(cl,ws){let[x0,z0,x1,z1]=cl;for(let k=0;k<24;k++){const a=inExtBand(x0,z0,ws),b=inExtBand(x1,z0,ws),c=inExtBand(x0,z1,ws),d=inExtBand(x1,z1,ws);if(!(a||b||c||d))return[x0,z0,x1,z1];if(a||c)x0+=.03;if(b||d)x1-=.03;if(a||b)z0+=.03;if(c||d)z1-=.03;if(x1-x0<.05||z1-z0<.05)return null;}return[x0,z0,x1,z1];}
@@ -1261,7 +1262,7 @@ export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]
    const cover=(i,useVis)=>{const l=H.levels[i],hs=holes(l.name),fl=FL.filter(f=>f.y>=(l.elevation||0)+.02&&f.y<(l.elevation||0)+.2&&(!useVis||(f.o.visible!==false&&!f.ghost&&f.o.material!==GHOST)));let bad=0;
     (CELLS[l.name]||[]).forEach(r=>{const area=(r[2]-r[0])*(r[3]-r[1]);if(area<.25)return;const step=Math.max(.15,Math.min(.4,Math.sqrt(area)/7));let t=0,h=0;
      for(let x=r[0]+.08;x<r[2]-.08;x+=step)for(let z=r[1]+.08;z<r[3]-.08;z+=step){if(hs.some(q=>x>q[0]&&x<q[2]&&z>q[1]&&z<q[3])||inWall(x,z,l.name)||outExt(x,z,l.name))continue;t++;if(fl.some(f=>x>=f.b.min.x&&x<=f.b.max.x&&z>=f.b.min.z&&z<=f.b.max.z))h++;}
-     if(t>=4&&h/t<.95){bad++;if(!useVis)P.push({rule:'floor-present',level:l.name,p:[r2((r[0]+r[2])/2),r2((r[1]+r[3])/2)],frac:r2(h/t),area:r2(area)});}});return bad;};
+     if(t>=4&&h/t<.95){bad++;if(!useVis)P.push({rule:'floor-present',level:l.name,p:[r2((r[0]+r[2])/2),r2((r[1]+r[3])/2)],frac:r2(h/t),area:r2(area),cell:r.slice(0,4).map(r2),near:FL.filter(f=>f.b.max.x>r[0]&&f.b.min.x<r[2]&&f.b.max.z>r[1]&&f.b.min.z<r[3]).slice(0,6).map(f=>[r2(f.y),r2(f.b.min.x),r2(f.b.max.x),r2(f.b.min.z),r2(f.b.max.z),f.o.name||f.o.geometry.type])});}});return bad;};
    H.levels.forEach((l,i)=>cover(i,false));
    const prevD=DOLL,prevC=LVCUT,prevW=walk;try{setDollViz(true);
     [null,...H.levels.map((l,i)=>i)].forEach(k=>{LVCUT=k;applyCut();const idx=k==null?H.levels.map((l,i)=>i):[k];idx.forEach(i=>{if(cover(i,true))P.push({rule:'floor-present',level:H.levels[i].name,mode:k==null?'doll-all':'doll-'+H.levels[i].name});});});

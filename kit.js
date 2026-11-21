@@ -58,6 +58,7 @@ function phAttach(g, type, F, sty) {
     const SEAT = type === 'sofa' || type === 'armch' || type === 'chair' || type === 'lounge'; let m = m0;
     if (SEAT && sc.userData.flip) { m = new THREE.Group(); m.add(m0); m.rotation.y = Math.PI; }
     g.children.forEach(c => { if (!(c.material && c.material.isMeshBasicMaterial && c.material.transparent)) c.visible = false; });
+    if (g.userData.ff) { m.scale.x /= g.userData.ff[0]; m.scale.z /= g.userData.ff[1]; } /* the photo model is already fitted to W x D */
     m.userData.ph = id; g.add(m); g.userData.ph = id; PH_STATS.inst++; phSwap();
   });
 }
@@ -553,6 +554,14 @@ function proc(type, F, cols) {
 
 export function makeFurn(type, F, cols = {}) {
   const g = metreUV(proc(type, F, cols));
+  /* v21m RULE (furn-footprint): a procedural piece whose drawing is wider than its (possibly shrunk) catalogue footprint is scaled
+     down in plan to fit it, so e.g. a 0.4 m coat stand never spreads 0.52 m. audit: furn-footprint */
+  if (F && F.w > 0 && F.d > 0 && type !== 'plant' && type !== 'kitch' && !(globalThis.__PF || {}).noFootFit) {
+    const bb = new THREE.Box3(); g.updateMatrixWorld(true);
+    g.traverse(c => { if (c.isMesh && !(c.material && c.material.isMeshBasicMaterial && c.material.transparent)) bb.expandByObject(c); });
+    if (!bb.isEmpty()) { const sx = bb.max.x - bb.min.x, sz = bb.max.z - bb.min.z, fx = sx > F.w + .03 ? F.w / sx : 1, fz = sz > F.d + .03 ? F.d / sz : 1;
+      if (fx < 1 || fz < 1) { g.scale.set(fx, 1, fz); g.userData.ff = [fx, fz]; } }
+  }
   phAttach(g, type, F, cols.sty);
   return g;
 }
