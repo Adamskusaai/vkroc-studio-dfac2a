@@ -831,7 +831,7 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
     (w.openings||[]).forEach(op=>{if(op.type!=='door'||op.kind==='terrace'||op.kind==='garage'||op.width>1.6)return;const m=op.offset+op.width/2,cx=g.x0+g.u[0]*m,cz=g.z0+g.u[1]*m;let nx=-g.u[1],nz=g.u[0];if(nx*(cx-hcx)+nz*(cz-hcz)<0){nx=-nx;nz=-nz;}
      /* v21o: a recessed front door (porch / entrance niche) is not on the outline: it counts when one side is a room and the other is outside */
      if(!edge){const A=lab(cx+nx*.7,cz+nz*.7),B=lab(cx-nx*.7,cz-nz*.7);if(A===null||A===B||(globalThis.__PF||{}).noRecessEnt)return;if(A){nx=-nx;nz=-nz;}}
-     const sc=(nz<-.5?3:Math.abs(nx)>.5?2:1)-Math.abs(op.width-.9);if(!best||sc>best.sc)best={sc,r:{cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3,ext:1}};});});return best?best.r:null;};
+     const sc=(nz<-.5?3:Math.abs(nx)>.5?2:1)-Math.abs(op.width-.9)-(edge?0:4);/* v21p: a door on the outline always beats a recessed one */if(!best||sc>best.sc)best={sc,r:{cx,cz,nx,nz,ux:g.u[0],uz:g.u[1],w:op.width,t:w.thickness||.3,ext:1}};});});return best?best.r:null;};
   const ENT=dOut('entrance')||dOutExt();let TER=dOut('terrace');
   /* v18k RULE (terrace where the plan draws it): a printed area OUTSIDE the walls (4-60 m2, the largest one) is the terrace. The deck goes on
      the exterior wall facing it - in front of that wall's door when it has one (living-room exit -> pergola), else centred on the label.
@@ -1107,7 +1107,7 @@ function installDownpipes(root){window.__dpInfo=[];if(!root||roof==='none')retur
  XW.forEach(w=>{[w.start,w.end].forEach(p=>{const k=key(p[0],p[1]);if(seen.has(k))return;const n=XW.filter(q=>Math.hypot(q.start[0]-p[0],q.start[1]-p[1])<.12||Math.hypot(q.end[0]-p[0],q.end[1]-p[1])<.12);if(n.length<2)return;seen.add(k);
   /* convex exterior corner: two ext walls meet, the bisector points outside */
   const ns=n.map(q=>{const g=geo(q);return[-g.u[1]*q._ext,g.u[0]*q._ext];});const bx=ns[0][0]+ns[1][0],bz=ns[0][1]+ns[1][1],bl=Math.hypot(bx,bz)||1;
-  const tx=p[0]+(bx/bl)*.45,tz=p[1]+(bz/bl)*.45,inside=(H.levels||[]).some(l=>(dcells(l.name)||[]).some(r=>tx>r[0]&&tx<r[2]&&tz>r[1]&&tz<r[3]));if(inside)return;corners.push({x:p[0],z:p[1],nx:bx/bl,nz:bz/bl});});});
+  const tx=p[0]+(bx/bl)*.45,tz=p[1]+(bz/bl)*.45,inside=(H.levels||[]).some(l=>(dcells(l.name)||[]).some(r=>tx>r[0]&&tx<r[2]&&tz>r[1]&&tz<r[3]));if(inside)return;/* v21p: two wall ends a few cm apart are one corner - one downpipe, not two with overlapping brackets. audit: coplanar-overlap */if(!(globalThis.__PF||{}).noDpDedup&&corners.some(q=>Math.hypot(q.x-p[0],q.z-p[1])<.4))return;corners.push({x:p[0],z:p[1],nx:bx/bl,nz:bz/bl});});});
  /* roof-edge height at a corner: top of the nearest coping / lower-roof / top slab */
  const edgeY=(x,z)=>eaveAt(root,x,z);
  corners.forEach(c=>{let y=edgeY(c.x,c.z);if(y===null||y<1.2)return;
