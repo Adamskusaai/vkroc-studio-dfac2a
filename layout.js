@@ -121,6 +121,9 @@ function scoreOf(G,it,S){const t=it.t;let s=.25*Math.min(dDoor(G,it.p),4);const 
  if(t==='sofa'){const D=rayWall(G,it.p,FV[it.r]);s+=D>=2.2&&D<=5.5?2.5:-1;}
  if(t==='kitch')s-=G.wins.length&&dWin(G,it.p)<1?.5:0;
  if(t==='table'&&S.last.kitch)s-=.4*Math.hypot(it.p[0]-S.last.kitch.p[0],it.p[1]-S.last.kitch.p[1]);
+ /* v21j RULE (kitchen-aisle): the dining table and its chairs keep a 1.0 m work aisle free in front of the kitchen run - the table sits beyond it (dining zone between kitchen and living), never in it. audit: kitchen-aisle */
+ if(t==='table'&&S.last.kitch&&!(globalThis.__PF||{}).noAisle){const k=S.last.kitch,q=k.q,v=FV[k.r],A=1.0,Z=v[1]>0?[q[0],q[3],q[2],q[3]+A]:v[0]>0?[q[2],q[1],q[2]+A,q[3]]:v[1]<0?[q[0],q[1]-A,q[2],q[1]]:[q[0]-A,q[1],q[0],q[3]],r=it.q,c=.6,e=[r[0]-c,r[1]-c,r[2]+c,r[3]+c];
+  const ov=(x,y)=>Math.min(x[2],y[2])-Math.max(x[0],y[0])>.05&&Math.min(x[3],y[3])-Math.max(x[1],y[1])>.05;if(ov(r,Z))s-=60;else if(ov(e,Z))s-=15;}
  if(t==='table'||t==='ctable'||t==='rug'||t==='runner'){const rm=G.room.bb;s-=.3*Math.hypot(it.p[0]-(rm[0]+rm[2])/2,it.p[1]-(rm[1]+rm[3])/2);}
  if((t==='armch')&&S.last.sofa)s-=.5*Math.hypot(it.p[0]-S.last.sofa.p[0],it.p[1]-S.last.sofa.p[1]);
  return s+.8*hsh(S.fv,it.p[0],it.p[1],it.r);}
