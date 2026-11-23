@@ -1,5 +1,5 @@
 import {LTJ} from './ltpl.js?v=20261112i';import {DTJ} from './dtpl.js?v=20261121c';
-import {tableAreas,labelAreas,barLadder} from './ocr.js?v=20261121l';
+import {tableAreas,labelAreas,barLadder} from './ocr.js?v=20261121r';
 import {segPlan} from './seg.js?v=20261118b';
 // plan.js — robust floor-plan reader (plain JS, no deps). prem8.
 // readPlan(img,{rect}) -> {walls:[{start,end,thickness,op:[]}], canvas, w, guess, mode:'plan', conf, scaleSrc, dbg} | null
@@ -478,7 +478,7 @@ function barFix(R,im,crop,cr){try{if(!R||!R.dbg||(globalThis.__PF||{}).noBarL||/
  const c=mk(W,H),x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0);const d=x.getImageData(0,0,W,H).data,G=new Float32Array(W*H);for(let i=0;i<W*H;i++)G[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];
  const B=barLadder(G,W,H,globalThis.__PF||{});R.dbg.barL=B?[+B.ppm.toFixed(2),B.n,B.ax,B.at]:null;R.dbg.barLd=barLadder.dbg;if(!B||!(R.w>0))return;
  const srcW=crop?(crop[2]-crop[0]):W,wNew=srcW/B.ppm,k=wNew/R.w;R.dbg.barK=+k.toFixed(3);if(!(k>.4&&k<2.5)||Math.abs(k-1)<.02)return;
- const s=v=>Math.round(v*k*100)/100;(R.walls||[]).forEach(w=>{w.start=w.start.map(s);w.end=w.end.map(s);(w.openings||[]).forEach(o=>{if(o.offset!=null)o.offset=s(o.offset);if(o.width!=null)o.width=s(o.width);});});
+ const s=v=>Math.round(v*k*100)/100;const seen=new Set(),PFb=globalThis.__PF||{};(R.walls||[]).forEach(w=>{w.start=w.start.map(s);w.end=w.end.map(s);[...(w.openings||[]),...(PFb.noBarOp?[]:(w.op||[]))].forEach(o=>{if(!o||seen.has(o))return;seen.add(o);if(o.offset!=null)o.offset=s(o.offset);if(o.width!=null)o.width=s(o.width);});});
  (R.labels||[]).forEach(l=>{if(l.p)l.p=l.p.map(s);});R.w=Math.round(wNew*100)/100;R.scaleSrc='scalebar';R.guess=false;R.dbg.scale='scalebar';}catch(e){if(R&&R.dbg)R.dbg.barErr=String(e).slice(0,80);}}
 export function readPlan(img,o={}){/* v18: area table read once on the full upload by the tiny CNN reader (ocr.js) */if(o._tab===undefined&&!(globalThis.__PF||{}).noTab){let T=0;try{T=tableAreas(img,globalThis.__PF||{})||0;}catch(e){T=0;}o={...o,_tab:T};}
  if(o._cm||o.rect||o.noCrop||(globalThis.__PF||{}).noCrop)return readPlanX(img,o);

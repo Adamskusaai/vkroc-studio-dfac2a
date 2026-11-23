@@ -109,9 +109,9 @@ export function barLadder(G,W,H,PF={}){const T0=performance.now(),hist=new Uint3
   R.push({v:+m[1],cx:(t.x0+t.x1)/2,cy:(t.y0+t.y1)/2,x0:t.x0,h:t.y1-t.y0+1});}
  let best=null;
  for(const ax of['v','h']){const pos=t=>ax==='v'?t.cy:t.cx,al=(a,b)=>ax==='v'?(Math.abs(a.x0-b.x0)<=Math.max(2,.6*a.h)||Math.abs(a.cx-b.cx)<=.6*a.h):Math.abs(a.cy-b.cy)<=.45*a.h;
-  for(const z of R){if(z.v!==0)continue;const G2=R.filter(u=>al(z,u)&&Math.abs(u.h/z.h-1)<.4);if(G2.length<4)continue;
+  for(const z of R){if(z.v!==0)continue;const G2=R.filter(u=>al(z,u)&&Math.abs(u.h/z.h-1)<.4);const n3=PF.noBl3?4:3;if(G2.length<n3)continue;
    for(const e of G2){if(e.v<=0)continue;const b=(pos(e)-pos(z))/e.v;if(Math.abs(b)<1.5*z.h)continue;const used=new Map();
     for(const u of G2){const d=Math.abs(pos(u)-(pos(z)+b*u.v));if(d<=.12*Math.abs(b)&&(!used.has(u.v)||d<used.get(u.v).d))used.set(u.v,{d});}
-    const vs=[...used.keys()].sort((a,b)=>a-b);if(vs.length<4||vs[0]!==0)continue;const st=vs[1];if(!vs.every((v,i)=>v%st===0)||vs[vs.length-1]>30)continue;
+    const vs=[...used.keys()].sort((a,b)=>a-b);if(vs.length<n3||vs[0]!==0)continue;const st=vs[1];if(vs.length<4&&(vs.length!==3||vs[2]!==2*st||st<2))continue;if(!vs.every((v,i)=>v%st===0)||vs[vs.length-1]>30)continue;
     const span=vs[vs.length-1]/st+1;if(vs.length<.75*span)continue;const sc=vs.length;if(!best||sc>best.n)best={ppm:Math.abs(b),n:sc,vals:vs,ax,at:[Math.round(z.cx),Math.round(z.cy)]};}}}
  barLadder.dbg={nC:C.length,nT:TK.length,nR:R.length,t:Math.round(performance.now()-T0)};return best;}
