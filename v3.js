@@ -1113,7 +1113,10 @@ function installDownpipes(root){window.__dpInfo=[];if(!root||roof==='none')retur
  corners.forEach(c=>{let y=edgeY(c.x,c.z);if(y===null||y<1.2)return;
   /* sit the pipe outside the coping: start 12 cm out, push further until the run is clear of slabs */
   let off=.18,x=c.x+c.nx*off,z=c.z+c.nz*off;for(let k=0;k<8;k++){if(!hits(x,z,.2,y-.15))break;off+=.06;x=c.x+c.nx*off;z=c.z+c.nz*off;}
-  const top=y-.04,pt=Math.max(.4,top-.2);(window.__dpInfo=window.__dpInfo||[]).push({x:+c.x.toFixed(2),z:+c.z.toFixed(2),top:+top.toFixed(2)});
+  /* v21q RULE (downpipe-off-wall): a wide eave / porch roof would push the pipe more than ~0.4 m off the wall - instead the pipe stays at the
+     corner and ends under the lowest slab above it (it enters the soffit). audit: downpipe-off-wall, downpipe-eave */
+  let yTop=y;if(!(globalThis.__PF||{}).noDpSoffit&&(off>.42||hits(x,z,.2,y-.15))){off=.18;x=c.x+c.nx*off;z=c.z+c.nz*off;let lo=1e9;for(const b of boxes)if(x>b.min.x-.06&&x<b.max.x+.06&&z>b.min.z-.06&&z<b.max.z+.06&&b.min.y>1.2&&b.min.y<lo)lo=b.min.y;if(lo<1e9)yTop=Math.min(y,lo+.02);}
+  const top=yTop-.04,pt=Math.max(.4,top-.2);(window.__dpInfo=window.__dpInfo||[]).push({x:+c.x.toFixed(2),z:+c.z.toFixed(2),top:+top.toFixed(2)});
   const hd=new THREE.Mesh(new THREE.BoxGeometry(.22,.16,.16),M.frame);hd.position.set(x-c.nx*.04,top-.1,z-c.nz*.04);hd.castShadow=true;hd.userData.roof=1;hd.userData.noCol=true;hd.userData.dpipe=1;hd.userData.hopper=1;root.add(hd);
   const armL=Math.max(.08,off-.04),arm=new THREE.Mesh(new THREE.BoxGeometry(armL,.05,.05),M.frame);arm.position.set(c.x+c.nx*(off-armL/2),top-.08,c.z+c.nz*(off-armL/2));arm.userData.roof=1;arm.userData.noCol=true;arm.userData.dpipe=1;arm.userData.gutter=1;root.add(arm);
   const pm=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,pt,12),M.frame);pm.position.set(x,pt/2,z);pm.castShadow=true;pm.userData.roof=1;pm.userData.noCol=true;pm.userData.dpipe=1;root.add(pm);
