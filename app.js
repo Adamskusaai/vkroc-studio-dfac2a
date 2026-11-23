@@ -1,6 +1,6 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
 import {readPlan} from './plan.js?v=20261121r';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261121t';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261121w';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -231,6 +231,20 @@ function roomFromCells(R,id){const{g,W,Hh,x0,z0,c}=R;let n=0,sx=0,sz=0,b=[1e9,1e
  for(let i=0;i<g.length;i++){if(g[i]!==id)continue;const x=i%W,z=(i/W)|0;n++;sx+=x;sz+=z;if(x<b[0])b[0]=x;if(z<b[1])b[1]=z;if(x>b[2])b[2]=x;if(z>b[3])b[3]=z;}
  if(!n)return null;let px=x0+sx/n*c,pz=z0+sz/n*c;const ci=Math.round((pz-z0)/c)*W+Math.round((px-x0)/c);if(g[ci]!==id){const q=cellIn(R,id);px=q[0];pz=q[1];}
  return{id,a:n*c*c,p:[px,pz],bb:[x0+b[0]*c,z0+b[1]*c,x0+b[2]*c,z0+b[3]*c]};}
+function snapZonesToStubs(R,own,seeds,sc,ws){if(!ws||!ws.length)return;
+ const{g,W,Hh,x0,z0,c}=R;
+ const side=(p,w)=>{const dx=w.end[0]-w.start[0],dz=w.end[1]-w.start[1],l=Math.hypot(dx,dz)||1e-9,nx=-dz/l,nz=dx/l;
+  return{s:(p[0]-w.start[0])*nx+(p[1]-w.start[1])*nz,t:(p[0]-w.start[0])*dx/l+(p[1]-w.start[1])*dz/l,l,th:(w.thickness||.2)/2};};
+ const stubs=ws.filter(w=>Math.hypot(w.end[0]-w.start[0],w.end[1]-w.start[1])>=.8);
+ if(!stubs.length)return;
+ const seedP=seeds.map((s,i)=>{const k=sc[i];return[x0+(k%W)*c,z0+((k/W)|0)*c];});
+ for(let i=0;i<g.length;i++){const si=own[i];if(si<0||g[i]<0)continue;const p=[x0+(i%W)*c,z0+((i/W)|0)*c],sp=seedP[si];if(!sp)continue;
+  for(const w of stubs){const a=side(p,w),b=side(sp,w);if(a.t<-.3||a.t>a.l+.3||b.t<-.4||b.t>b.l+.4)continue;
+   if(a.s*b.s>=0||Math.abs(a.s)<=a.th+.02||Math.abs(b.s)<=b.th+.02)continue;
+   /* cell is on the other side of this stub from its seed - give it to a seed on the same side */
+   let best=-1,bd=1e9;for(let k=0;k<seeds.length;k++){const sk=side(seedP[k],w);if(sk.s*a.s<=0||Math.abs(sk.s)<=a.th+.02)continue;const d=Math.hypot(p[0]-seedP[k][0],p[1]-seedP[k][1]);if(d<bd){bd=d;best=k;}}
+   if(best>=0&&best!==si)own[i]=best;break;}}
+}
 function splitOneZone(R,room,seeds,bar){const{g,W,Hh,c}=R,id0=room.id,nS=seeds.length;
  const sc=seeds.map(s=>openZoneCell(R,id0,s.p));if(sc.some(i=>i<0))return 0;
  const INF=1e9,dist=new Float64Array(g.length),own=new Int32Array(g.length);dist.fill(INF);own.fill(-1);
@@ -252,7 +266,7 @@ function splitOneZone(R,room,seeds,bar){const{g,W,Hh,c}=R,id0=room.id,nS=seeds.l
   for(let it=0;it<5000;it++){let moved=0;for(let a=0;a<nS;a++)for(let b=0;b<nS;b++){if(a===b||!tgt[a]||!tgt[b])continue;if(area(a)<=tgt[a]+c*c*.5||area(b)>=tgt[b]-c*c*.5)continue;
    let best=null;for(const i of cells[a]){if(!nbrs(i).some(j=>own[j]===b))continue;if(!connected(a,i))continue;const sc=dist[i];if(best==null||sc>best.sc)best={i,sc};}
    if(!best)continue;own[best.i]=b;cells[a]=cells[a].filter(i=>i!==best.i);cells[b].push(best.i);moved=1;}if(!moved)break;}}
- let nid=2;for(let i=0;i<g.length;i++)if(g[i]>nid)nid=g[i];nid++;
+ snapZonesToStubs(R,own,seeds,sc,R._zoneWs||[]);let nid=2;for(let i=0;i<g.length;i++)if(g[i]>nid)nid=g[i];nid++;
  const ids=seeds.map((_,i)=>i===0?id0:nid++);
  const zg=(R._zg=(R._zg||1),R._zg++);
  for(let i=0;i<g.length;i++)if(g[i]===id0&&own[i]>=0)g[i]=ids[own[i]];
@@ -260,7 +274,7 @@ function splitOneZone(R,room,seeds,bar){const{g,W,Hh,c}=R,id0=room.id,nS=seeds.l
  if(neu.length<2){/* revert */for(let i=0;i<g.length;i++)if(ids.includes(g[i]))g[i]=id0;return 0;}
  R.r=R.r.filter(q=>q.id!==id0).concat(neu);return neu.length;}
 function splitOpenZones(R,L,ws){if((globalThis.__PF||{}).noOpenZones||!R||!R.g)return 0;let n=0;
- openZoneCands(R,L).forEach(c=>{nameOpenSeeds(c.seeds,R,L,R.r,c.r);const bar=stubBarriers(R,c.r.id,ws||[]);n+=splitOneZone(R,c.r,c.seeds,bar);});
+ openZoneCands(R,L).forEach(c=>{nameOpenSeeds(c.seeds,R,L,R.r,c.r);const bar=stubBarriers(R,c.r.id,ws||[]);R._zoneWs=ws||[];n+=splitOneZone(R,c.r,c.seeds,bar);delete R._zoneWs;});
  return n;}
 window.__rcClear=()=>{for(const k of Object.keys(RC))delete RC[k];};
 window.__openZoneCands=(L=lvl)=>openZoneCands(RC[L]||(rooms(L),RC[L]),L).map(c=>({n:c.r.n,a:+c.r.a.toFixed(1),seeds:c.seeds.map(s=>({v:s.v,n:s.n,p:s.p.map(v=>+v.toFixed(2))}))}));
@@ -1051,7 +1065,7 @@ function closeGaps(L){closeGaps.log=[];const ws=()=>H.walls.filter(q=>q.level===
  H.walls=H.walls.concat(add);if(st||ex||dr)H.gapFix={stubs:st,ext:ex,doors:dr,log:closeGaps.log};}
 /* v12b: an uploaded plan must never open as an empty house - every level with rooms and no furniture is furnished once (H.autoF), the user can still clear or re-roll it */
 function autoFurn(){if(!H||!H.levels)return;H.autoF=H.autoF||{};const L0=lvl;let did=0;for(const lv of H.levels){const L=lv.name;if(H.autoF[L]||(H.furn||[]).some(f=>f.level===L))continue;if(!H.walls.some(w=>w.level===L))continue;H.autoF[L]=1;if(!rooms(L).length)continue;lvl=L;furnish({auto:1});did++;}if(lvl!==L0){lvl=L0;draw();}if(did)save();}
-window.__autoFurn=autoFurn;
+window.__autoFurn=autoFurn;window.__furnish=furnish;
 function furnish(op){const dm=!!(op&&op.demo===1);const RS=rooms();if(!RS.length){if(!dm)toast('Najprv uzavrite steny miestností.','warn');return;}const rt=!!(op&&op.__rt);if(!dm&&!rt)snap();const had=(H.furn||[]).some(f=>f.level===lvl);if(!rt)H.fv=dm?0:had?((H.fv||0)+1)%4:0;
  const R=RC[lvl],ids=new Set(RS.map(r=>r.id));const fixes=sanitizeOpenings(H.walls.filter(w=>w.level===lvl),p=>{const v=roomAt(R,p);return v===-1?-1:ids.has(v)?v:0;});H.fixLog=fixes;
  const T=assignTypes(R,lvl);addMissingDoors(R,lvl,RS,T,fixes);try{addEntrance(R,lvl,RS,fixes);}catch(e){console.warn('entrance',e);}wetDoors(R,lvl,RS,T,fixes);if(!dm)try{rulesFix({noFix:1});}catch(e){console.warn('rulesFix',e);}/* door/opening fixes BEFORE layout so furniture respects the final door spots */H.furn=(H.furn||[]).filter(f=>f.level!==lvl||!ids.has(roomAt(R,f.p)));let n=0;const empty=[];
@@ -1308,7 +1322,7 @@ function rulesFix(op){op=op||{};const log=[];try{sitePlot(log);}catch(e){console
    if(!it.some(f=>K.includes(f.t))){
     // LOGIC RULE (type must fit the room): if the room cannot hold its key fixture, swap its type with another auto-named room on the floor
     // when BOTH rooms then hold their key fixtures (e.g. a 4 m² "Kuchyňa" and a 9 m² "Technická" trade names). Biggest plausible partner first.
-    if(!r.auto)return;/* v12h: a name printed on the plan inside this room is ground truth, never traded away */if(/^(WC|Kúpeľ)/.test(n)&&(H.rlab||[]).some(l=>l.level===L&&roomAt(R,l.p)===r.id&&n.replace(/ \d+$/,'').startsWith(l.n)))return;const C=RS.filter(q=>q!==r&&q.auto&&!/^(Chodba|Predsieň|Obývačka)/.test(roomType(q,T,R,L))).sort((a,b)=>b.a-a.a);
+    if(!r.auto||r.zone)return;/* v12h: a name printed on the plan inside this room, or a virtual open-plan zone, is ground truth, never traded away */if(/^(WC|Kúpeľ)/.test(n)&&(H.rlab||[]).some(l=>l.level===L&&roomAt(R,l.p)===r.id&&n.replace(/ \d+$/,'').startsWith(l.n)))return;const C=RS.filter(q=>q!==r&&q.auto&&!/^(Chodba|Predsieň|Obývačka)/.test(roomType(q,T,R,L))).sort((a,b)=>b.a-a.a);
     const wet=t=>/^(WC|Kúpeľ)/.test(t),sto=t=>/^(Technick|Komora|Špajz|Šatník)/.test(t);for(const q of C){const tq=roomType(q,T,R,L);if(wet(n)?!(wet(tq)||sto(tq)):wet(tq)?!sto(n):false)continue;/* wet rooms trade only with wet/storage rooms */const a=lay(r,tq),b=lay(q,n);if(okK(a,tq)&&okK(b,n)){const inQ=f=>f.level===L&&(f.rid===q.id||roomAt(R,f.p)===q.id);H.furn=H.furn.filter(f=>!inR(f)&&!inQ(f));a.forEach(f=>H.furn.push({...f,level:L,rid:r.id}));b.forEach(f=>H.furn.push({...f,level:L,rid:q.id}));
      H.rn=(H.rn||[]).filter(e=>!(e.level===L&&(roomAt(R,e.p)===r.id||roomAt(R,e.p)===q.id)));H.rn.push({level:L,p:[...r.p],n:tq.replace(/ \d+$/,''),auto:1},{level:L,p:[...q.p],n:n.replace(/ \d+$/,''),auto:1});log.push('type-swap:'+L+':'+n+'<->'+tq);nameR(R,L);return;}}
     return;}

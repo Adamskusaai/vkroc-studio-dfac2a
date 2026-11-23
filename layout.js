@@ -63,6 +63,8 @@ export function makeRoom(R,room,ops,walls,dims){const c=R.c,bb=room.bb;const i0=
   if(best)G.seeds.push([best.reduce((s,p)=>s+p[0],0)/best.length,best.reduce((s,p)=>s+p[1],0)/best.length]);}
  G.thr=4;const e=pathInfo(G,[]);if(!e.ok){G.seeds=doors0.slice();G.thr=4;const e2=pathInfo(G,[]);if(!e2.ok){for(const t of[3,2,1]){G.thr=t;if(pathInfo(G,[]).ok)break;}}}
  if(!G.seeds.length){/* no door (open plan): seed at the most open cell */const P=pathInfo(G,[]);G.seeds=[P.best];}
+ /* open-zones: also seed the most open cell in the zone so furniture in the main body stays reachable when an opening sits on a narrow arm */
+ if(G.room&&G.room.zg){const P=pathInfo(G,[]);if(P&&P.best)G.seeds.push(P.best);}
  return G;}
 function cellsIn(G,q,fn){const i0=Math.ceil((q[0]-G.X(0))/G.c-1e-6),i1=Math.floor((q[2]-G.X(0))/G.c+1e-6),j0=Math.ceil((q[1]-G.Z(0))/G.c-1e-6),j1=Math.floor((q[3]-G.Z(0))/G.c+1e-6);let n=0;
  for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){n++;if(fn(i,j,(i<0||j<0||i>=G.w||j>=G.h)?-1:j*G.w+i)===false)return -1;}if(!n){const i=G.li((q[0]+q[2])/2),j=G.lj((q[1]+q[3])/2);if(fn(i,j,(i<0||j<0||i>=G.w||j>=G.h)?-1:j*G.w+i)===false)return -1;n=1;}return n;}
@@ -70,10 +72,12 @@ const inRoomR=(G,q0,frac=1)=>{/* the wall raster overshoots the true wall face b
  /* open-zones: furniture stays in its zone, but a clearance strip may extend into a sister virtual zone (the 3D space is open) */
  const zg=G.room&&G.room.zg,sis=zg&&G.R&&G.R.r&&G.R.g?new Set(G.R.r.filter(o=>o.zg===zg).map(o=>o.id)):null;
  let n=0,k=0;const r=cellsIn(G,q,(i,j,x)=>{n++;if(x>=0&&G.inR[x])k++;else if(frac<1&&sis&&x>=0){const v=G.R.g[(G.j0+j)*G.R.W+(G.i0+i)];if(sis.has(v))k++;else if(frac>=1)return false;}else if(frac>=1)return false;});return r>0&&k>=frac*n;};
-const wallFrac=(G,q)=>{let n=0,k=0;cellsIn(G,q,(i,j,x)=>{n++;if(x>=0&&G.wall[x])k++;});return n?k/n:0;};
+const wallFrac=(G,q)=>{let n=0,k=0;cellsIn(G,q,(i,j,x)=>{n++;if(x>=0&&G.wall[x])k++;});if(n&&k/n>=.6)return k/n;return wallHit(G,q)?1:(n?k/n:0);};
 const wallHit=(G,q)=>{const P=rP([q[0]+.005,q[1]+.005,q[2]-.005,q[3]-.005]);return G.walls.some(w=>polyOv(w.P,P));};
 // ---------- walking paths: >=80 cm wide (cells farther than thr from any obstacle), all doors connected, items reachable ----------
-function pathInfo(G,items){const N=G.w*G.h,obs=new Uint8Array(N);for(let i=0;i<N;i++)obs[i]=G.inR[i]?0:1;
+function pathInfo(G,items){const N=G.w*G.h,obs=new Uint8Array(N);
+ const zg=!(globalThis.__PF||{}).noZoneFurn&&G.room&&G.room.zg,sis=zg&&G.R&&G.R.g?new Set(G.R.r.filter(o=>o.zg===zg).map(o=>o.id)):null;
+ for(let i=0;i<N;i++){if(G.inR[i]){obs[i]=0;continue;}if(sis){const ii=i%G.w,jj=(i/G.w)|0,gi=G.i0+ii,gj=G.j0+jj;if(gi>=0&&gj>=0&&gi<G.R.W&&gj<G.R.Hh&&sis.has(G.R.g[gj*G.R.W+gi])){obs[i]=0;continue;}}obs[i]=1;}
  for(const it of items){if(SOFT.has(it.t)||SEAT.has(it.t))continue;cellsIn(G,[it.q[0]-.04,it.q[1]-.04,it.q[2]+.04,it.q[3]+.04],(i,j,x)=>{if(x>=0)obs[x]=1;});}
  const D=new Int16Array(N).fill(-1),Q=new Int32Array(N);let qh=0,qt=0;for(let i=0;i<N;i++)if(obs[i]){D[i]=0;Q[qt++]=i;}
  while(qh<qt){const i=Q[qh++],x=i%G.w;for(const j of[x>0?i-1:-1,x<G.w-1?i+1:-1,i-G.w,i+G.w])if(j>=0&&j<N&&D[j]<0){D[j]=D[i]+1;Q[qt++]=j;}}
@@ -96,6 +100,8 @@ function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k
  /* v20261117q: a side table only stands next to a seat or bed (never alone by a wall); plants keep 1.1 m apart (no rows of pots). audit: lone-side, plant-cluster */
  if(t==='side'&&!items.some(o=>o!==it&&COMPAN.has(o.t)&&rGap(o.q,q)<.35))return no('lone-side');
  if(t==='plant'&&items.some(o=>o!==it&&o.t==='plant'&&Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1])<1.1))return no('plant-cluster');
+ /* a plant or lamp may stand near furniture, never inside a solid piece (3D meshes would interpenetrate). audit: furn-overlap3d */
+ if(t==='plant'||t==='lamp'){for(const o of items){if(o===it||o.t==='plant'||o.t==='lamp'||SOFT.has(o.t))continue;if(ov(o.q,q,-.12))return no('overlap:'+o.t);}}
  if(!inRoomR(G,q))return no('outside-room');if(wallHit(G,EPS<.005?[q[0]-.004,q[1]-.004,q[2]+.004,q[3]+.004]:q))return no('wall-overlap');
  /* v20261117r: stair opening + 60 cm walkway (upper floor) and 20 cm around a WC stay free */if(G.noGo&&!SOFT.has(t)&&!MOUNT.has(t)&&G.noGo.some(z=>ov(z,q,EPS)))return no('stair-walkway');
  if(t==='wc'||items.some(o=>o.t==='wc')){for(const o of items){if(o===it||SOFT.has(o.t)||MOUNT.has(o.t)||(t!=='wc'&&o.t!=='wc'))continue;if(rGap(o.q,q)<.2)return no('wc-clearance');}}
@@ -106,8 +112,8 @@ function hard(G,it,items,why){const t=it.t,q=it.q;const no=k=>{if(why)why.push(k
   if(!SEAT.has(t)&&t!=='tvw'&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(it.partner===o)&&!(t==='kitch'&&o.t==='kitch'))return no('in-clearance:'+o.t);/* L-kitchen: two counter legs meet at the corner */
   if(SEAT.has(t)&&o.clr&&o.clr.some(z=>ov(z,q,EPS))&&!(o.t==='table'||o.t==='desk'||o.t==='otable'))return no('seat-in-clearance:'+o.t);}
  if(it.clr)for(const z of it.clr){if(!inRoomR(G,z,.85)||(wallHit(G,z)&&!(G.room&&G.room.zg)))return no('clearance-blocked');for(const o of items){if(o===it||SOFT.has(o.t)||o.t==='tvw'||(t==='kitch'&&o.t==='kitch')||(SEAT.has(o.t)&&(t==='table'||t==='desk'||t==='otable'))||o.partner===it||it.partner===o)continue;if(ov(o.q,z,EPS))return no('clearance-blocked:'+o.t);}}
- if(!FREE.has(t)&&!SEAT.has(t)&&t!=='nstand'&&t!=='plant'&&t!=='lamp'&&wallFrac(G,backR(q,it.r,.02,.14))<.6)return no('not-against-wall');
- if(WALLSTAND.has(t)&&t!=='curtain'&&backGap(G,it).gap>.03)return no('not-flush-to-wall');
+ if(!FREE.has(t)&&!SEAT.has(t)&&t!=='nstand'&&t!=='plant'&&t!=='lamp'&&wallFrac(G,backR(q,it.r,.02,.14))<.6){const bg=!(globalThis.__PF||{}).noZoneFurn&&G.room&&G.room.zg?backGap(G,it):null;if(!(bg&&bg.w&&bg.gap>=-.03&&bg.gap<=.55))return no('not-against-wall');}
+ if(WALLSTAND.has(t)&&t!=='curtain'&&backGap(G,it).gap>.03){const bg=backGap(G,it);if(!(!(globalThis.__PF||{}).noZoneFurn&&G.room&&G.room.zg&&bg.w&&bg.gap<=.55))return no('not-flush-to-wall');}
  if(t==='art'){const F=frontR(q,it.r,.5);if(items.some(o=>o!==it&&TALL.has(o.t)&&o.t!=='art'&&ov(o.q,F)))return no('art-hidden');if(items.some(o=>o!==it&&o.t==='art'&&Math.hypot(o.p[0]-it.p[0],o.p[1]-it.p[1])<1.5))return no('art-crowded');}
  if((t==='bed'||t==='bed1'||t==='bunk')&&!(RELAX||it.rx)){const B=rP(backR(q,it.r,-.05,.35));if(G.winB.some(P=>polyOv(P,B)))return no('bed-head-at-window');}
  return true;}
@@ -119,7 +125,13 @@ function bedSides(G,it,items){return it.sides.filter(z=>inRoomR(G,z,.9)&&!wallHi
 function wallCands(G,t,rs=[0,1,2,3]){const out=[],seen=new Set(),[fw,fd]=G.dims(t);
  for(const r of rs){const f=FV[r],b=[-f[0],-f[1]],d=r%2?fw:fd;for(let j=0;j<G.h;j++)for(let i=0;i<G.w;i++){const k=j*G.w+i;if(!G.inR[k])continue;const a=i+b[0],bj=j+b[1];if(a<0||bj<0||a>=G.w||bj>=G.h||!G.wall[bj*G.w+a])continue;
   let x=G.X(i),z=G.Z(j),best=null;for(const w of G.walls){const nw=[-w.u[1],w.u[0]];const dp=nw[0]*f[0]+nw[1]*f[1];if(Math.abs(dp)<.95)continue;const s=(x-w.p0[0])*w.u[0]+(z-w.p0[1])*w.u[1];if(s<-.1||s>w.L+.1)continue;const dd=((x-w.p0[0])*nw[0]+(z-w.p0[1])*nw[1])*Math.sign(dp);if(dd>0&&dd<w.t/2+.25&&(!best||dd<best.dd))best={dd,t:w.t};}
-  if(best){const off=best.dd-best.t/2;x-=f[0]*off;z-=f[1]*off;}else{x-=f[0]*G.c/2;z-=f[1]*G.c/2;}x+=f[0]*(d/2+.005);z+=f[1]*(d/2+.005);const key=r+':'+Math.round(x*20)+':'+Math.round(z*20);if(seen.has(key))continue;seen.add(key);out.push([x,z,r]);}}return out;}
+  if(best){const off=best.dd-best.t/2;x-=f[0]*off;z-=f[1]*off;}else{x-=f[0]*G.c/2;z-=f[1]*G.c/2;}x+=f[0]*(d/2+.005);z+=f[1]*(d/2+.005);const key=r+':'+Math.round(x*20)+':'+Math.round(z*20);if(seen.has(key))continue;seen.add(key);out.push([x,z,r]);}}
+ /* open-zones: also walk real wall faces (outer walls and stubs) whose inward side is in this room, so a run sits on a stub even when the wall raster is thin */
+ if(!(globalThis.__PF||{}).noZoneFurn){for(const w of G.walls){const nw=[-w.u[1],w.u[0]];for(const sg of[1,-1]){const n=[nw[0]*sg,nw[1]*sg];const r=FV.findIndex(f=>f[0]*n[0]+f[1]*n[1]>.95);if(r<0||!rs.includes(r))continue;const[fw,fd]=G.dims(t),d=r%2?fw:fd;
+  for(let s=.2;s<=w.L-.2;s+=G.c){let x=w.p0[0]+w.u[0]*s+n[0]*(w.t/2+d/2+.005),z=w.p0[1]+w.u[1]*s+n[1]*(w.t/2+d/2+.005);let i=G.li(x),j=G.lj(z);
+   if(i<0||j<0||i>=G.w||j>=G.h||!G.inR[j*G.w+i]){let ok=0;for(let k=1;k<=16;k++){const x2=x+n[0]*k*.05,z2=z+n[1]*k*.05;i=G.li(x2);j=G.lj(z2);if(i>=0&&j>=0&&i<G.w&&j<G.h&&G.inR[j*G.w+i]){x=x2;z=z2;ok=1;break;}}if(!ok)continue;}
+   const key=r+':'+Math.round(x*20)+':'+Math.round(z*20);if(seen.has(key))continue;seen.add(key);out.push([x,z,r]);}}}}
+ return out;}
 function freeCands(G,rs=[0,1],step=2){const out=[];for(let j=0;j<G.h;j+=step)for(let i=0;i<G.w;i+=step)if(G.inR[j*G.w+i])for(const r of rs)out.push([G.X(i),G.Z(j),r]);return out;}
 const dDoor=(G,p)=>Math.min(9,...G.doors.map(o=>{const s=(o.s0+o.s1)/2;return Math.hypot(o.p0[0]+o.u[0]*s-p[0],o.p0[1]+o.u[1]*s-p[1]);}));
 const dWin=(G,p)=>Math.min(9,...G.wins.map(o=>{const s=(o.s0+o.s1)/2;return Math.hypot(o.p0[0]+o.u[0]*s-p[0],o.p0[1]+o.u[1]*s-p[1]);}));
@@ -219,7 +231,8 @@ function entry0(G,S,e,opt){const req=e.endsWith('!');e=e.replace('!','');const c
  if(e==='ctable'){const s=S.last.sofa;if(!s)return;const f=FV[s.r],[,cd]=G.dims('ctable'),dd=(s.r%2?s.q[2]-s.q[0]:s.q[3]-s.q[1])/2+.46+cd/2;ok(place(G,S,'ctable',[[s.p[0]+f[0]*dd,s.p[1]+f[1]*dd,s.r%2?1:0]]));return;}
  if(e==='rug'){const a=S.last.ctable||S.last.bed||S.last.table;const C=a?[[a.p[0],a.p[1],a.r%2],[a.p[0],a.p[1],(a.r+1)%2]]:[];ok(place(G,S,'rug',C.concat(freeCands(G,[0,1],3)),{},12));return;}
  if(e==='runner'){const b=G.room.bb,r=(b[2]-b[0])>=(b[3]-b[1])?0:1;ok(place(G,S,'runner',freeCands(G,[r],2),{},12));return;}
- if(e==='table'||e==='otable'||e==='lounge'){let x=place(G,S,e,freeCands(G));/* v21m dining-present: in the relaxed pass a table that fits nowhere free-standing may stand with one side at a wall (chairs on 3 sides) */if(!x&&e==='table'&&RELAX&&!(globalThis.__PF||{}).noWallTable)x=place(G,S,'table',wallCands(G,'table'),{wt:1});ok(x);return;}
+ if(e==='table'||e==='otable'||e==='lounge'){let C=[];if(!(globalThis.__PF||{}).noZoneFurn&&G.room&&G.room.zg){let sx=0,sz=0,n=0;for(let j=0;j<G.h;j++)for(let i=0;i<G.w;i++)if(G.inR[j*G.w+i]){sx+=G.X(i);sz+=G.Z(j);n++;}if(n){const x=sx/n,z=sz/n;C=[[x,z,0],[x,z,1]];}}
+  let x=place(G,S,e,C.concat(freeCands(G)));/* v21m dining-present: in the relaxed pass a table that fits nowhere free-standing may stand with one side at a wall (chairs on 3 sides) */if(!x&&e==='table'&&RELAX&&!(globalThis.__PF||{}).noWallTable)x=place(G,S,'table',wallCands(G,'table'),{wt:1});ok(x);return;}
  if(e==='armch'){ok(place(G,S,'armch',wallCands(G,'armch')));return;}
  if(e.includes('|')){const[a,b]=e.split('|');ok(place(G,S,a,wallCands(G,a))||place(G,S,b,wallCands(G,b)));return;}
  if(COMPACT[e]){let got=cmp?null:place(G,S,e,wallCands(G,e));if(!got){const d0=G.dims,z=COMPACT[e];G.dims=t=>t===e?z:d0(t);got=place(G,S,e,wallCands(G,e),{sz:z});G.dims=d0;}ok(got);return;}
