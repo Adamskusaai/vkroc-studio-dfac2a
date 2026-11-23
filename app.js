@@ -1,6 +1,6 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
 import {readPlan} from './plan.js?v=20261121r';
-import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261121m';
+import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261121t';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
 const hh=()=>document.documentElement.style.setProperty('--hh',document.getElementById('hdr').offsetHeight+'px');new ResizeObserver(hh).observe(document.getElementById('hdr'));
@@ -447,6 +447,7 @@ async function recog(quiet,nosnap){if(!bg||!bg.complete||!bg.width){if(!quiet)to
  if(R&&R.mode==='plan')inkFilter(R,lv.name);
  if(R&&R.mode==='plan')cleanOutline(lv.name);
  if(R&&R.mode==='plan')closeGaps(lv.name);
+ if(R&&R.mode==='plan')try{closeSlots(lv.name);}catch(e){console.warn('closeSlots',e);}
  if(R&&R.mode==='plan')try{labelHull(lv.name);}catch(e){console.warn('labelHull',e);}
  if(R&&R.mode==='plan')try{labelMerge(lv.name);}catch(e){console.warn('labelMerge',e);}
  if(R&&R.mode==='plan')try{labelSplit(lv.name);}catch(e){console.warn('labelSplit',e);}
@@ -910,6 +911,35 @@ function bandMerge(L,log){if((globalThis.__PF||{}).noBand)return 0;let n=0;for(l
 window.__bandRooms=L=>bandRooms(L||H.levels[0].name).map(b=>({n:b.n,a:+b.a.toFixed(1),into:b.into,d:+b.d.toFixed(2),len:+b.len.toFixed(2)}));window.__bandMerge=L=>bandMerge(L||H.levels[0].name,[]);
 function closeEnvelope(L,log){if((globalThis.__PF||{}).noEnv)return 0;let n=0;for(let it=0;it<6;it++){const hs=envHoles(L);if(!hs.length)break;const h=hs[0];h.ws.forEach((w,k)=>{w.id='env'+Date.now().toString(36)+n+k;H.walls.push(w);});n++;if(log)log.push('envelope-closed:'+h.len.toFixed(1)+'m/'+h.gain.toFixed(1)+'m2');}if(n)H.envFix=(H.envFix||0)+n;return n;}
 window.__closeEnv=L=>closeEnvelope(L||H.levels[0].name,[]);window.__envHoles=L=>envHoles(L||H.levels[0].name).map(h=>({len:+h.len.toFixed(2),gain:+h.gain.toFixed(1),n:h.ws.length,at:h.ends.map(e=>e.e.map(v=>+v.toFixed(2)))}));
+/* v21t RULE (no open slot in the outer wall): a narrow slot of outside space cut into the house (< 1.8 m wide) that two or more ordinary doors (<= 1.25 m, no terrace / sliding / garage)
+   open into is an entrance hall whose outer wall was not read (plan arrow / thin line). Close its mouth with a wall holding the entrance
+   door, so the house has no hole and the hall becomes a room. PF.noSlot. audit: envelope-closed, entrance-present */
+function closeSlots(L){closeSlots.log=[];if((globalThis.__PF||{}).noSlot)return;const ws=H.walls.filter(q=>q.level===L);if(ws.length<4)return;
+ const C=.1,r=.9,pad=r+1.2;let X0=1e9,Z0=1e9,X1=-1e9,Z1=-1e9;ws.forEach(w=>{[w.start,w.end].forEach(p=>{X0=Math.min(X0,p[0]);X1=Math.max(X1,p[0]);Z0=Math.min(Z0,p[1]);Z1=Math.max(Z1,p[1]);});});
+ const ox=X0-pad,oz=Z0-pad,nx=Math.ceil((X1-X0+2*pad)/C),nz=Math.ceil((Z1-Z0+2*pad)/C);if(nx*nz>800000)return;const N=nx*nz,B=new Uint8Array(N);
+ ws.forEach(w=>{const dx=w.end[0]-w.start[0],dz=w.end[1]-w.start[1],l=Math.hypot(dx,dz);if(l<.05)return;const t=(w.thickness||.2)/2+.03,st=Math.max(1,Math.ceil(l/(C*.5)));
+  for(let k=0;k<=st;k++){const x=w.start[0]+dx*k/st,z=w.start[1]+dz*k/st,i0=Math.floor((x-t-ox)/C),i1=Math.floor((x+t-ox)/C),j0=Math.floor((z-t-oz)/C),j1=Math.floor((z+t-oz)/C);for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)if(i>=0&&j>=0&&i<nx&&j<nz)B[j*nx+i]=1;}});
+ const E=new Uint8Array(N),q=[];for(let i=0;i<nx;i++){q.push(i,(nz-1)*nx+i);}for(let j=0;j<nz;j++){q.push(j*nx,j*nx+nx-1);}q.forEach(k=>{if(!B[k])E[k]=1;});
+ for(let h=0;h<q.length;h++){const k=q[h];if(!E[k])continue;const i=k%nx,j=(k/nx)|0;for(const [a,b] of[[1,0],[-1,0],[0,1],[0,-1]]){const ii=i+a,jj=j+b;if(ii<0||jj<0||ii>=nx||jj>=nz)continue;const kk=jj*nx+ii;if(!E[kk]&&!B[kk]){E[kk]=1;q.push(kk);}}}
+ // chamfer distance (in cells) from non-exterior; core = exterior farther than r; opened = within r of core
+ const dist=(M)=>{const D=new Float32Array(N);for(let k=0;k<N;k++)D[k]=M[k]?1e9:0;for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i;if(!D[k])continue;let v=D[k];if(i>0)v=Math.min(v,D[k-1]+1);if(j>0){v=Math.min(v,D[k-nx]+1);if(i>0)v=Math.min(v,D[k-nx-1]+1.414);if(i<nx-1)v=Math.min(v,D[k-nx+1]+1.414);}D[k]=v;}
+  for(let j=nz-1;j>=0;j--)for(let i=nx-1;i>=0;i--){const k=j*nx+i;if(!D[k])continue;let v=D[k];if(i<nx-1)v=Math.min(v,D[k+1]+1);if(j<nz-1){v=Math.min(v,D[k+nx]+1);if(i<nx-1)v=Math.min(v,D[k+nx+1]+1.414);if(i>0)v=Math.min(v,D[k+nx-1]+1.414);}D[k]=v;}return D;};
+ const R=r/C,D1=dist(E),core=new Uint8Array(N);for(let k=0;k<N;k++)core[k]=D1[k]>R?0:1;/* core[k]=1 means NOT core */const D2=dist(core),O=new Uint8Array(N);for(let k=0;k<N;k++)O[k]=E[k]&&D2[k]<=R+.5?1:0;
+ const P=new Uint8Array(N);for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i,x=ox+(i+.5)*C,z=oz+(j+.5)*C;if(E[k]&&!O[k]&&x>X0&&x<X1&&z>Z0&&z<Z1)P[k]=1;}
+ const lab=new Int32Array(N).fill(-1),comps=[];for(let k0=0;k0<N;k0++){if(!P[k0]||lab[k0]>=0)continue;const id=comps.length,st=[k0],cs=[];lab[k0]=id;while(st.length){const k=st.pop();cs.push(k);const i=k%nx,j=(k/nx)|0;for(const [a,b] of[[1,0],[-1,0],[0,1],[0,-1]]){const ii=i+a,jj=j+b;if(ii<0||jj<0||ii>=nx||jj>=nz)continue;const kk=jj*nx+ii;if(P[kk]&&lab[kk]<0){lab[kk]=id;st.push(kk);}}}comps.push(cs);}
+ comps.forEach((cs,id)=>{const area=cs.length*C*C;if(area<1.2||area>14)return;
+  const dw=new Set();ws.forEach((w,wi)=>(w.openings||[]).forEach(o=>{if(o.type!=='door'||o.width>1.25||(o.kind&&o.kind!=='entrance'))return;const dx=w.end[0]-w.start[0],dz=w.end[1]-w.start[1],l=Math.hypot(dx,dz)||1,u=[dx/l,dz/l],m=o.offset+o.width/2,cx=w.start[0]+u[0]*m,cz=w.start[1]+u[1]*m,t=(w.thickness||.2)/2+.2;
+   for(const s of[1,-1]){const x=cx-u[1]*s*t,z=cz+u[0]*s*t,i=Math.floor((x-ox)/C),j=Math.floor((z-oz)/C);if(i>=0&&j>=0&&i<nx&&j<nz&&lab[j*nx+i]===id)dw.add(wi+':'+o.offset+':'+(o.kind||'')+':'+o.width);}}));
+  if(dw.size<2){closeSlots.log.push({area:+area.toFixed(1),doors:dw.size});return;}
+  const M=cs.filter(k=>{const i=k%nx,j=(k/nx)|0;return[[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>{const ii=i+a,jj=j+b;return ii>=0&&jj>=0&&ii<nx&&jj<nz&&O[jj*nx+ii];});});if(!M.length)return;
+  let a0=1e9,a1=-1e9,b0=1e9,b1=-1e9;M.forEach(k=>{const x=ox+((k%nx)+.5)*C,z=oz+(((k/nx)|0)+.5)*C;a0=Math.min(a0,x);a1=Math.max(a1,x);b0=Math.min(b0,z);b1=Math.max(b1,z);});
+  const vert=(a1-a0)<=.45&&(b1-b0)>(a1-a0),hor=(b1-b0)<=.45&&(a1-a0)>(b1-b0);if(!vert&&!hor){closeSlots.log.push({area:+area.toFixed(1),doors:dw.size,mouth:'shape'});return;}
+  const len=vert?b1-b0:a1-a0;if(len<.7||len>2.6){closeSlots.log.push({area:+area.toFixed(1),doors:dw.size,len:+len.toFixed(2)});return;}
+  const th=ws.filter(w=>w._ext||w.thickness>=.25).map(w=>w.thickness).sort((x,y)=>x-y),T=th.length?th[th.length>>1]:.3,c=vert?(a0+a1)/2:(b0+b1)/2,e0=(vert?b0:a0)-C/2-.25,e1=(vert?b1:a1)+C/2+.25,L2=e1-e0;
+  const st=vert?[+c.toFixed(2),+e0.toFixed(2)]:[+e0.toFixed(2),+c.toFixed(2)],en=vert?[+c.toFixed(2),+e1.toFixed(2)]:[+e1.toFixed(2),+c.toFixed(2)],dW=Math.min(1.0,Math.max(.8,len-.3));
+  H.walls.push({id:'slot'+Date.now()+id,auto:1,level:L,start:st,end:en,thickness:T,base:0,height:ws[0].height||2.85,openings:[{type:'door',offset:+((L2-dW)/2).toFixed(2),width:dW,height:2.05,out:1}],slot:1});
+  closeSlots.log.push({area:+area.toFixed(1),doors:dw.size,dk:[...dw],wall:[st,en],T});});
+ try{window.__slots=closeSlots.log;}catch(e){}}
 function closeGaps(L){closeGaps.log=[];const ws=()=>H.walls.filter(q=>q.level===L&&q.auto);const G=q=>{const dx=q.end[0]-q.start[0],dz=q.end[1]-q.start[1],l=Math.hypot(dx,dz)||1e-9;return{l,u:[dx/l,dz/l]};};
  const dist=(p,q)=>{const{l,u}=G(q),t=Math.max(0,Math.min(l,(p[0]-q.start[0])*u[0]+(p[1]-q.start[1])*u[1]));return Math.hypot(p[0]-q.start[0]-u[0]*t,p[1]-q.start[1]-u[1]*t)-q.thickness/2;};
  const free=(q,e)=>!H.walls.some(o=>o!==q&&o.level===L&&dist(e,o)<=.12);let st=0,ex=0,dr=0;
