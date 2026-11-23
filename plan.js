@@ -202,9 +202,14 @@ function snap(S){for(const s of S){for(const end of ['a','b']){const p=s[end];le
  // extend other ends: perpendicular wall ends that stop near s get pulled onto s.c (done symmetrically by loop)
  }return S.filter(s=>s.b-s.a>s.t*.8);}
 // ---------- openings ----------
-function classifyGap(A,lo,hi,c,t,ink,W,H){let lines=0;const nS=7;for(let k=0;k<nS;k++){const off=-t*.7+k*(t*1.4)/(nS-1);let on=0,tot=0;for(let u=lo+2;u<hi-2;u+=1){const x=Math.round(A.hz?u:c+off),y=Math.round(A.hz?c+off:u);if(x<0||y<0||x>=W||y>=H)continue;tot++;if(ink[y*W+x])on++;}if(tot&&on>.7*tot)lines++;}
+/* v21x RULE (window on a grey floor): on an outer wall a gap whose band is paper-white while the room floor next to it is a grey fill is a window, not a door
+   (a door lets the floor tone run through). Only with a grey floor tone; white-floor plans are unchanged. PF.noToneWin. audit: opening recall */
+function toneWin(A,lo,hi,c,t,W,H){const g=classifyGap.raw;if(!g||hi-lo<8)return false;const fr=(o0,o1,f)=>{let k=0,n=0;for(let off=o0;off<=o1;off+=1)for(let u=lo+3;u<hi-3;u+=1){const x=Math.round(A.hz?u:c+off),y=Math.round(A.hz?c+off:u);if(x<0||y<0||x>=W||y>=H)continue;n++;if(f(g[y*W+x]))k++;}return n?k/n:0;};
+ const b=fr(-t*.3,t*.3,v=>v>=228),e=t/2+3,s1=fr(e,e+6,v=>v>=110&&v<=212),s2=fr(-e-6,-e,v=>v>=110&&v<=212);return b>=.6&&Math.max(s1,s2)>=.7;}
+function classifyGap(A,lo,hi,c,t,ink,W,H,ext){let lines=0;const nS=7;for(let k=0;k<nS;k++){const off=-t*.7+k*(t*1.4)/(nS-1);let on=0,tot=0;for(let u=lo+2;u<hi-2;u+=1){const x=Math.round(A.hz?u:c+off),y=Math.round(A.hz?c+off:u);if(x<0||y<0||x>=W||y>=H)continue;tot++;if(ink[y*W+x])on++;}if(tot&&on>.7*tot)lines++;}
  if(classifyGap.paper&&!(globalThis.__PF||{}).noArc){const g=hi-lo;let best=0;for(const sg of[-1,1])for(const[h,dr]of[[lo,1],[hi,-1]]){let on=0,n=0;for(let d=15;d<=75;d+=5){const an=d*Math.PI/180,u=h+dr*g*Math.cos(an),v=c+sg*(t/2+g*Math.sin(an));let hit=0;for(let e=-2;e<=2&&!hit;e++)for(let f=-2;f<=2&&!hit;f++){const x=Math.round((A.hz?u:v)+e),y=Math.round((A.hz?v:u)+f);if(x>=0&&y>=0&&x<W&&y<H&&ink[y*W+x])hit=1;}n++;on+=hit;}best=Math.max(best,on/n);}
   if(best>=.7)return 'door';if(lines>=1)return 'window';}
+ if(ext&&!(globalThis.__PF||{}).noToneWin&&toneWin(A,lo,hi,c,t,W,H))return 'window';
  return lines>=2?'window':'door';}
 function findOpenings(S,ink,W,H,ppm,bb){const out=[];const used=new Set();
  const isExt=(A,c,t)=>A.hz?Math.min(Math.abs(c-bb[1]),Math.abs(c-bb[3]))<t*1.5:Math.min(Math.abs(c-bb[0]),Math.abs(c-bb[2]))<t*1.5;
@@ -215,12 +220,12 @@ function findOpenings(S,ink,W,H,ppm,bb){const out=[];const used=new Set();
   pairs.push([g,i,j]);}
  pairs.sort((a,b)=>a[0]-b[0]);
  for(const[g,i,j]of pairs){if(used.has('b'+i)||used.has('a'+j))continue;used.add('b'+i);used.add('a'+j);const A=S[i],B=S[j],t=(A.t+B.t)/2,lo=A.b,hi=B.a,c=(A.c+B.c)/2;
-  out.push({i,j,type:classifyGap(A,lo,hi,c,t,ink,W,H),lo,hi,ext:isExt(A,c,t),g});}
+  out.push({i,j,type:classifyGap(A,lo,hi,c,t,ink,W,H,isExt(A,c,t)),lo,hi,ext:isExt(A,c,t),g});}
  // exterior walls are continuous: bridge any remaining colinear gap on the outline (bay, chimney, wide glazing)
  for(let i=0;i<S.length;i++){if(used.has('b'+i))continue;const A=S[i];if(!isExt(A,A.c,A.t))continue;let bj=-1,bg=1e9;
   for(let j=0;j<S.length;j++){if(j===i||used.has('a'+j))continue;const B=S[j];if(B.hz!==A.hz||Math.abs(B.c-A.c)>Math.max(A.t,B.t)+2)continue;const g=B.a-A.b;if(g>0&&g<bg){bg=g;bj=j;}}
   if(bj<0||bg>.5*Math.max(bb[2]-bb[0],bb[3]-bb[1]))continue;const B=S[bj];if(S.some((C,k)=>k!==i&&k!==bj&&C.hz===A.hz&&Math.abs(C.c-A.c)<A.t&&C.a<B.a-1&&C.b>A.b+1))continue;
-  used.add('b'+i);used.add('a'+bj);const t=(A.t+B.t)/2,lo=A.b,hi=B.a,c=(A.c+B.c)/2,ty=classifyGap(A,lo,hi,c,t,ink,W,H);
+  used.add('b'+i);used.add('a'+bj);const t=(A.t+B.t)/2,lo=A.b,hi=B.a,c=(A.c+B.c)/2,ty=classifyGap(A,lo,hi,c,t,ink,W,H,isExt(A,c,t));
   out.push({i,j:bj,type:bg>3.2*ppm&&ty!=='window'?'wall':ty,lo,hi,ext:true,g:bg});}
  // free ends: gap up to a perpendicular wall (door next to a corner / junction)
  S.forEach((A,i)=>{for(const end of['a','b']){if(used.has(end+i))continue;const p=A[end],dir=end==='b'?1:-1;
@@ -230,7 +235,7 @@ function findOpenings(S,ink,W,H,ppm,bb){const out=[];const used=new Set();
    if(!best)continue;const to=best.c,lo=dir>0?p:to+best.t/2,hi=dir>0?to-best.t/2:p;
    if(S.some(C=>C!==A&&C.hz===A.hz&&Math.abs(C.c-A.c)<A.t&&C.a<hi&&C.b>lo))continue;
    if(hi-lo<.45*ppm)continue;used.add(end+i);
-   out.push({i,j:null,end,to,type:classifyGap(A,lo,hi,A.c,A.t,ink,W,H),lo,hi,ext:isExt(A,A.c,A.t),g:hi-lo});}});
+   out.push({i,j:null,end,to,type:classifyGap(A,lo,hi,A.c,A.t,ink,W,H,isExt(A,A.c,A.t)),lo,hi,ext:isExt(A,A.c,A.t),g:hi-lo});}});
  return out;}
 // ---------- scale ----------
 function median(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);return s[s.length>>1];}
@@ -508,7 +513,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  if(!o.rect&&!o.noPaper){const q=findPaper(c);if(q){dbg.pq=q.map(p=>p.map(v=>Math.round(v)));dbg.pref=findPaper.ref;dbg.psrc=findPaper.src;dbg.fd=findPaper.fd;dbg.cw=[c.width,c.height];c=warpPaper(c,q);dbg.asp=warpPaper.asp;dbg.paper=1;}}
  focus.nearE=!!o._cyan;tm('paper');let n=CG(c),W=c.width,H=c.height,ink=inkMask(n,W,H,.6);
  if(!o.rect){const a=skewAngle(ink,W,H);dbg.skew=+(a*180/Math.PI).toFixed(2);if(Math.abs(a)>.003){c=rotateCanvas(c,a);n=CG(c);W=c.width;H=c.height;ink=inkMask(n,W,H,.6);}}
- tm('clean');ink=compsFilter(ink,W,H,k=>k.n>=6);if(!(globalThis.__PF||{}).noFrame){const nf=sheetFrame(ink,W,H);if(nf)dbg.frame=nf;}
+ tm('clean');classifyGap.raw=null;if(!(globalThis.__PF||{}).noToneWin){try{const d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Uint8Array(W*H);for(let i=0;i<W*H;i++)g[i]=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;classifyGap.raw=g;}catch(e){}}tm('clean');ink=compsFilter(ink,W,H,k=>k.n>=6);if(!(globalThis.__PF||{}).noFrame){const nf=sheetFrame(ink,W,H);if(nf)dbg.frame=nf;}
  // prem8: coloured window symbols (saturated cyan / blue bands in the wall line) close the outline as wall body and are
  // turned into window openings after the walls are found (instead of being stripped with the colour fills)
  let cyan=null;if(o._cyan){const d=c.getContext('2d').getImageData(0,0,W,H).data,cm=new Uint8Array(W*H);let nc=0;for(let i=0;i<W*H;i++){const r0=d[i*4],g0=d[i*4+1],b0=d[i*4+2],mx=Math.max(r0,g0,b0),mn=Math.min(r0,g0,b0);if(b0>130&&b0-r0>60&&mx-mn>60&&g0>=r0){cm[i]=1;nc++;}}
