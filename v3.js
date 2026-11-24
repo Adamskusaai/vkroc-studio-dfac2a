@@ -936,6 +936,21 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
    const lu=T.door==null?hL*.6:(du<0?hL-.75:-hL+.75);if(free(lu,.5))kit('lounge',lu,hD-.9,0,-1);
    {let np=0;[[-hL+.3,hD-.3],[hL-.3,hD-.3],[-hL+.3,-hD+.35],[hL-.3,-hD+.35],[0,hD-.3]].forEach(([u,n])=>{if(np>=2||!free(u,.3))return;np++;const pl=bx(u-.22,u+.22,n-.22,n+.22,.42,std({color:0x6f6a62,roughness:.9}),.12+.21);pl.userData.planter=1;kit('plant',u,n,0,1).position.y=.54;});}
    const shrub=(u,n,sc)=>{const m=makeShrub(sc);const p=W(u,n);m.position.set(p[0],0,p[1]);m.userData.noCol=true;m.userData.terrS=1;root.add(m);};for(let u=-hL+.9;u<hL-.6;u+=1.4)if(free(u,.4))shrub(u,hD+.75,.45);
+   /* v22b RULE (terrace clear of walls, generic): after the set is laid, any group (table+chairs, lounger, plant+planter) whose footprint reaches into a
+      ground-floor wall slides to the nearest spot on the deck (25 cm grid, up to 2.5 m) that is clear of walls, the door path and the other pieces;
+      a group with no such spot is left out (the table set is kept). PF.noTerrWall */
+   if(!(globalThis.__PF||{}).noTerrWall){try{const ln=H.levels[0]&&H.levels[0].name,WB=[];(H.walls||[]).filter(w=>w.level===ln).forEach(w=>{const t2=(w.thickness||.3)/2;WB.push([Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2]);});
+    const ov=(a,b)=>a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1];const bq=os=>{const b=new THREE.Box3();os.forEach(o=>{o.updateMatrixWorld(true);b.expandByObject(o);});return [b.min.x+.03,b.min.z+.03,b.max.x-.03,b.max.z-.03];};
+    const db=bq([terr]),deck=[db[0]-.1,db[1]-.1,db[2]+.1,db[3]+.1];let DP=null;if(T.door!=null){const c=W(T.door,-hD),e=W(T.door,hD);DP=[Math.min(c[0],e[0])-Math.abs(T.ux)*.6,Math.min(c[1],e[1])-Math.abs(T.uz)*.6,Math.max(c[0],e[0])+Math.abs(T.ux)*.6,Math.max(c[1],e[1])+Math.abs(T.uz)*.6];}
+    const K=root.children.filter(o=>o.userData&&(o.userData.terrF||o.userData.planter));const used=new Set(),GR=[];
+    {const tb=K.filter(o=>o.userData.terrF==='otable'||o.userData.terrF==='chair');if(tb.length){GR.push({os:tb,keep:1});tb.forEach(o=>used.add(o));}}
+    K.forEach(o=>{if(used.has(o))return;const g=[o];used.add(o);if(o.userData.terrF==='plant'||o.userData.planter)K.forEach(p=>{if(!used.has(p)&&(p.userData.terrF==='plant'||p.userData.planter)&&Math.hypot(p.position.x-o.position.x,p.position.z-o.position.z)<.05){g.push(p);used.add(p);}});GR.push({os:g});});
+    GR.forEach(g=>g.q=bq(g.os));
+    GR.forEach(g=>{if(!WB.some(w=>ov(g.q,w)))return;const C=[];for(let a=-2.5;a<=2.5001;a+=.25)for(let b=-2.5;b<=2.5001;b+=.25)if(a||b)C.push([a,b]);C.sort((x,y)=>Math.hypot(x[0],x[1])-Math.hypot(y[0],y[1]));
+     const fit=C.find(([a,b])=>{const dx=T.ux*a+T.nx*b,dz=T.uz*a+T.nz*b,q=[g.q[0]+dx,g.q[1]+dz,g.q[2]+dx,g.q[3]+dz];return q[0]>=deck[0]&&q[1]>=deck[1]&&q[2]<=deck[2]&&q[3]<=deck[3]&&!WB.some(w=>ov([q[0]-.05,q[1]-.05,q[2]+.05,q[3]+.05],w))&&!(DP&&ov(q,DP))&&!GR.some(h=>h!==g&&!h.gone&&ov(q,h.q));});
+     if(fit){const dx=T.ux*fit[0]+T.nx*fit[1],dz=T.uz*fit[0]+T.nz*fit[1];g.os.forEach(o=>{o.position.x+=dx;o.position.z+=dz;});g.q=[g.q[0]+dx,g.q[1]+dz,g.q[2]+dx,g.q[3]+dz];}
+     else if(!g.keep){g.os.forEach(o=>root.remove(o));g.gone=1;}});
+    try{window.__terrWall=1;}catch(e){}}catch(e){}}
    if(T.door!=null){/* wall light beside the door */const p=W(du+(du<0?.95:-.95),-hD+.06);const wl=add(new THREE.BoxGeometry(.12,.22,.1),std({color:0x2c2c2c,roughness:.5}),p[0],2.1,p[1],0,1);wl.userData.noCol=true;wl.userData.terrL=1;const gl=add(new THREE.BoxGeometry(.08,.12,.02),std({color:0xfff1d0,emissive:0xffd9a0,emissiveIntensity:.8}),p[0]+T.nx*.06,2.1,p[1]+T.nz*.06,0,1);gl.castShadow=false;gl.userData.noCol=true;}
    if(T.liv){/* slim pergola over the deck (v21c: also off the living room without a readable door): 2 outer posts, beams to the wall, slats */const PM=std({color:0x3b3a37,roughness:.6,metalness:.3}),h=2.55;
     [[-hL+.12,hD-.12],[hL-.12,hD-.12]].forEach(([u,n])=>{const p=W(u,n);const po=add(new THREE.BoxGeometry(.1,h,.1),PM,p[0],.12+h/2,p[1],0,1);po.userData.pergola=1;});
