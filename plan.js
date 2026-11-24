@@ -659,7 +659,14 @@ function focus(S){const n=S.length,par=S.map((_,i)=>i),f=i=>par[i]===i?i:(par[i]
  const eb=bbox(S),ext=Math.max(eb[2]-eb[0],eb[3]-eb[1]),m2=.12*ext,ends=A=>A.hz?[[A.a,A.c],[A.b,A.c]]:[[A.c,A.a],[A.c,A.b]];
  const nearE=(A,B)=>A.t>=.6*B.t&&B.t>=.6*A.t&&ends(A).some(p=>ends(B).some(q=>Math.hypot(p[0]-q[0],p[1]-q[1])<Math.max(m2,7*Math.max(A.t,B.t))));
  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(near(S[i],S[j])||(focus.nearE&&nearE(S[i],S[j])))par[f(i)]=f(j);
- const L={};S.forEach((s,i)=>{L[f(i)]=(L[f(i)]||0)+(s.b-s.a)*s.t;});const best=+Object.keys(L).sort((a,b)=>L[b]-L[a])[0];
+ const L={};S.forEach((s,i)=>{L[f(i)]=(L[f(i)]||0)+(s.b-s.a)*s.t;});
+ /* 22c: a second big wall cluster cut off from the main one only by a door-sized gap (entrance door between an outer wall end and the
+    wall it meets) is the same building: join it when it carries >= 20 % of the main wall mass (3+ walls of a similar thickness) and one of its wall ends lies within a
+    door width of the main network (end to segment distance). Without this the whole cut-off part of the outer wall was dropped. */
+ if(!(globalThis.__PF||{}).noFocusJoin){const tmx=Math.max(...S.map(s=>s.t)),dJ=Math.min(.1*ext,Math.max(.06*ext,3*tmx)),dSeg=(p,B)=>B.hz?Math.hypot(Math.max(B.a-p[0],0,p[0]-B.b),p[1]-B.c):Math.hypot(p[0]-B.c,Math.max(B.a-p[1],0,p[1]-B.b));let ch=1;
+  while(ch){ch=0;const ks=Object.keys(L).map(Number).sort((a,b)=>L[b]-L[a]),b0=ks[0];for(const k of ks.slice(1)){if(L[k]<.2*L[b0])break;const C=S.filter((s,i)=>f(i)===k),M=S.filter((s,i)=>f(i)===b0);if(C.length<3)continue;const tC=median(C.map(q=>q.t)),tM=median(M.map(q=>q.t));if(tC<.6*tM||tC>1.6*tM)continue;
+   if(C.some(A=>ends(A).some(p=>M.some(B=>dSeg(p,B)<dJ+B.t/2)))||M.some(A=>ends(A).some(p=>C.some(B=>dSeg(p,B)<dJ+B.t/2)))){const r=S.findIndex((s,i)=>f(i)===k);par[f(r)]=b0;L[b0]+=L[k];delete L[k];focus.joined=(focus.joined||0)+1;ch=1;break;}}}}
+ const best=+Object.keys(L).sort((a,b)=>L[b]-L[a])[0];
  // also keep colinear wall pieces across door gaps (separate clusters on the same line within 3 m-ish)
  const keep=S.filter((s,i)=>f(i)===best);const kb=bbox(keep);
  return S.filter((s,i)=>f(i)===best||(s.hz?(s.c>=kb[1]-s.t&&s.c<=kb[3]+s.t&&s.a>=kb[0]-s.t&&s.b<=kb[2]+s.t):(s.c>=kb[0]-s.t&&s.c<=kb[2]+s.t&&s.a>=kb[1]-s.t&&s.b<=kb[3]+s.t)));}
@@ -675,7 +682,14 @@ function closeCorners(S){const out=S.map(q=>({...q}));for(const A of out)for(con
 function pruneLoose(S){let ch=1;while(ch&&S.length>4){ch=0;for(const s of S){const R=S.filter(q=>q!==s),m=s.t+8;
   const box=q=>q.hz?[q.a-q.t/2,q.c-q.t/2,q.b+q.t/2,q.c+q.t/2]:[q.c-q.t/2,q.a-q.t/2,q.c+q.t/2,q.b+q.t/2];const A=box(s);
   const touch=R.some(q=>{const B=box(q);return A[0]<B[2]+m&&B[0]<A[2]+m&&A[1]<B[3]+m&&B[1]<A[3]+m;});if(touch)continue;
-  const bb=bbox(R),out=s.hz?(s.c<bb[1]-s.t||s.c>bb[3]+s.t):(s.c<bb[0]-s.t||s.c>bb[2]+s.t);if(out){S=R;ch=1;break;}}}return S;}
+  const bb=bbox(R),out=s.hz?(s.c<bb[1]-s.t||s.c>bb[3]+s.t):(s.c<bb[0]-s.t||s.c>bb[2]+s.t);if(out){S=R;ch=1;break;}}}
+ /* 22c: a short wall sticking OUT of the building outline with a free far end (balcony side fin, garden wall stub) encloses nothing:
+    it is not part of the envelope and would stretch the plan size. Only fins whose free end lies beyond all other walls. */
+ if(!(globalThis.__PF||{}).noSpur&&S.length>6){const eb=bbox(S),ext=Math.max(eb[2]-eb[0],eb[3]-eb[1]);const dSeg=(p,B)=>B.hz?Math.hypot(Math.max(B.a-p[0],0,p[0]-B.b),p[1]-B.c):Math.hypot(p[0]-B.c,Math.max(B.a-p[1],0,p[1]-B.b));const drop=[];
+  for(const s of S){const L=s.b-s.a;if(L>.12*ext||L<.04*ext)continue;const R=S.filter(q=>q!==s),E=s.hz?[[s.a,s.c],[s.b,s.c]]:[[s.c,s.a],[s.c,s.b]],nr=E.map(p=>R.some(q=>dSeg(p,q)<q.t/2+s.t+6));if(nr[0]===nr[1])continue;
+   const fe=E[nr[0]?1:0],bb=bbox(R),beyond=s.hz?Math.max(bb[0]-fe[0],fe[0]-bb[2]):Math.max(bb[1]-fe[1],fe[1]-bb[3]);if(beyond>.5*L)drop.push(s);}
+  if(drop.length&&drop.length<=2){S=S.filter(q=>!drop.includes(q));pruneLoose.spur=drop.length;}}
+ return S;}
 
 // ---------- room labels (printed words, letter templates + fuzzy dictionary; SK/CZ/DE/EN incl. abbreviations) ----------
 let LTPL=null;const LCH='ABCDEFGHIJKLMNOPRSTUVWZYabcdefghijklmnoprstuvwzy';
