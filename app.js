@@ -178,7 +178,7 @@ function roomDoors(R,L){const out=[];H.walls.filter(w=>w.level===L).forEach(w=>{
    area and furnishing follow the zones. PF.noOpenZones. audit: open-zones */
 function openKind(n){return /^Obýva/.test(n||'')?'liv':/^Kuchyň/.test(n||'')?'kit':/^Jedáleň/.test(n||'')?'din':'';}
 function openZoneCands(R,L){if(!R||!R.g||!R.r)return[];const out=[];
- R.r.forEach(r=>{const labs=(H.rlab||[]).filter(l=>l.level===L&&l.p&&openKind(l.n)&&roomAtL(R,l.p)===r.id);
+ R.r.forEach(r=>{const labs=(H.rlab||[]).filter(l=>l.level===L&&l.p&&!l.rt&&openKind(l.n)&&roomAtL(R,l.p)===r.id);/* v21z: our own re-type pins are not printed evidence */
   const raw=(H.rarea||[]).filter(a=>a.level===L&&a.p&&a.v>=3&&a.v<200&&roomAtL(R,a.p)===r.id);
   const seeds=[];const take=(p,v,n)=>{if(!seeds.some(s=>Math.hypot(s.p[0]-p[0],s.p[1]-p[1])<.45&&Math.abs((s.v||0)-(v||0))<.3&&(s.n||'')===(n||'')))seeds.push({p:[p[0],p[1]],v:v||0,n:n||''});};
   labs.forEach(l=>{const a=raw.map(q=>({q,d:Math.hypot(q.p[0]-l.p[0],q.p[1]-l.p[1])})).sort((x,y)=>x.d-y.d)[0];take(l.p,a&&a.d<2.2?a.q.v:0,l.n);});
@@ -223,7 +223,8 @@ function nameOpenSeeds(seeds,R,L,RS,room){const used=new Set(seeds.map(s=>openKi
  RS.forEach(q=>{if(q.id!==room.id&&q.a>=2&&q.a<=12&&(q.bb[0]<room.bb[2]+.4&&q.bb[2]>room.bb[0]-.4&&q.bb[1]<room.bb[3]+.4&&q.bb[3]>room.bb[1]-.4))wetPts.push(q.p);});
  const dW=s=>{if(!wetPts.length)return 9;return Math.min(...wetPts.map(p=>Math.hypot(p[0]-s.p[0],p[1]-s.p[1])));};
  const rest=()=>seeds.filter(s=>!openKind(s.n));
- if(!used.has('kit')){const c=rest().filter(s=>!s.v||(s.v>=4.5&&s.v<=16)).sort((a,b)=>dW(a)-dW(b)||(a.v||9)-(b.v||9))[0];if(c)c.n='Kuchyňa';}
+ const rtIn=(H.rlab||[]).some(l=>l.level===L&&l.rt&&l.p&&roomAtL(R,l.p)===room.id);/* v21z: a zone already re-typed from a failed kitchen keeps the kitchen out of this open space */
+ if(!used.has('kit')&&!rtIn){const c=rest().filter(s=>!s.v||(s.v>=4.5&&s.v<=16)).sort((a,b)=>dW(a)-dW(b)||(a.v||9)-(b.v||9))[0];if(c)c.n='Kuchyňa';}
  if(!used.has('liv')){const c=rest().slice().sort((a,b)=>(b.v||0)-(a.v||0))[0];if(c)c.n='Obývačka';}
  if(!used.has('din')){const c=rest().filter(s=>!s.v||s.v>=7).sort((a,b)=>(b.v||0)-(a.v||0))[0]||rest()[0];if(c)c.n='Jedáleň';}
  seeds.forEach(s=>{if(!s.n)s.n='Miestnosť';});}
@@ -1086,18 +1087,19 @@ function furnish(op){const dm=!!(op&&op.demo===1);const RS=rooms();if(!RS.length
       if(k){its=it2;OPS.splice(0,OPS.length,...ops2);(window.__wetDoor=window.__wetDoor||[]).push([r.n,k]);}}}}}
   /* v21u RULE (guessed room that cannot hold its key fixture): a kitchen without room for a kitchen run, whose name was only guessed (no plan label inside), becomes a study / storage room; the names are re-assigned and the level is furnished
      again once, so the kitchen goes to a room that fits it (often the living room as an open-plan kitchen). PF.noRetype. audit: fixture-missing */
-  if(!(globalThis.__PF||{}).noRetype&&!(op&&op.__rt)&&!r.zone){const tq=roomType(r,T,R,lvl)||'',need=/^Kuchyň/.test(tq)?['kitch']:null;
-   if(need&&!its.some(i=>need.includes(i.t))&&!(H.rlab||[]).some(l=>l.level===lvl&&roomAt(R,l.p)===r.id)){for(const alt of r.a>=5?['Pracovňa','Komora']:['Komora','Šatník']){const it2=layoutRoom(G,alt,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});if(it2.length){its=it2;retype.push([r,alt]);break;}}}}
+  /* v21z: an open-plan zone only guessed as the kitchen (no printed caption) that cannot hold the run becomes the dining zone and the walled rooms are typed again (the kitchen goes back to a real room). PF.noZoneRetype */if(!(globalThis.__PF||{}).noRetype&&!(op&&op.__rt)&&(!r.zone||!(globalThis.__PF||{}).noZoneRetype)){const tq=roomType(r,T,R,lvl)||'',need=/^Kuchyň/.test(tq)?['kitch']:null;
+   const kc=r.zone&&need?RS.filter(q=>!q.zone&&q.a>=7&&q.a<=16&&/^(Detská|Izba|Pracovňa)/.test(roomType(q,T,R,lvl)||'')&&!(H.rlab||[]).some(l=>l.level===lvl&&roomAt(R,l.p)===q.id)&&RS.some(z=>z.zg&&z.zg===r.zg&&q.bb[0]<z.bb[2]+.4&&q.bb[2]>z.bb[0]-.4&&q.bb[1]<z.bb[3]+.4&&q.bb[3]>z.bb[1]-.4)&&(H.rarea||[]).some(a=>a.level===lvl&&a.p&&a.v>=3&&roomAt(R,a.p)===q.id)).sort((a,b)=>Math.abs(a.a-11)-Math.abs(b.a-11))[0]:null;
+   if(need&&(!r.zone||kc)&&!its.some(i=>need.includes(i.t))&&!(H.rlab||[]).some(l=>l.level===lvl&&roomAt(R,l.p)===r.id)){const kp=[];if(kc){/* the walled room next to the open space takes the kitchen back; every other walled room keeps its current name (no reshuffle) */RS.forEach(q=>{if(q.zone||q===r)return;if((H.rlab||[]).some(l=>l.level===lvl&&roomAt(R,l.p)===q.id))return;const tq2=q===kc?'Kuchyňa':roomType(q,T,R,lvl);if(tq2)kp.push([q,tq2,1]);});}for(const alt of r.zone?['Jedáleň','Obývačka']:r.a>=5?['Pracovňa','Komora']:['Komora','Šatník']){const it2=layoutRoom(G,alt,{fv:(H.fv||0)*13+r.id*7,style:({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod',hasWC});if(it2.length){its=it2;retype.push([r,alt],...kp);break;}}}}
   its.forEach(it=>{H.furn.push({...it,level:lvl,rid:r.id});n++;});if(!its.length)empty.push(r.n);});
  if(retype.length){const pin=r=>{const b=r.bb,c=[(b[0]+b[2])/2,(b[1]+b[3])/2];if(roomAt(R,c)===r.id)return c;let best=null,bd=1e9;for(let x=b[0]+.1;x<b[2];x+=.2)for(let z=b[1]+.1;z<b[3];z+=.2){if(roomAt(R,[x,z])!==r.id)continue;const d=Math.hypot(x-c[0],z-c[1]);if(d<bd){bd=d;best=[x,z];}}return best;};
-  let k=0;retype.forEach(([r,alt])=>{const p=pin(r);if(p){H.rlab=(H.rlab||[]).concat([{level:lvl,p,n:alt,rt:1}]);k++;}});window.__retype=retype.map(([r,alt])=>[r.n,alt]);if(k)return furnish({...(op||{}),__rt:1});}
+  let k=0;retype.forEach(([r,alt,keep])=>{const p=pin(r);if(p){H.rlab=(H.rlab||[]).concat([{level:lvl,p,n:alt,rt:1}]);if(!keep)k++;}});window.__retype=retype.map(([r,alt])=>[r.n,alt]);if(k)return furnish({...(op||{}),__rt:1});}
  /* v21u RULE (dining fallback): a storey whose kitchen run fits but whose dining table fits nowhere tries the living rooms again with the table required, then a
     study / room whose name was only guessed (no plan label inside, largest first) as a dining room. PF.noDinFb. audit: dining-present */
  if(!dm&&!hasDin&&!(globalThis.__PF||{}).noDinFb){const FL=()=>H.furn.filter(f=>f.level===lvl&&ids.has(roomAt(R,f.p)));if(FL().some(f=>f.t==='kitch')&&!FL().some(f=>f.t==='table')){const sty=({minimal:'min',moderny:'mod',futur:'mod'})[H.style]||'rod';
   const lab=r=>(H.rlab||[]).some(l=>l.level===lvl&&!l.rt&&roomAt(R,l.p)===r.id);const cand=RS.map(r=>({r,ty:roomType(r,T,R,lvl)||''})).filter(c=>c.r.a>=5&&(/^Obývačka/.test(c.ty)||(!lab(c.r)&&/^(Pracovňa|Izba)$/.test(c.ty)))).sort((a,b)=>/^Obývačka/.test(b.ty)-/^Obývačka/.test(a.ty)||b.r.a-a.r.a);
   for(const c of cand){const G=stairNoGo(makeRoom(R,c.r,OPS.filter(o=>o.room===c.r.id),WS,ldim),lvl);const liv=/^Obývačka/.test(c.ty),old=H.furn.filter(f=>f.level===lvl&&f.rid===c.r.id);
-   const its=liv?layoutRoom(G,c.ty,{fv:(H.fv||0)*13+c.r.id*7,style:sty,hasWC,dine:1,needTable:1}):layoutRoom(G,'Jedáleň',{fv:(H.fv||0)*13+c.r.id*7,style:sty,hasWC,needTable:1});
-   if(!its.some(i=>i.t==='table'))continue;if(liv&&old.some(f=>f.t==='sofa')&&!its.some(i=>i.t==='sofa'))continue;
+   /* v21z: the living room retry also tries the other layout variants (seeds) before giving up. PF.noDinSeeds */let its=[];for(let k=0;k<((globalThis.__PF||{}).noDinSeeds?1:4);k++){const fv=(H.fv||0)*13+c.r.id*7+k*5;const x=liv?layoutRoom(G,c.ty,{fv,style:sty,hasWC,dine:1,needTable:1}):layoutRoom(G,'Jedáleň',{fv,style:sty,hasWC,needTable:1});if(x.some(i=>i.t==='table')&&!(liv&&old.some(f=>f.t==='sofa')&&!x.some(i=>i.t==='sofa'))&&!(liv&&old.some(f=>f.t==='kitch')&&!x.some(i=>i.t==='kitch'))){its=x;break;}}
+   if(!its.length)continue;
    H.furn=H.furn.filter(f=>!(f.level===lvl&&f.rid===c.r.id));its.forEach(it=>H.furn.push({...it,level:lvl,rid:c.r.id}));
    if(!liv){const b=c.r.bb;let p=null,bd=1e9;for(let x=b[0]+.1;x<b[2];x+=.2)for(let z=b[1]+.1;z<b[3];z+=.2){if(roomAt(R,[x,z])!==c.r.id)continue;const d=Math.hypot(x-(b[0]+b[2])/2,z-(b[1]+b[3])/2);if(d<bd){bd=d;p=[x,z];}}
     H.rlab=(H.rlab||[]).filter(l=>!(l.level===lvl&&l.rt&&roomAt(R,l.p)===c.r.id));if(p)H.rlab.push({level:lvl,p,n:'Jedáleň',rt:1});}
