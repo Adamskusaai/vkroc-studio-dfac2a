@@ -15,10 +15,13 @@ export function ocrRead(v,W){const N=load();let x=v,C=1,H=OCRW.hn;const L=[['c1'
  let r=conv(x,C,H,W,N['c4.weight'],N['c4.bias'],N['c4.weight_s'],0,2);relu(r.y);C=N['c4.weight_s'][0];r=conv(r.y,C,1,W,N['c5.weight'],N['c5.bias'],N['c5.weight_s'],0,0);
  const K=N['c5.weight_s'][0];let out='',prev=0,conf=1;for(let t=0;t<W;t++){let bk=0,bv=-1e9,s=0;for(let k=0;k<K;k++){const z=r.y[k*W+t];if(z>bv){bv=z;bk=k;}}for(let k=0;k<K;k++)s+=Math.exp(r.y[k*W+t]-bv);conf=Math.min(conf,1/s);if(bk&&bk!==prev)out+=OCRW.alph[bk-1];prev=bk;}
  return {s:out,conf};}
+function nearUp(g,w,h,W2,H2){const o=new Float32Array(W2*H2);for(let j=0;j<H2;j++){const ys=Math.min(h-1,Math.floor(j*h/H2));for(let i=0;i<W2;i++){const xs=Math.min(w-1,Math.floor(i*w/W2));o[j*W2+i]=g[ys*w+xs];}}return o;}
 function bilin(g,w,h,W2,H2){const o=new Float32Array(W2*H2);for(let j=0;j<H2;j++){let ys=(j+.5)*h/H2-.5;ys=Math.min(h-1,Math.max(0,ys));const y0=Math.floor(ys),y1=Math.min(y0+1,h-1),fy=ys-y0;
  for(let i=0;i<W2;i++){let xs=(i+.5)*w/W2-.5;xs=Math.min(w-1,Math.max(0,xs));const x0=Math.floor(xs),x1=Math.min(x0+1,w-1),fx=xs-x0;o[j*W2+i]=(g[y0*w+x0]*(1-fx)+g[y0*w+x1]*fx)*(1-fy)+(g[y1*w+x0]*(1-fx)+g[y1*w+x1]*fx)*fy;}}return o;}
-export function ocrPrep(G,GW,x0,y0,x1,y1,pd=0){const HN=OCRW.hn;let w=x1-x0,h=y1-y0;const h0=h;let g=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++)g[y*w+x]=G[(y+y0)*GW+x+x0];
- const W2=Math.max(4,Math.round(w*HN/h));if(h>2*HN){const f=Math.floor(h/HN),h2=Math.floor(h/f),w2=Math.floor(w/f),g2=new Float32Array(w2*h2);for(let y=0;y<h2;y++)for(let x=0;x<w2;x++){let s=0;for(let a=0;a<f;a++)for(let b=0;b<f;b++)s+=g[(y*f+a)*w+x*f+b];g2[y*w2+x]=s/(f*f);}g=g2;w=w2;h=h2;}
+export function ocrPrep(G,GW,x0,y0,x1,y1,pd=0){const HN=OCRW.hn;let w=x1-x0,h=y1-y0;let g=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++)g[y*w+x]=G[(y+y0)*GW+x+x0];
+ /* v22: tiny strokes (phone scale-bar / area digits ~2-7 px) are upscaled into the 8-16 px band the CNN was trained on, then the usual prep runs */
+ if(h>0&&h<8&&!(globalThis.__PF||{}).noTinyUp){const s=Math.max(2,Math.ceil(8/h)),w2=Math.max(2,Math.round(w*s)),h2=Math.max(2,Math.round(h*s));g=bilin(g,w,h,w2,h2);w=w2;h=h2;}
+ const h0=h;const W2=Math.max(4,Math.round(w*HN/h));if(h>2*HN){const f=Math.floor(h/HN),h2=Math.floor(h/f),w2=Math.floor(w/f),g2=new Float32Array(w2*h2);for(let y=0;y<h2;y++)for(let x=0;x<w2;x++){let s=0;for(let a=0;a<f;a++)for(let b=0;b<f;b++)s+=g[(y*f+a)*w+x*f+b];g2[y*w2+x]=s/(f*f);}g=g2;w=w2;h=h2;}
  const r=bilin(g,w,h,W2,HN),srt=Array.from(r).sort((a,b)=>a-b),pi=(srt.length-1)*.95,i0=Math.floor(pi),hi=srt[i0]+(srt[Math.min(i0+1,srt.length-1)]-srt[i0])*(pi-i0),cc=Math.floor(pd*HN/h0);let lo=1e9;if(HN-2*cc>=2&&W2-2*cc>=2){for(let y=cc;y<HN-cc;y++)for(let x=cc;x<W2-cc;x++)lo=Math.min(lo,r[y*W2+x]);}else lo=srt[0];const d=Math.max(hi-lo,20);
  for(let i=0;i<r.length;i++)r[i]=Math.min(1,Math.max(0,(hi-r[i])/d));return {v:r,W:W2};}
 /* find stacked number columns (area table) and read them */
@@ -94,18 +97,32 @@ export function labelAreas(G,W,H,bb,PF={}){const T0=performance.now(),hist=new U
 /* v21l scale-bar ladder: the tick labels of a scale bar (0 1 2 3 4 5 m), read straight from the raster with the CRNN, wherever the bar sits
    (also outside the plan crop and at screenshot / phone resolution, where the dimension OCR misses single digits). A ladder = 4+ small
    number tokens in one aligned column or row, values 0, d, 2d ... (with 0), positions linear in the value; px per unit = the slope. */
-export function barLadder(G,W,H,PF={}){const T0=performance.now(),hist=new Uint32Array(256);for(let i=0;i<W*H;i++)hist[Math.max(0,Math.min(255,G[i]|0))]++;
+/* v22: scale-bar ladder. On phone screenshots the tick labels are often 2-4 px; 1x connected components miss them
+   (min height was 5). After a failed 1x pass, the paper-white region is bilinear-upscaled (default 4x) and read again,
+   with ppm scaled back. PF.noBarUp disables the retry; PF.noTinyUp disables the per-glyph upscale in ocrPrep. */
+function paperBox(G,W,H){const hist=new Uint32Array(256);for(let i=0;i<W*H;i++)hist[Math.max(0,Math.min(255,G[i]|0))]++;
+ let acc=0,p95=255;for(let v=0;v<256;v++){acc+=hist[v];if(acc>=.95*W*H){p95=v;break;}}const thr=Math.max(220,Math.min(248,p95-4));
+ let nb=0;for(let i=0;i<W*H;i++)if(G[i]>=thr)nb++;
+ /* a mostly-white sheet: the whole upload is the page. A dark phone chrome around a small page: take the largest bright component. */
+ if(nb>.45*W*H)return[0,0,W,H];
+ const lab=new Int32Array(W*H);let bestN=0,best=[0,0,W,H];
+ for(let i=0;i<W*H;i++){if(lab[i]||G[i]<thr)continue;const st=[i];lab[i]=1;let n=0,x0=1e9,y0=1e9,x1=-1,y1=-1;
+  while(st.length){const k=st.pop(),px=k%W,py=(k/W)|0;n++;if(px<x0)x0=px;if(px>x1)x1=px;if(py<y0)y0=py;if(py>y1)y1=py;
+   for(const [dx,dy] of[[-1,0],[1,0],[0,-1],[0,1]]){const qx=px+dx,qy=py+dy;if(qx<0||qy<0||qx>=W||qy>=H)continue;const q=qy*W+qx;if(!lab[q]&&G[q]>=thr){lab[q]=1;st.push(q);}}}
+  if(n>bestN){bestN=n;best=[x0,y0,x1+1,y1+1];}}
+ return bestN>=80?best:[0,0,W,H];}
+function barLadderOnce(G,W,H,PF,minH){const T0=performance.now(),hist=new Uint32Array(256);for(let i=0;i<W*H;i++)hist[Math.max(0,Math.min(255,G[i]|0))]++;
  let acc=0,p95=255;for(let v=0;v<256;v++){acc+=hist[v];if(acc>=.95*W*H){p95=v;break;}}const thr=Math.min(200,p95*.8);
  const lab=new Int32Array(W*H),C=[];let id=0;
  for(let i=0;i<W*H;i++){if(lab[i]||G[i]>=thr)continue;id++;const st=[i];lab[i]=id;let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0,big=0;
   while(st.length){const k=st.pop(),px=k%W,py=(k/W)|0;n++;if(px<x0)x0=px;if(px>x1)x1=px;if(py<y0)y0=py;if(py>y1)y1=py;if(n>500){big=1;}
    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const qx=px+dx,qy=py+dy;if(qx<0||qy<0||qx>=W||qy>=H)continue;const q=qy*W+qx;if(!lab[q]&&G[q]<thr){lab[q]=id;st.push(q);}}}
-  if(big)continue;const w=x1-x0+1,h=y1-y0+1;if(h>=5&&h<=30&&w<=1.1*h+2&&n>=4)C.push({x0,y0,x1,y1,h});}
- if(C.length>4000)return null;C.sort((a,b)=>a.x0-b.x0);const TK=[];
+  if(big)continue;const w=x1-x0+1,h=y1-y0+1;if(h>=minH&&h<=30&&w<=1.1*h+2&&n>=4)C.push({x0,y0,x1,y1,h});}
+ if(C.length>4000)return{best:null,dbg:{nC:C.length,nT:0,nR:0,t:Math.round(performance.now()-T0)}};C.sort((a,b)=>a.x0-b.x0);const TK=[];
  for(const c of C){let t=null;for(let j=TK.length-1;j>=0&&j>=TK.length-60;j--){const q=TK[j];if(q.n>=2)continue;const ov=Math.min(q.y1,c.y1)-Math.max(q.y0,c.y0),hh=Math.max(q.y1-q.y0+1,c.h);if(ov<.6*hh||Math.max(q.y1-q.y0+1,c.h)/Math.min(q.y1-q.y0+1,c.h)>1.35)continue;const gap=c.x0-q.x1;if(gap>=-1&&gap<=.35*hh){t=q;break;}}
   if(t){t.x1=Math.max(t.x1,c.x1);t.y0=Math.min(t.y0,c.y0);t.y1=Math.max(t.y1,c.y1);t.n++;}else TK.push({x0:c.x0,y0:c.y0,x1:c.x1,y1:c.y1,n:1});}
- if(TK.length>2500)return null;const R=[];
- for(const t of TK){const p=2,X0=Math.max(0,t.x0-p),X1=Math.min(W,t.x1+1+p),Y0=Math.max(0,t.y0-p),Y1=Math.min(H,t.y1+1+p);if(Y1-Y0<4)continue;const P=ocrPrep(G,W,X0,Y0,X1,Y1,p),r=ocrRead(P.v,P.W);const m=/^(\d{1,2})$/.exec(r.s);if(!m||r.conf<(PF.blConf??.5))continue;
+ if(TK.length>2500)return{best:null,dbg:{nC:C.length,nT:TK.length,nR:0,t:Math.round(performance.now()-T0)}};const R=[];
+ for(const t of TK){const p=2,X0=Math.max(0,t.x0-p),X1=Math.min(W,t.x1+1+p),Y0=Math.max(0,t.y0-p),Y1=Math.min(H,t.y1+1+p);if(Y1-Y0<3)continue;const P=ocrPrep(G,W,X0,Y0,X1,Y1,p),r=ocrRead(P.v,P.W);const m=/^(\d{1,2})$/.exec(r.s);if(!m||r.conf<(PF.blConf??.5))continue;
   R.push({v:+m[1],cx:(t.x0+t.x1)/2,cy:(t.y0+t.y1)/2,x0:t.x0,h:t.y1-t.y0+1});}
  let best=null;
  for(const ax of['v','h']){const pos=t=>ax==='v'?t.cy:t.cx,al=(a,b)=>ax==='v'?(Math.abs(a.x0-b.x0)<=Math.max(2,.6*a.h)||Math.abs(a.cx-b.cx)<=.6*a.h):Math.abs(a.cy-b.cy)<=.45*a.h;
@@ -114,4 +131,24 @@ export function barLadder(G,W,H,PF={}){const T0=performance.now(),hist=new Uint3
     for(const u of G2){const d=Math.abs(pos(u)-(pos(z)+b*u.v));if(d<=.12*Math.abs(b)&&(!used.has(u.v)||d<used.get(u.v).d))used.set(u.v,{d});}
     const vs=[...used.keys()].sort((a,b)=>a-b);if(vs.length<n3||vs[0]!==0)continue;const st=vs[1];if(vs.length<4&&(vs.length!==3||vs[2]!==2*st||st<2))continue;if(!vs.every((v,i)=>v%st===0)||vs[vs.length-1]>30)continue;
     const span=vs[vs.length-1]/st+1;if(vs.length<.75*span)continue;const sc=vs.length;if(!best||sc>best.n)best={ppm:Math.abs(b),n:sc,vals:vs,ax,at:[Math.round(z.cx),Math.round(z.cy)]};}}}
- barLadder.dbg={nC:C.length,nT:TK.length,nR:R.length,t:Math.round(performance.now()-T0)};return best;}
+ if(!best&&!PF.noBl0){for(const ax of['v','h']){const pos=t=>ax==='v'?t.cy:t.cx,al=(a,b)=>ax==='v'?(Math.abs(a.x0-b.x0)<=Math.max(2,.6*a.h)||Math.abs(a.cx-b.cx)<=.6*a.h):Math.abs(a.cy-b.cy)<=.45*a.h;
+  const seen=new Set();for(const z of R){if(seen.has(z))continue;const G2=R.filter(u=>al(z,u)&&Math.abs(u.h/z.h-1)<.4);if(G2.length<4)continue;G2.forEach(u=>seen.add(u));
+   for(const e of G2){for(const f of G2){if(f.v<=e.v)continue;const b=(pos(f)-pos(e))/(f.v-e.v);if(Math.abs(b)<1.5*z.h)continue;const used=new Map();
+    for(const u of G2){const d=Math.abs(pos(u)-(pos(e)+b*(u.v-e.v)));if(d<=.12*Math.abs(b)&&(!used.has(u.v)||d<used.get(u.v).d))used.set(u.v,{d,u});}
+    const vs=[...used.keys()].sort((a,c)=>a-c);if(vs.length<4||vs[0]===0)continue;const st=vs[1]-vs[0];if(st<1||!vs.every((v,i)=>v===vs[0]+i*st)||vs[vs.length-1]>30)continue;
+    const sc=vs.length;if(!best||sc>best.n)best={ppm:Math.abs(b),n:sc,vals:vs,ax,at:[Math.round(z.cx),Math.round(z.cy)],imp0:1};}}}}}
+
+ return{best,dbg:{nC:C.length,nT:TK.length,nR:R.length,vs:R.map(q=>q.v).slice(0,24),t:Math.round(performance.now()-T0)}};}
+export function barLadder(G,W,H,PF={}){const A=barLadderOnce(G,W,H,PF,5);let best=A.best,dbg=A.dbg,up=0;
+ if(!best&&!PF.noBarUp&&W*H<=4e6){const bb=paperBox(G,W,H),bw=bb[2]-bb[0],bh=bb[3]-bb[1],s=Math.max(2,Math.min(4,PF.barUp||(Math.min(bw,bh)<500?4:3)));
+  if(bw*bh*s*s<=8e6&&bw>=40&&bh>=40){const W2=Math.round(bw*s),H2=Math.round(bh*s),crop=new Float32Array(bw*bh);
+   for(let y=0;y<bh;y++)for(let x=0;x<bw;x++)crop[y*bw+x]=G[(y+bb[1])*W+x+bb[0]];
+   /* nearest-neighbour keeps 2-4 px ink as solid blocks; bilinear smears them into grey and the 1x threshold misses them */
+   const tryUp=fn=>{const U=fn(crop,bw,bh,W2,H2);let med=0;for(let i=0;i<U.length;i++)med+=U[i];med/=Math.max(1,U.length);
+    if(med>200){const srt=Array.from(U).sort((a,b)=>a-b),lo=srt[Math.floor(srt.length*.02)],hi=srt[Math.max(0,Math.floor(srt.length*.8))]||255,d=Math.max(20,hi-lo);
+     for(let i=0;i<U.length;i++)U[i]=Math.min(255,Math.max(0,(U[i]-lo)/d*255));}
+    return {B:barLadderOnce(U,W2,H2,PF,4),med};};
+   let T=tryUp(nearUp);if(!T.B.best){const T2=tryUp(bilin);if((T2.B.best&&!T.B.best)||((T2.B.dbg.nR||0)>(T.B.dbg.nR||0)))T=T2;}
+   const B=T.B;up=s;dbg={...dbg,nC1:dbg.nC,nT1:dbg.nT,nR1:dbg.nR,nC:B.dbg.nC,nT:B.dbg.nT,nR:B.dbg.nR,vs:B.dbg.vs,t:dbg.t+B.dbg.t,up:s,bb:[bb[0],bb[1],bw,bh],med:+T.med.toFixed(1)};
+   if(B.best)best={...B.best,ppm:B.best.ppm/s,at:B.best.at?B.best.at.map((v,i)=>Math.round(v/s+bb[i%2?1:0])):B.best.at};}}
+ barLadder.dbg={...dbg,up};return best;}
