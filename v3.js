@@ -918,7 +918,14 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
    {const L0n=H.levels&&H.levels[0]&&H.levels[0].name,WBt=(H.walls||[]).filter(w=>w.level===L0n).map(w=>{const t2=(w.thickness||.3)/2;return[Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2];});
     const hit=s=>{const x=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*s,z=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*s,ew=Math.abs(TER.nx)>.9,hx=(ew?dp:tl)/2-.06,hz=(ew?tl:dp)/2-.06;return WBt.some(b=>x-hx<b[2]&&x+hx>b[0]&&z-hz<b[3]&&z+hz>b[1]);};
     if(hit(sh)){const lim=TER.nodoor?tl/2:tl/2-.5;const C=[-sh];for(let d=.25;d<=lim;d+=.25)C.push(sh>0?sh-d:sh+d,sh>0?sh+d:sh-d);const f=C.find(s=>Math.abs(s)<=lim+1e-6&&!hit(s));if(f!=null)sh=f;}}
-   const cx=TER.cx+TER.nx*(TER.t/2+dp/2)+TER.ux*sh,cz=TER.cz+TER.nz*(TER.t/2+dp/2)+TER.uz*sh,ew=Math.abs(TER.nx)>.9;
+   /* v22d RULE (deck outside the house): a deck with no terrace door whose slab would cover rooms (a wall line parallel to its own runs through it - the
+      chosen wall was an inner one) moves out along its normal past the farthest such wall, so it sits outside the outer wall. PF.noTerrOut */
+   let po=0;if(TER.nodoor&&!(globalThis.__PF||{}).noTerrOut){const L0n=H.levels&&H.levels[0]&&H.levels[0].name,Wp=(H.walls||[]).filter(w=>w.level===L0n),ew0=Math.abs(TER.nx)>.9;
+    for(let it=0;it<8;it++){const x=TER.cx+TER.nx*(TER.t/2+dp/2+po)+TER.ux*sh,z=TER.cz+TER.nz*(TER.t/2+dp/2+po)+TER.uz*sh,hx=(ew0?dp:tl)/2-.06,hz=(ew0?tl:dp)/2-.06;let far=null;
+     Wp.forEach(w=>{if(ew0?Math.abs(w.start[0]-w.end[0])>.05:Math.abs(w.start[1]-w.end[1])>.05)return;const t2=(w.thickness||.3)/2,b=[Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2];
+      if(!(x-hx<b[2]&&x+hx>b[0]&&z-hz<b[3]&&z+hz>b[1]))return;const nn=(ew0?(w.start[0]-TER.cx)*TER.nx:(w.start[1]-TER.cz)*TER.nz)+t2;if(nn>0&&(far==null||nn>far))far=nn;});
+     if(far==null)break;po=far-TER.t/2+.02;}if(po>9)po=0;if(po)try{window.__terrOut=+po.toFixed(2);}catch(e){}}
+   const cx=TER.cx+TER.nx*(TER.t/2+dp/2+po)+TER.ux*sh,cz=TER.cz+TER.nz*(TER.t/2+dp/2+po)+TER.uz*sh,ew=Math.abs(TER.nx)>.9;
    terr=add(new THREE.BoxGeometry(ew?dp:tl,.12,ew?tl:dp),M.deck,cx,.06,cz,0,1);terr.userData.tf={cx,cz,ux:TER.ux,uz:TER.uz,nx:TER.nx,nz:TER.nz,L:tl,D:dp,door:TER.nodoor?null:-sh,dw:TER.w||1.6,liv:TER.nodoor&&!TER.liv?0:1,hint:THint?THint.p:TInk};}
   else{terr=add(new THREE.BoxGeometry(tw,.12,3.2),M.deck,hx,.06,terrZ+.2,0,1);terr.userData.tf={cx:hx,cz:terrZ+.2,ux:1,uz:0,nx:0,nz:1,L:tw,D:3.2,door:null,liv:0};}terr.receiveShadow=true;terr.userData.noCol=true;terr.userData.terrace=1;
   /* v18j RULES (terrace = the demo villa's terrace, generic): the deck sits 12 cm above the lawn with a stone edge (one step down),
