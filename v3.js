@@ -859,19 +859,29 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
   /* v21m RULE (path-to-street): the entrance path always reaches the street edge (-z): straight out of a street-facing door; out of a side
      door 1 m then down to the street; out of a back door 1 m, round the nearer side of the house and down. Each run is checked against the
      house walls and the plot; a run that would cut the house falls back to the other side, then to the old straight path. audit: path-to-street */
-  const PATHR=(()=>{const W2=.75,L0n=H.levels[0].name,WB2=(H.walls||[]).filter(w=>w.level===L0n).map(w=>{const t2=(w.thickness||.3)/2;return[Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2];});
+  const mkPath=(ENT)=>{const W2=.75,L0n=H.levels[0].name,WB2=(H.walls||[]).filter(w=>w.level===L0n).map(w=>{const t2=(w.thickness||.3)/2;return[Math.min(w.start[0],w.end[0])-t2,Math.min(w.start[1],w.end[1])-t2,Math.max(w.start[0],w.end[0])+t2,Math.max(w.start[1],w.end[1])+t2];});
    /* v21s: a wall line parallel to the entrance wall right at the door (a doubled outer-wall line read from the plan, a sill) does not block
       the path - only walls further out do. audit: path-to-street */
    const adj=b=>{if(!ENT||(globalThis.__PF||{}).noDoorAdj)return false;const m=ENT.t/2+.6;if(Math.abs(ENT.nz)>.5)return b[2]-b[0]>b[3]-b[1]&&b[0]<ENT.cx&&b[2]>ENT.cx&&b[1]>=ENT.cz-m&&b[3]<=ENT.cz+m;return b[3]-b[1]>b[2]-b[0]&&b[1]<ENT.cz&&b[3]>ENT.cz&&b[0]>=ENT.cx-m&&b[2]<=ENT.cx+m;};
-   const HX0=Math.min(...xs),HX1=Math.max(...xs),clear=r=>r[0]>=xMin+.15&&r[2]<=xMax-.15&&r[1]>=zMin-.01&&r[3]<=zMax-.15&&!WB2.some(b=>!adj(b)&&r[0]<b[2]-.02&&r[2]>b[0]+.02&&r[1]<b[3]-.02&&r[3]>b[1]+.02);
+   /* v22g RULE (wall band at the entrance): between the entrance wall and a doubled outer-wall line in front of it the path crosses solid wall mass;
+      a cross-wall end that stops inside that band (no deeper out than the doubled line) does not block the path. PF.noEntBand. audit: path-to-street */
+   const ax0=ENT&&Math.abs(ENT.nz)>.5,outx=b=>!ENT?0:ax0?(ENT.nz<0?ENT.cz-b[1]:b[3]-ENT.cz):(ENT.nx<0?ENT.cx-b[0]:b[2]-ENT.cx),adjL=ENT?WB2.filter(adj):[],
+    bandD=(!ENT||(globalThis.__PF||{}).noEntBand||!adjL.length)?-1:Math.max(ENT.t/2,...adjL.map(outx)),
+    inBand=(r,b)=>{if(bandD<0)return false;const o=[Math.max(r[0],b[0]),Math.max(r[1],b[1]),Math.min(r[2],b[2]),Math.min(r[3],b[3])];if(outx(o)>bandD+.02)return false;const lo=ax0?o[0]:o[1],hi=ax0?o[2]:o[3],c=ax0?ENT.cx:ENT.cz;return lo>c-W2-.6&&hi<c+W2+.6;};
+   const HX0=Math.min(...xs),HX1=Math.max(...xs),clear=r=>r[0]>=xMin+.15&&r[2]<=xMax-.15&&r[1]>=zMin-.01&&r[3]<=zMax-.15&&!WB2.some(b=>!adj(b)&&!inBand(r,b)&&r[0]<b[2]-.02&&r[2]>b[0]+.02&&r[1]<b[3]-.02&&r[3]>b[1]+.02);
    const ok=L=>L.every(clear)?L:null;
    /* v21s RULE (path-to-street, any shape): when none of the fixed runs is clear (door in a recess / courtyard, house close to a plot
       side), route the path on a 0.25 m grid round the house walls to the street edge (fewest turns), as straight paved runs. PF.noGridPath */
    const GRIDP=()=>{const W2=.5;if((globalThis.__PF||{}).noGridPath||!ENT)return null;const S=.25,gx0=xMin,gz0=zMin,NX=Math.ceil((xMax-xMin)/S)+1,NZ=Math.ceil((zMax-zMin)/S)+1;if(NX*NZ>250000)return null;
     const sq=(x,z)=>[x-W2,z-W2,x+W2,z+W2],OK=new Int8Array(NX*NZ).fill(-1),okc=(i,k)=>{const q=k*NX+i;if(OK[q]<0)OK[q]=clear(sq(gx0+i*S,gz0+k*S))?1:0;return OK[q]===1;};
-    const fx=ENT.cx+ENT.nx*t2,fz=ENT.cz+ENT.nz*t2;let si=-1,sk=-1,st=0;for(let d=W2;d<=W2+1.01&&si<0;d+=S){const i=Math.round((fx+ENT.nx*d-gx0)/S),k=Math.round((fz+ENT.nz*d-gz0)/S);if(i>=0&&k>=0&&i<NX&&k<NZ&&okc(i,k)){si=i;sk=k;st=d;}}
-    if(si<0)return null;const sx=gx0+si*S,sz=gz0+sk*S,R0=[Math.min(fx,sx)-(Math.abs(ENT.nx)>.5?0:W2),Math.min(fz,sz)-(Math.abs(ENT.nz)>.5?0:W2),Math.max(fx,sx)+(Math.abs(ENT.nx)>.5?0:W2),Math.max(fz,sz)+(Math.abs(ENT.nz)>.5?0:W2)];
-    if(Math.abs(ENT.nx)>.5){R0[1]=sz-W2;R0[3]=sz+W2;}else{R0[0]=sx-W2;R0[2]=sx+W2;}if(!clear(R0))return null;
+    /* v22g RULE (entrance path start slides): the first paved square may slide along the entrance wall (still covering the door opening, up to
+       15 cm past its jamb) when a wall corner or a cross-wall end right beside the door clips it. PF.noStartSlide. audit: path-to-street */
+    const uX=ENT.ux!=null?ENT.ux:Math.abs(ENT.nz)>.5?1:0,uZ=ENT.uz!=null?ENT.uz:Math.abs(ENT.nx)>.5?1:0,smax=(globalThis.__PF||{}).noStartSlide?0:Math.max(0,W2-(ENT.w||.9)/2+.15),SH=[0];for(let q=.05;q<=smax+1e-6;q+=.05)SH.push(q,-q);
+    let si=-1,sk=-1,st=0,R0=null,fx=0,fz=0;for(const sh of SH){fx=ENT.cx+ENT.nx*t2+uX*sh;fz=ENT.cz+ENT.nz*t2+uZ*sh;si=-1;
+     for(let d=W2;d<=W2+1.01&&si<0;d+=S){const i=Math.round((fx+ENT.nx*d-gx0)/S),k=Math.round((fz+ENT.nz*d-gz0)/S);if(i>=0&&k>=0&&i<NX&&k<NZ&&okc(i,k)){si=i;sk=k;st=d;}}
+     if(si<0)continue;const sx=gx0+si*S,sz=gz0+sk*S,R=[Math.min(fx,sx)-(Math.abs(ENT.nx)>.5?0:W2),Math.min(fz,sz)-(Math.abs(ENT.nz)>.5?0:W2),Math.max(fx,sx)+(Math.abs(ENT.nx)>.5?0:W2),Math.max(fz,sz)+(Math.abs(ENT.nz)>.5?0:W2)];
+     if(Math.abs(ENT.nx)>.5){R[1]=sz-W2;R[3]=sz+W2;}else{R[0]=sx-W2;R[2]=sx+W2;}if(clear(R)){R0=R;break;}si=-1;}
+    if(!R0)return null;
     const DI=[[1,0],[-1,0],[0,1],[0,-1]],N=NX*NZ,GD=new Int8Array(N).fill(-1),C=new Int32Array(N*4).fill(1e9),PR=new Int32Array(N*4).fill(-1),B=[];const push=(c,v)=>{(B[c]||(B[c]=[])).push(v);};
     for(let d=0;d<4;d++){C[(sk*NX+si)*4+d]=0;push(0,(sk*NX+si)*4+d);}let goal=-1;
     for(let c=0;c<B.length&&goal<0;c++){const L=B[c];if(!L)continue;for(let t=0;t<L.length;t++){const v=L[t];if(C[v]!==c)continue;const q=v>>2,dd=v&3,i=q%NX,k=(q/NX)|0;
@@ -883,7 +893,8 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
     const G=pt(P[P.length-1]);out.push([G[0]-W2,zMin,G[0]+W2,G[1]+W2]);return out;};if((globalThis.__PF||{}).noStreetPath||!ENT)return null;const cx=ENT.cx,cz=ENT.cz,t2=ENT.t/2;
    if(ENT.nz<-.5)return ok([[cx-W2,zMin,cx+W2,cz-t2]])||GRIDP();
    if(Math.abs(ENT.nx)>.9){const e=cx+ENT.nx*t2,xo=e+ENT.nx*(1.0+W2);return ok([[Math.min(e,xo),cz-W2,Math.max(e,xo),cz+W2],[xo-W2,zMin,xo+W2,cz+W2]])||GRIDP();}
-   const e=cz+t2,zo=e+1.0+W2;for(const sd of (cx-HX0<HX1-cx?[-1,1]:[1,-1])){const xo=sd<0?HX0-1.0-W2:HX1+1.0+W2,L=ok([[cx-W2,e,cx+W2,zo+W2],[Math.min(cx,xo)-W2,zo-W2,Math.max(cx,xo)+W2,zo+W2],[xo-W2,zMin,xo+W2,zo+W2]]);if(L)return L;}return GRIDP();})();
+   const e=cz+t2,zo=e+1.0+W2;for(const sd of (cx-HX0<HX1-cx?[-1,1]:[1,-1])){const xo=sd<0?HX0-1.0-W2:HX1+1.0+W2,L=ok([[cx-W2,e,cx+W2,zo+W2],[Math.min(cx,xo)-W2,zo-W2,Math.max(cx,xo)+W2,zo+W2],[xo-W2,zMin,xo+W2,zo+W2]]);if(L)return L;}return GRIDP();};
+  const PATHR=mkPath(ENT);
   try{window.__entPath={ent:ENT?{cx:ENT.cx,cz:ENT.cz,nx:ENT.nx,nz:ENT.nz}:null,rects:PATHR,zMin};}catch(e){}
   // prem8 h5: carport (slim dark steel posts, flat dark roof) over the driveway. Candidates: current driveway, then beside the house (E/W).
   // A candidate is rejected if it leaves the plot, touches the house, covers a path, or comes within 1.2 m of any door/window; the driveway follows the pick.
