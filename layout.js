@@ -123,11 +123,12 @@ function mkItem(G,t,x,z,r,extra){const q=extra&&extra.sz?rectOf(t,x,z,r,()=>extr
 function bedSides(G,it,items){return it.sides.filter(z=>inRoomR(G,z,.9)&&!wallHit(G,z)&&!items.some(o=>o!==it&&!SOFT.has(o.t)&&o.t!=='nstand'&&ov(o.q,z,.005)));}
 // ---------- candidates ----------
 function wallCands(G,t,rs=[0,1,2,3]){const out=[],seen=new Set(),[fw,fd]=G.dims(t);
- for(const r of rs){const f=FV[r],b=[-f[0],-f[1]],d=r%2?fw:fd;for(let j=0;j<G.h;j++)for(let i=0;i<G.w;i++){const k=j*G.w+i;if(!G.inR[k])continue;const a=i+b[0],bj=j+b[1];if(a<0||bj<0||a>=G.w||bj>=G.h||!G.wall[bj*G.w+a])continue;
+ /* v22h RULE (side-wall depth): an item facing along x stands out of the wall by its depth too (rectOf puts the depth along the facing), not by its width - side-wall spots were pushed into or off the wall. PF.noCandDepth. audit: fixture-missing */
+ for(const r of rs){const f=FV[r],b=[-f[0],-f[1]],d=(r%2&&!OLDD&&!(globalThis.__PF||{}).noCandDepth)?fd:r%2?fw:fd;for(let j=0;j<G.h;j++)for(let i=0;i<G.w;i++){const k=j*G.w+i;if(!G.inR[k])continue;const a=i+b[0],bj=j+b[1];if(a<0||bj<0||a>=G.w||bj>=G.h||!G.wall[bj*G.w+a])continue;
   let x=G.X(i),z=G.Z(j),best=null;for(const w of G.walls){const nw=[-w.u[1],w.u[0]];const dp=nw[0]*f[0]+nw[1]*f[1];if(Math.abs(dp)<.95)continue;const s=(x-w.p0[0])*w.u[0]+(z-w.p0[1])*w.u[1];if(s<-.1||s>w.L+.1)continue;const dd=((x-w.p0[0])*nw[0]+(z-w.p0[1])*nw[1])*Math.sign(dp);if(dd>0&&dd<w.t/2+.25&&(!best||dd<best.dd))best={dd,t:w.t};}
   if(best){const off=best.dd-best.t/2;x-=f[0]*off;z-=f[1]*off;}else{x-=f[0]*G.c/2;z-=f[1]*G.c/2;}x+=f[0]*(d/2+.005);z+=f[1]*(d/2+.005);const key=r+':'+Math.round(x*20)+':'+Math.round(z*20);if(seen.has(key))continue;seen.add(key);out.push([x,z,r]);}}
  /* open-zones: also walk real wall faces (outer walls and stubs) whose inward side is in this room, so a run sits on a stub even when the wall raster is thin */
- if(!(globalThis.__PF||{}).noZoneFurn){for(const w of G.walls){const nw=[-w.u[1],w.u[0]];for(const sg of[1,-1]){const n=[nw[0]*sg,nw[1]*sg];const r=FV.findIndex(f=>f[0]*n[0]+f[1]*n[1]>.95);if(r<0||!rs.includes(r))continue;const[fw,fd]=G.dims(t),d=r%2?fw:fd;
+ if(!(globalThis.__PF||{}).noZoneFurn){for(const w of G.walls){const nw=[-w.u[1],w.u[0]];for(const sg of[1,-1]){const n=[nw[0]*sg,nw[1]*sg];const r=FV.findIndex(f=>f[0]*n[0]+f[1]*n[1]>.95);if(r<0||!rs.includes(r))continue;const[fw,fd]=G.dims(t),d=(r%2&&!OLDD&&!(globalThis.__PF||{}).noCandDepth)?fd:r%2?fw:fd;
   for(let s=.2;s<=w.L-.2;s+=G.c){let x=w.p0[0]+w.u[0]*s+n[0]*(w.t/2+d/2+.005),z=w.p0[1]+w.u[1]*s+n[1]*(w.t/2+d/2+.005);let i=G.li(x),j=G.lj(z);
    if(i<0||j<0||i>=G.w||j>=G.h||!G.inR[j*G.w+i]){let ok=0;for(let k=1;k<=16;k++){const x2=x+n[0]*k*.05,z2=z+n[1]*k*.05;i=G.li(x2);j=G.lj(z2);if(i>=0&&j>=0&&i<G.w&&j<G.h&&G.inR[j*G.w+i]){x=x2;z=z2;ok=1;break;}}if(!ok)continue;}
    const key=r+':'+Math.round(x*20)+':'+Math.round(z*20);if(seen.has(key))continue;seen.add(key);out.push([x,z,r]);}}}}
@@ -268,7 +269,13 @@ function repair(G,S,key,opt){const R=reqFor(key,G.room.a).concat(opt.needWC&&/^K
  while(fillRatio(G,S.items)<.62*tg&&guard++<4){let prog=false;for(const e of F){if(fillRatio(G,S.items)>=.62*tg)break;if(S.items.filter(i=>i.t===e).length>=6)continue;const n0=S.items.length;entry(G,S,e,opt);relast(S);if(S.items.length>n0)prog=true;}if(!prog)break;}
  if(!S.items.length){const d0=G.dims;for(const[t,z]of[['shelf',[.45,.3]],['plant',null],['wshelf',null],['mirror',null],['art',null]]){if(z)G.dims=q=>q===t?z:d0(q);const it=place(G,S,t,wallCands(G,t));G.dims=d0;if(it){if(z)it.sz=z;break;}}}}
 function fillRoom(G,S,key,opt){const tg=TARGET[key]??.2,F=FILL[key]||[];let prog=true,guard=0;S.spread=G.room.a>=20;while(prog&&guard++<(G.room.a>40?5:3)&&fillRatio(G,S.items)<tg){prog=false;const CAP={plant:3,art:2,lamp:2,armch:2,shelf:2,side:1,rug:1,runner:1,desk:1,chair1:1,toy:1,dresser:1,sideb:1,washer:1,table:1,chair4:1,ward:2,shoe:1,coat:1,mirror:1,bench:1,towel:1};const cnt=t=>S.items.filter(i=>i.t===t||(t==='chair1'&&i.t==='chair')).length;for(const e of F){if(fillRatio(G,S.items)>=Math.min(.4,tg+.08))break;if(cnt(e)>=(CAP[e]||2)*Math.max(1,Math.round(G.room.a/28)))continue;const n0=S.items.length;entry(G,S,e,opt);if(S.items.length>n0)prog=true;}}}
-export function layoutRoom(G,typ,opt={}){const key=tplKey(typ,/ [2468]$/.test(typ||''));let T=TPL[key]||TPL['Izba'];const sty=opt.style||'rod';
+/* v22h: a room laid out with the corrected side-wall depth that still misses a required fixture is laid out once more with the old
+   side-wall spots; the layout missing fewer required fixtures wins (ties keep the new one). PF.noCandDepth turns both off. audit: fixture-missing */
+let OLDD=0;
+export function layoutRoom(G,typ,opt={}){const a=layoutRoom0(G,typ,opt);if((globalThis.__PF||{}).noCandDepth)return a;const key=tplKey(typ,/ [2468]$/.test(typ||''));
+ const miss=L=>reqFor(key,G.room.a).concat(opt.needWC&&/^Kúpeľ/.test(key)?[['wc']]:[]).filter(g=>!L.some(i=>g.includes(i.t))).length*2+(/^Kúpeľ/.test(key)&&!opt.hasWC&&G.room.a>=3&&!L.some(i=>i.t==='wc')?1:0);
+ const m0=miss(a);if(!m0)return a;OLDD=1;let b;try{b=layoutRoom0(G,typ,opt);}finally{OLDD=0;}return miss(b)<m0?b:a;}
+function layoutRoom0(G,typ,opt={}){const key=tplKey(typ,/ [2468]$/.test(typ||''));let T=TPL[key]||TPL['Izba'];const sty=opt.style||'rod';
  if(opt.dine)T=T.map(tp=>tp.includes('table')?tp:tp.slice(0,3).concat(['table','chair4'],tp.slice(3)));
  if(opt.noTable)T=T.map(tp=>tp.filter(e=>!/^table|^chair4$|^chair$/.test(e.replace(/[!~]/g,''))));
  T=T.map(tp=>{if(sty==='min'){let dk=0;return tp.filter(e=>e.endsWith('!')||!DECOR.has(e)||(dk++<1));}if(sty==='mod')return tp.filter(e=>e!=='toy'&&e!=='lamp');return tp;});
