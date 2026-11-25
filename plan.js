@@ -680,13 +680,36 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
  const ppm=sc.ppm,r=v=>Math.round(v/ppm*100)/100;
  // build walls: merge pairs with openings into one wall each
  const parent=S.map((s,i)=>i),find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
- /* v12h: two interior wall pieces are not one wall when the 'gap' between them is wider than any door and holds no window (a corridor crossing, e.g. two bedroom dividers on both sides of a hallway) */const Tm=Math.max(...S.map(q=>q.t)),noGC=(globalThis.__PF||{}).noGapCap,tj=(A,u)=>S.some(q=>q.hz!==A.hz&&Math.abs(q.c-u)<=q.t+A.t+2&&q.a<A.c-q.t&&q.b>A.c+q.t);let gcap=0;ops.forEach(p=>{if(p.j==null)return;if(!noGC&&!dbg.paper&&p.type!=='window'&&(p.hi-p.lo)>2.2*sc.ppm&&S[p.i].t<.75*Tm&&S[p.j].t<.75*Tm&&tj(S[p.i],p.lo)&&tj(S[p.i],p.hi)){p.type='wall';p.j=null;p.inside=1;gcap++;return;}parent[find(p.j)]=find(p.i);});dbg.gapCap=gcap;
+ /* v12h: two interior wall pieces are not one wall when the 'gap' between them is wider than any door and holds no window (a corridor crossing, e.g. two bedroom dividers on both sides of a hallway) */const Tm=Math.max(...S.map(q=>q.t)),noGC=(globalThis.__PF||{}).noGapCap,tj=(A,u)=>S.some(q=>q.hz!==A.hz&&Math.abs(q.c-u)<=q.t+A.t+2&&q.a<A.c-q.t&&q.b>A.c+q.t);/* v22j+ RULE (bump-out, PF.noBumpCut): an outer wall is not bridged across a gap whose two cross walls run on to a parallel wall beyond it - the room bumps out there
+   (bungalow 'IZBA 1' 12.0 m2 was cut to 8.6 by the outer line continued through it) */const bump=(A,lo,hi)=>{if((globalThis.__PF||{}).noBumpCut)return false;const cr=u=>S.filter(q=>q.hz!==A.hz&&Math.abs(q.c-u)<=q.t+A.t+2);
+  return S.some(P=>P!==A&&P.hz===A.hz&&Math.abs(P.c-A.c)>2*A.t&&Math.abs(P.c-A.c)<.6*(hi-lo)&&P.a<=lo+P.t+A.t+3&&P.b>=hi-P.t-A.t-3&&[lo,hi].every(u=>cr(u).some(q=>q.a<=Math.min(A.c,P.c)+q.t+2&&q.b>=Math.max(A.c,P.c)-q.t-2)));};
+ let gcap=0;ops.forEach(p=>{if(p.j==null)return;if(!noGC&&!dbg.paper&&p.type!=='window'&&(p.hi-p.lo)>2.2*sc.ppm&&((S[p.i].t<.75*Tm&&S[p.j].t<.75*Tm)||bump(S[p.i],p.lo,p.hi))&&tj(S[p.i],p.lo)&&tj(S[p.i],p.hi)){p.type='wall';p.j=null;p.inside=1;gcap++;if(!(S[p.i].t<.75*Tm&&S[p.j].t<.75*Tm))dbg.bumpCut=(dbg.bumpCut||0)+1;return;}parent[find(p.j)]=find(p.i);});dbg.gapCap=gcap;
  const groups={};S.forEach((s,i)=>{(groups[find(i)]=groups[find(i)]||[]).push(i);});
  const walls=[];
  for(const g of Object.values(groups)){const ss=g.map(i=>S[i]);let a=Math.min(...ss.map(s=>s.a)),b=Math.max(...ss.map(s=>s.b));ops.filter(p=>p.j==null&&!p.inside&&g.includes(p.i)).forEach(p=>{if(p.end==='b')b=Math.max(b,p.to);else a=Math.min(a,p.to);});const L=ss.reduce((q,s)=>q+s.b-s.a,0),cc=ss.reduce((q,s)=>q+s.c*(s.b-s.a),0)/L,t=ss.reduce((q,s)=>q+s.t*(s.b-s.a),0)/L;
   const th=Math.min(.6,Math.max(.08,Math.round(t/ppm*100)/100));
   const WL=r(b-a),op=ops.filter(p=>g.includes(p.i)&&p.type!=='wall').map(p=>{/* v12h: an opening never eats the whole wall */let off=r(p.lo-a),w=r(p.hi-p.lo);if(WL>1&&w>WL-.4){off=Math.max(off,.2);w=Math.max(.6,Math.round((WL-.2-off)*100)/100);}return p.type==='window'?{type:'window',offset:off,width:w,sill:w>2.1?0:.9,height:w>2.1?2.2:1.4}:{type:'door',offset:off,width:Math.min(w,1.6),height:2.05,...(p.ext?{out:1}:{})};});
   const s0=ss[0];walls.push(s0.hz?{start:[r(a),r(cc)],end:[r(b),r(cc)],thickness:th,op}:{start:[r(cc),r(a)],end:[r(cc),r(b)],thickness:th,op});}
+ /* v22k RULE (bump-out cut, PF.noBumpCut): a wall piece between two cross walls that both run on to a parallel wall beyond it, with almost no wall ink along the piece,
+    is a line continued through a room that bumps out (bungalow 'IZBA 1' 12.0 m2 cut to 8.6 by the outer line drawn on through it). The piece is removed, openings outside kept. */
+ if((globalThis.__PF||{}).dbgInk){const hz=w=>Math.abs(w.start[1]-w.end[1])<1e-6;dbg.wInk=walls.map(w=>{let n=0,on=0;const h=hz(w),c=h?w.start[1]:w.start[0],a=h?Math.min(w.start[0],w.end[0]):Math.min(w.start[1],w.end[1]),b=h?Math.max(w.start[0],w.end[0]):Math.max(w.start[1],w.end[1]);for(let u=a;u<=b;u+=.05){n++;const X=Math.round((h?u:c)*ppm),Y=Math.round((h?c:u)*ppm);if(X>=0&&Y>=0&&X<W&&Y<H&&ink[Y*W+X])on++;}return +(on/Math.max(1,n)).toFixed(2);});}
+ if(!(globalThis.__PF||{}).noBumpCut&&walls.length>=6){let nb=0;const hz=w=>Math.abs(w.start[1]-w.end[1])<1e-6,lo=w=>hz(w)?Math.min(w.start[0],w.end[0]):Math.min(w.start[1],w.end[1]),hi=w=>hz(w)?Math.max(w.start[0],w.end[0]):Math.max(w.start[1],w.end[1]),cc=w=>hz(w)?w.start[1]:w.start[0];
+  const inkAt=(x,y)=>{const X=Math.round(x*ppm),Y=Math.round(y*ppm);return X>=0&&Y>=0&&X<W&&Y<H&&ink[Y*W+X];};
+  const Tmx=Math.max(...walls.map(w=>w.thickness)),ax=walls.flatMap(w=>[w.start[0],w.end[0]]),az=walls.flatMap(w=>[w.start[1],w.end[1]]),mx=(Math.min(...ax)+Math.max(...ax))/2,mz=(Math.min(...az)+Math.max(...az))/2;
+  for(let k=0;k<walls.length;k++){const A=walls[k],h=hz(A),c=cc(A),a0=lo(A),b0=hi(A);if(A.thickness<.75*Tmx)continue;/* outer walls only */
+   const X=walls.filter(q=>q!==A&&hz(q)!==h&&cc(q)>a0+.3&&cc(q)<b0-.3&&lo(q)<=c+A.thickness&&hi(q)>=c-A.thickness).map(q=>({q,u:cc(q)}));if(X.length<2)continue;X.sort((m,n)=>m.u-n.u);
+   for(let i=0;i<X.length-1&&k!==-1;i++)for(let j=i+1;j<X.length;j++){const u1=X[i].u,u2=X[j].u;if(u2-u1<1.5)continue;
+    for(const side of[Math.sign(c-(h?mz:mx))||1]){/* the bump lies outside the house */const r1=side>0?hi(X[i].q)-c:c-lo(X[i].q),r2=side>0?hi(X[j].q)-c:c-lo(X[j].q),d=Math.min(r1,r2);if(d<.35||d>.6*(u2-u1))continue;
+     if(X.slice(i+1,j).some(m=>(side>0?hi(m.q)-c:c-lo(m.q))>A.thickness))continue;/* the bump interior is free of other cross walls */
+     const P=walls.filter(q=>q!==A&&hz(q)===h&&Math.abs(cc(q)-(c+side*d))<Math.max(.15,q.thickness)&&hi(q)>u1&&lo(q)<u2);const cov=P.reduce((s2,q)=>s2+Math.max(0,Math.min(hi(q),u2)-Math.max(lo(q),u1)),0)/(u2-u1);if(cov<.6)continue;
+     if((A.op||[]).some(o=>{const s0=a0+o.offset;return s0<u2&&s0+o.width>u1;}))continue;
+     let n=0,on=0;for(let u=u1+A.thickness;u<=u2-A.thickness;u+=.05){n++;let f=0;for(const v of[-.33,0,.33]){const vv=c+v*A.thickness/2;if(h?inkAt(u,vv):inkAt(vv,u))f++;}if(f>=2)on++;}
+     if(!n||on/n>=((globalThis.__PF||{}).bumpInk??.35))continue;
+     const mk2=(p0,p1)=>h?{start:[p0,c],end:[p1,c]}:{start:[c,p0],end:[c,p1]};const L=u1-a0;
+     const w1={...mk2(a0,u1),thickness:A.thickness,op:(A.op||[]).filter(o=>a0+o.offset+o.width<=u1+.01)},w2={...mk2(u2,b0),thickness:A.thickness,op:(A.op||[]).filter(o=>a0+o.offset>=u2-.01).map(o=>({...o,offset:Math.round((o.offset-(u2-a0))*100)/100}))};
+     walls.splice(k,1,...[w1,w2].filter(w=>hi(w)-lo(w)>.2));nb++;dbg.bumpCut=(dbg.bumpCut||[]).concat([[+c.toFixed(2),+u1.toFixed(2),+u2.toFixed(2),+(on/n).toFixed(2)]]);k=-1;break;}
+    if(k===-1)break;}
+   if(nb>6)break;}}
  // confidence: closed outline + reasonable count + interior walls
  const cov=sideCoverage(S,bb);const conf=Math.min(1,(cov.n/4)*.6+(S.length>=6?.25:S.length/24)+(ops.length?.15:0));
  dbg.cov=cov;dbg.ops=ops.length;dbg.scale=sc.src;dbg.ppm=+ppm.toFixed(2);
