@@ -116,6 +116,12 @@ class USDZExporter {
 
 		}
 
+		if ( options.ar.anchoring.type === 'image' && options.ar.imageAnchoring && options.ar.imageAnchoring.bytes ) {
+
+			files[ options.ar.imageAnchoring.file ] = options.ar.imageAnchoring.bytes;
+
+		}
+
 		// 64 byte alignment
 		// https://github.com/101arrowz/fflate/issues/39#issuecomment-777263109
 
@@ -207,17 +213,32 @@ function buildHeader() {
 
 function buildSceneStart( options ) {
 
-	const alignment = options.includeAnchoringProperties === true ? `
-		token preliminary:anchoring:type = "${options.ar.anchoring.type}"
-		token preliminary:planeAnchoring:alignment = "${options.ar.planeAnchoring.alignment}"
-	` : '';
+	// Vkroč fork: Preliminary_AnchoringAPI applied to the scene prim; anchoring type 'plane' (upstream) or 'image'
+	// (options.ar.imageAnchoring = { file: 'marker/x.png', physicalWidth: <centimetres> }), see Apple "Placing a prim in the real world".
+	const on = options.includeAnchoringProperties === true;
+	const img = on && options.ar.anchoring.type === 'image' && options.ar.imageAnchoring;
+	const api = on ? `
+			prepend apiSchemas = [ "Preliminary_AnchoringAPI" ]` : '';
+	const alignment = ! on ? '' : img ? `
+			uniform token preliminary:anchoring:type = "image"
+			rel preliminary:imageAnchoring:referenceImage = </Root/Scenes/Scene/AnchoringReferenceImage>
+
+			def Preliminary_ReferenceImage "AnchoringReferenceImage"
+			{
+				uniform asset image = @${ img.file }@
+				uniform double physicalWidth = ${ img.physicalWidth }
+			}
+` : `
+			uniform token preliminary:anchoring:type = "${options.ar.anchoring.type}"
+			uniform token preliminary:planeAnchoring:alignment = "${options.ar.planeAnchoring.alignment}"
+	`;
 	return `def Xform "Root"
 {
 	def Scope "Scenes" (
 		kind = "sceneLibrary"
 	)
 	{
-		def Xform "Scene" (
+		def Xform "Scene" (${api}
 			customData = {
 				bool preliminary_collidesWithEnvironment = 0
 				string sceneName = "Scene"

@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 const Q=new URLSearchParams(location.search);
 const $=id=>document.getElementById(id);
-export const AR_V='20261125a';
+export const AR_V='20261125b';
+const LOD_T=+(Q.get('arlodt')||1500),LOD_C=+(Q.get('arlodc')||0.02); // usdz: dense glTF decor (> LOD_T triangles) simplified by 2 cm vertex clustering (?arlod=0 = off)
 const SKIP=['lawn','drive','site','outdoor','sky','wx','helper'];           // real ground / surroundings: the real world replaces them
 const TOP=['roof','lroof','ceil','gutter','hopper','dpipe','flash','cope','cap']; // toggled by "Strecha" (dollhouse view in AR)
 const MARGIN=+(Q.get('armargin')||1.2),YARD=5,YARD_TAGS=['terrace','terrE','terrF','terrS','terrL','pergola','kit','planter','balc','tf'];
@@ -49,6 +50,14 @@ function piece(g,mw,start,count){let s=g;
  if(mw.determinant()<0){const I=out.index.array;for(let i=0;i<I.length;i+=3){const t=I[i+1];I[i+1]=I[i+2];I[i+2]=t;}}
  return out;}
 
+/* Vertex clustering: snap vertices to a c-metre grid, keep the first vertex of each cell, drop collapsed triangles. O(n), keeps the silhouette. */
+function cluster(g,c){const P=g.attributes.position,I=g.index.array,map=new Map(),rep=new Int32Array(P.count),keep=[];
+ for(let i=0;i<P.count;i++){const k=Math.floor(P.getX(i)/c)+','+Math.floor(P.getY(i)/c)+','+Math.floor(P.getZ(i)/c);let r=map.get(k);if(r==null){r=keep.length;map.set(k,r);keep.push(i);}rep[i]=r;}
+ const ix=[];for(let i=0;i<I.length;i+=3){const a=rep[I[i]],b=rep[I[i+1]],d=rep[I[i+2]];if(a!==b&&b!==d&&a!==d)ix.push(a,b,d);}
+ if(ix.length/3>I.length/3*.92)return g; // nothing gained
+ const out=new THREE.BufferGeometry();for(const n of ['position','normal','uv']){const A=g.attributes[n];if(!A)continue;const it=A.itemSize,arr=new Float32Array(keep.length*it);keep.forEach((v,j)=>{for(let q=0;q<it;q++)arr[j*it+q]=A.array[v*it+q];});out.setAttribute(n,new THREE.BufferAttribute(arr,it));}
+ out.setIndex(ix);return out;}
+
 /* Build the AR model from the studio world. Returns a Group whose origin is the middle of the street-side facade edge at ground level,
    the house extending to +z; front = the street side (-z in the studio after streetTurn). */
 export function buildModel(world,{merge=!Q.has('arraw'),usdz=false,top=true,side=0}={}){
@@ -77,7 +86,7 @@ export function buildModel(world,{merge=!Q.has('arraw'),usdz=false,top=true,side
   const wallish=!!tagUp(o,['wallCut'],W),isPH=!!tagUp(o,['ph'],W); // ph = closed glTF furniture: no back faces needed
   const inst=o.isInstancedMesh?o.count:0,mi=new THREE.Matrix4(),mw=new THREE.Matrix4();
   for(let k=0;k<(inst||1);k++){if(inst){o.getMatrixAt(k,mi);mw.multiplyMatrices(o.matrixWorld,mi);}else mw.copy(o.matrixWorld);
-   for(const[m,st,ct]of parts){if(!m||m.visible===false)continue;const p=piece(g,mw,st,ct);if(!p)continue;
+   for(const[m,st,ct]of parts){if(!m||m.visible===false)continue;let p=piece(g,mw,st,ct);if(!p)continue;if(usdz&&isPH&&Q.get('arlod')!=='0'&&p.index.count/3>LOD_T){const n0=p.index.count/3;p=cluster(p,n0>8000?LOD_C*2:LOD_C);stat.lodCut=(stat.lodCut||0)+n0-p.index.count/3;}
     const am=arMat(m,cache,stat,usdz);const key=am.uuid+'|'+(isTop?1:0);if(!buckets.has(key))buckets.set(key,{m:am,top:isTop,g:[]});const bk=buckets.get(key);bk.g.push(p);stat.tris+=p.index.count/3;
     if(am.userData.dbl&&!isPH){const r=p.clone(),I=r.index.array;for(let i=0;i<I.length;i+=3){const t=I[i+1];I[i+1]=I[i+2];I[i+2]=t;}const n=r.attributes.normal;for(let i=0;i<n.array.length;i++)n.array[i]=-n.array[i];bk.g.push(r);stat.tris+=r.index.count/3;}}}});
  if(shell.isEmpty()){W.traverse(o=>{if(o.isMesh&&!tagUp(o,SKIP,W))shell.expandByObject(o);});ground=shell.min.y;}
@@ -89,14 +98,34 @@ export function buildModel(world,{merge=!Q.has('arraw'),usdz=false,top=true,side
  W.clear();
  stat.ms=Math.round(performance.now()-t0);stat.tex=stat.tex.size;stat.mats=cache.size;
  G.userData.front=front;G.userData.stat=stat;return G;}
+/* 1 m check rods (10 cm orange/white stripes) standing on the 4 corners of the ground-storey wall box: a size check you can hold a tape against. */
+export function addRods(G){const F=G.userData.front,ow=[],wh=[],t=.04;
+ for(const[x,z]of[[F.width/2,0],[-F.width/2,0],[F.width/2,F.depth],[-F.width/2,F.depth]])for(let k=0;k<10;k++){const b=new THREE.BoxGeometry(t,.1,t).translate(x+(x>0?t/2:-t/2),.05+k*.1,z+(z>0?t/2:-t/2));(k%2?wh:ow).push(b);}
+ // 1 m bar on the ground along the front edge from the left corner
+ for(let k=0;k<10;k++){const b=new THREE.BoxGeometry(.1,.02,t).translate(F.width/2-.05-k*.1,.01,-t/2);(k%2?wh:ow).push(b);}
+ const R=new THREE.Group();R.name='rods';R.add(new THREE.Mesh(mergeGeometries(ow),new THREE.MeshStandardMaterial({color:0xE2552D,roughness:.6})),new THREE.Mesh(mergeGeometries(wh),new THREE.MeshStandardMaterial({color:0xffffff,roughness:.6})));G.add(R);return R;}
 export function setTop(G,on){G.traverse(o=>{if(o.userData&&o.userData.top!==undefined&&o.isMesh)o.visible=on;});}
 
 /* ---------- iPhone: USDZ + system AR viewer ---------- */
-export async function toUSDZ(G,{maxTex=+(Q.get('artex')||512)}={}){
+/* anchor = null (plane: the viewer drops it on the floor, facade towards you) or {mode:'post'|'ground',h,along,front}: the printed sign
+   (assets/ar/marker_*.png, 18 cm wide) stands at the front-left corner, face to the street; along = metres from the corner towards the right corner,
+   front = metres in front of the facade (street side), h = height of the sign centre above ground (post only).
+   Image anchor axes (ARKit): X = right edge of the image, Y = normal out of the printed face, Z = towards the image bottom. */
+export const MARKER={png:'assets/ar/marker_ref_'+AR_V+'.png',cm:18};
+export function anchorMatrix(F,a){const sx=F.width/2-(+a.along||0),sz=-(+a.front||0),sy=a.mode==='ground'?0:(a.h==null?1:+a.h),M=new THREE.Matrix4();
+ if(a.mode==='ground')M.set(-1,0,0,sx, 0,1,0,-sy, 0,0,-1,sz, 0,0,0,1);   // sign flat on the ground, top edge towards the house
+ else M.set(-1,0,0,sx, 0,0,-1,sz, 0,-1,0,sy, 0,0,0,1);                   // upright sign facing the street
+ return M;}
+export async function toUSDZ(G,{maxTex=+(Q.get('artex')||512),anchor=null}={}){
  const {USDZExporter}=await import('./ar-usdz.js?v='+AR_V);
- const S=new THREE.Scene(),R=new THREE.Group();R.rotation.y=Math.PI;R.add(G);S.add(R);  // facade faces the viewer when the AR viewer drops it in front
+ const S=new THREE.Scene(),R=new THREE.Group();R.add(G);S.add(R);
+ let ar={anchoring:{type:'plane'},planeAnchoring:{alignment:'horizontal'}};
+ if(anchor){R.matrixAutoUpdate=false;R.matrix.copy(anchorMatrix(G.userData.front,anchor));
+  const bytes=new Uint8Array(await (await fetch(MARKER.png)).arrayBuffer());
+  ar={anchoring:{type:'image'},imageAnchoring:{file:'marker/vkroc_marker.png',physicalWidth:MARKER.cm,bytes}};}
+ else R.rotation.y=Math.PI;  // facade faces the viewer when the AR viewer drops it in front
  S.updateMatrixWorld(true);
- const buf=await new USDZExporter().parseAsync(S,{quickLookCompatible:true,maxTextureSize:maxTex,jpeg:Q.get('arjpeg')!=='0',ar:{anchoring:{type:'plane'},planeAnchoring:{alignment:'horizontal'}}});
+ const buf=await new USDZExporter().parseAsync(S,{quickLookCompatible:true,maxTextureSize:maxTex,jpeg:Q.get('arjpeg')!=='0',ar});
  R.remove(G);return new Blob([buf],{type:'model/vnd.usdz+zip'});}
 
 /* ---------- Android: WebXR immersive-ar ---------- */
@@ -110,6 +139,7 @@ const CSS=`#arov{position:fixed;inset:0;z-index:90;pointer-events:none;font:500 
 #ardlg .c{background:#fff;color:#0b0b0b;border-radius:16px;padding:18px;width:min(420px,92vw);box-shadow:0 10px 40px #0004}
 #ardlg h3{margin:0 0 8px;font:800 18px Archivo,Inter,sans-serif}#ardlg p{margin:6px 0;color:#3a3a3a}#ardlg ol{margin:6px 0;padding-left:20px;color:#3a3a3a}
 #ardlg .r{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}#ardlg button,#ardlg a.b{height:44px;padding:0 16px;border-radius:11px;border:1px solid #E3DFD8;background:#fff;font:600 14px inherit;display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#0b0b0b;cursor:pointer}
+#ardlg .ck{display:flex;gap:8px;align-items:center;margin:6px 0}#ardlg .ck input{width:18px;height:18px;accent-color:#E2552D;flex:none}#ardlg .ln{display:flex;gap:8px;align-items:center;margin:6px 0}#ardlg .ln select,#ardlg .ln input{flex:1;min-width:0;height:36px;border-radius:9px;border:1px solid #E3DFD8;padding:0 8px;font:inherit}#ardlg .ln input{max-width:90px}#ardlg .an{background:#F3F1ED;border-radius:12px;padding:6px 10px;margin:4px 0}#ardlg .an button{height:36px;margin:4px 0}#ardlg a{color:#E2552D}#ardlg .c{max-height:92vh;overflow:auto}
 #ardlg .go,#ardlg a.b{background:#E2552D;border-color:#E2552D;color:#fff}#ardlg a.b img{width:26px;height:26px}#ardlg small{color:#6b6b6b}`;
 function css(){if($('arcss'))return;const s=document.createElement('style');s.id='arcss';s.textContent=CSS;document.head.appendChild(s);}
 const fm=v=>(Math.round(v*100)/100).toFixed(2).replace('.',',')+' m';
@@ -176,21 +206,37 @@ async function onAR(){if(busy)return;const V=window.__vk&&window.__vk.m,world=V&
  try{
   if(md==='webxr'){const D=dlg('<h3>Dom v skutočnej veľkosti</h3><ol><li>Postavte sa na rovnú zem pred miesto, kde bude dom (strana k ulici).</li><li>Ťuknite na <b>ľavý</b> a potom na <b>pravý</b> predný roh domu na zemi.</li><li>Dom sa postaví v mierke 1:1, môžete ho obísť aj vojsť dnu.</li></ol>'+'<label style="display:flex;gap:8px;align-items:center;margin:8px 0">Predná strana <select id="arside" style="flex:1;height:38px;border-radius:10px;border:1px solid #E3DFD8;padding:0 8px"><option value="0">k ulici (štandard)</option><option value="1">ľavý bok (pri pohľade z ulice)</option><option value="2">zadná strana</option><option value="3">pravý bok (pri pohľade z ulice)</option></select></label>'+'<small>Ak plán nemá zadanú ulicu, predná strana je horná strana pôdorysu. Kamera sa používa len vo vašom telefóne, nič sa neodosiela.</small><div class="r"><button data-x>Zrušiť</button><button class="go" data-go>Spustiť AR</button></div>');
    D.d.querySelector('[data-x]').onclick=()=>{D.close();busy=false;};
-   D.d.querySelector('[data-go]').onclick=async()=>{const side=+D.d.querySelector('#arside').value;D.close();try{const G=buildModel(world,{side});console.info('[ar] model',JSON.stringify(G.userData.stat),JSON.stringify(G.userData.front));await startXR(G,{onEnd:()=>{busy=false;}});}catch(e){busy=false;console.warn('[ar]',e);toast('AR sa nepodarilo spustiť: '+(e&&e.message||e),'err');}};
+   D.d.querySelector('[data-go]').onclick=async()=>{const side=+D.d.querySelector('#arside').value;D.close();try{const G=buildModel(world,{side});if(Q.get('arrods')!=='0')addRods(G);console.info('[ar] model',JSON.stringify(G.userData.stat),JSON.stringify(G.userData.front));await startXR(G,{onEnd:()=>{busy=false;}});}catch(e){busy=false;console.warn('[ar]',e);toast('AR sa nepodarilo spustiť: '+(e&&e.message||e),'err');}};
    return;}
   // iPhone / iPad
   const D=dlg('<h3>Dom v skutočnej veľkosti</h3><p id="arst">Pripravujem model…</p><div class="r"><button data-x>Zavrieť</button></div>');
   let url=null;const done=()=>{D.close();busy=false;if(url){const u=url;setTimeout(()=>URL.revokeObjectURL(u),60000);}};
   D.d.querySelector('[data-x]').onclick=done;
-  let side=0;const make=async top=>{const t0=performance.now();const c=D.d.querySelector('.c');if(url){URL.revokeObjectURL(url);url=null;}
+  const O={top:!(V.isDoll&&V.isDoll()),side:0,rods:Q.get('arrods')!=='0',anc:false,mode:'post',h:1,along:0,front:0};
+  const SEL='<label class="ln">Predná strana <select id="arside"><option value="0">k ulici (štandard)</option><option value="1">ľavý bok (pri pohľade z ulice)</option><option value="2">zadná strana</option><option value="3">pravý bok (pri pohľade z ulice)</option></select></label>';
+  const num=(id,lab,v)=>'<label class="ln">'+lab+' <input id="'+id+'" type="number" step="0.05" inputmode="decimal" value="'+v+'"> m</label>';
+  const make=async()=>{const t0=performance.now();const c=D.d.querySelector('.c');if(url){URL.revokeObjectURL(url);url=null;}
    c.innerHTML='<h3>Dom v skutočnej veľkosti</h3><p>Pripravujem model…</p>';await new Promise(r=>setTimeout(r,30));
-   const G=buildModel(world,{usdz:true,top,side});const blob=await toUSDZ(G);url=URL.createObjectURL(blob);const mb=(blob.size/1048576).toFixed(1).replace('.',',');
-   window.__vkARusdz={ms:Math.round(performance.now()-t0),size:blob.size,stat:G.userData.stat,front:G.userData.front,url,top};console.info('[ar] usdz',blob.size,JSON.stringify(G.userData.stat));
-   c.innerHTML='<h3>Dom v skutočnej veľkosti</h3><ol><li>Postavte sa na rovnú zem pred miesto, kde bude dom.</li><li>Ťuknite na <b>Otvoriť v AR</b>. Dom sa položí na zem pred vami, <b>fasádou k vám</b>, v mierke 1:1.</li><li>Jedným prstom ho posuniete tak, aby predná hrana sedela s rohmi domu na zemi, dvoma prstami ho otočíte. Potom ho obíďte alebo vojdite dnu.</li></ol><label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="artop" '+(top?'checked':'')+' style="width:18px;height:18px;accent-color:#E2552D">So strechou</label>'+'<label style="display:flex;gap:8px;align-items:center;margin:8px 0">Predná strana <select id="arside" style="flex:1;height:38px;border-radius:10px;border:1px solid #E3DFD8;padding:0 8px"><option value="0">k ulici (štandard)</option><option value="1">ľavý bok (pri pohľade z ulice)</option><option value="2">zadná strana</option><option value="3">pravý bok (pri pohľade z ulice)</option></select></label>'+'<small>Šírka domu '+fm(G.userData.front.width)+', hĺbka '+fm(G.userData.front.depth)+'. Model sa vytvoril priamo v telefóne ('+mb+' MB), nič sa neodosiela.</small><div class="r"><button data-x>Zavrieť</button><a class="b" rel="ar" id="arql" href="'+url+'#allowsContentScaling=0"><img alt="" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22%3E%3Cpath d=%22M12 2l9 5v10l-9 5-9-5V7z%22/%3E%3Cpath d=%22M12 12l9-5M12 12v10M12 12L3 7%22/%3E%3C/svg%3E">Otvoriť v AR</a></div>';
+   const G=buildModel(world,{usdz:true,top:O.top,side:O.side});if(O.rods)addRods(G);
+   const anchor=O.anc?{mode:O.mode,h:O.h,along:O.along,front:O.front}:null;
+   const blob=await toUSDZ(G,{anchor});url=URL.createObjectURL(blob);const mb=(blob.size/1048576).toFixed(1).replace('.',',');const F=G.userData.front;
+   window.__vkARusdz={ms:Math.round(performance.now()-t0),size:blob.size,stat:G.userData.stat,front:F,url,opts:{...O},anchor:anchor&&anchorMatrix(F,anchor).toArray()};console.info('[ar] usdz',blob.size,JSON.stringify(G.userData.stat));
+   const steps=O.anc?'<ol><li>Vytlačte <a href="ar-preview/tabula_a4_'+AR_V+'.pdf" target="_blank">tabuľu (A4, PDF)</a> v mierke 100 % a nalepte ju na tvrdú dosku.</li><li>'+(O.mode==='post'?'Postavte ju zvislo na <b>ľavý predný roh</b> domu (pri pohľade z ulice), lícom k ulici, stred obrázka '+fm(O.h)+' nad terénom.':'Položte ju na zem na <b>ľavý predný roh</b> domu, hornou hranou k domu.')+'</li><li>Ťuknite na <b>Otvoriť v AR</b> a namierte telefón na tabuľu z 1–2 m. Keď ju telefón rozpozná, dom sa postaví sám na svoje miesto.</li></ol>'
+    :'<ol><li>Postavte sa na rovnú zem pred miesto, kde bude dom.</li><li>Ťuknite na <b>Otvoriť v AR</b>. Dom sa položí na zem pred vami, <b>fasádou k vám</b>, v mierke 1:1.</li><li>Jedným prstom ho posuniete tak, aby predná hrana sedela s rohmi domu na zemi, dvoma prstami ho otočíte. Potom ho obíďte alebo vojdite dnu.</li></ol>';
+   c.innerHTML='<h3>Dom v skutočnej veľkosti</h3>'+steps+
+    '<label class="ck"><input type="checkbox" id="artop" '+(O.top?'checked':'')+'>So strechou</label>'+
+    '<label class="ck"><input type="checkbox" id="arrods" '+(O.rods?'checked':'')+'>Kontrolné tyče 1 m na rohoch (na overenie veľkosti)</label>'+
+    '<label class="ck"><input type="checkbox" id="aranc" '+(O.anc?'checked':'')+'>Ukotviť na tabuľu (presné umiestnenie na pozemku)</label>'+
+    (O.anc?'<div class="an"><label class="ln">Tabuľa <select id="armode"><option value="post">zvislo na kolíku, lícom k ulici</option><option value="ground">na zemi, hornou hranou k domu</option></select></label>'+(O.mode==='post'?num('arh','Výška stredu tabule',O.h):'')+num('aralong','Posun od rohu pozdĺž fasády',O.along)+num('arfront','Posun pred fasádu (k ulici)',O.front)+'<button id="arapply">Použiť</button></div>':'')+
+    SEL+'<small>Šírka domu '+fm(F.width)+', hĺbka '+fm(F.depth)+'. Model sa vytvoril priamo v telefóne ('+mb+' MB), nič sa neodosiela.</small><div class="r"><button data-x>Zavrieť</button><a class="b" rel="ar" id="arql" href="'+url+'#allowsContentScaling=0"><img alt="" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22%3E%3Cpath d=%22M12 2l9 5v10l-9 5-9-5V7z%22/%3E%3Cpath d=%22M12 12l9-5M12 12v10M12 12L3 7%22/%3E%3C/svg%3E">Otvoriť v AR</a></div>';
    if(!quickLook()){const a=c.querySelector('#arql');a.removeAttribute('rel');a.setAttribute('download',(document.title||'dom').replace(/\W+/g,'_')+'.usdz');a.lastChild.textContent='Stiahnuť model (USDZ)';}
-   c.querySelector('[data-x]').onclick=done;c.querySelector('#artop').onchange=e=>make(e.target.checked).catch(fail);const sl=c.querySelector('#arside');sl.value=side;sl.onchange=e=>{side=+e.target.value;make(c.querySelector('#artop').checked).catch(fail);};};
+   c.querySelector('[data-x]').onclick=done;
+   const re=()=>make().catch(fail),q=k=>c.querySelector(k),rd=k=>{const e=q(k);if(!e)return null;const v=parseFloat(String(e.value).replace(',','.'));return isFinite(v)?Math.max(-50,Math.min(50,v)):0;};
+   q('#artop').onchange=e=>{O.top=e.target.checked;re();};q('#arrods').onchange=e=>{O.rods=e.target.checked;re();};q('#aranc').onchange=e=>{O.anc=e.target.checked;re();};
+   const sl=q('#arside');sl.value=O.side;sl.onchange=e=>{O.side=+e.target.value;re();};
+   if(O.anc){q('#armode').value=O.mode;q('#armode').onchange=e=>{O.mode=e.target.value;re();};q('#arapply').onclick=()=>{const h=rd('#arh');if(h!=null)O.h=Math.max(0,h);O.along=rd('#aralong');O.front=rd('#arfront');re();};}};
   const fail=e=>{busy=false;console.warn('[ar]',e);toast('AR model sa nepodarilo pripraviť.','err');const d=$('ardlg');if(d)d.remove();};
-  await make(!(V.isDoll&&V.isDoll()));
+  await make();
  }catch(e){busy=false;console.warn('[ar]',e);toast('AR model sa nepodarilo pripraviť.','err');const d=$('ardlg');if(d)d.remove();}
 }
 export function mount(){if(Q.get('ar')==='0'||$('mAR'))return;const modes=$('modes');if(!modes){setTimeout(mount,400);return;}
