@@ -1,4 +1,4 @@
-import {LTJ} from './ltpl.js?v=20261112i';import {DTJ} from './dtpl.js?v=20261121c';
+import {LTJ} from './ltpl.js?v=20261112i';import {DTJ} from './dtpl.js?v=20261121c';import {WTJ} from './wtpl.js?v=20261122i';
 import {tableAreas,labelAreas,barLadder} from './ocr.js?v=20261122f';
 import {segPlan} from './seg.js?v=20261118b';
 // plan.js — robust floor-plan reader (plain JS, no deps). prem8.
@@ -7,12 +7,33 @@ import {segPlan} from './seg.js?v=20261118b';
 //        thick-stroke (wall) mask -> axis segments -> junction snapping -> openings (door/window) -> scale -> metres.
 const MAXD=1400;
 function mk(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
-function imgCanvas(img,M,cap){const S=Math.min(cap||2.5,M/Math.max(img.width,img.height)),c=mk(Math.max(1,Math.round(img.width*S)),Math.max(1,Math.round(img.height*S)));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;}
+/* v22i: device-independent resampling. Browser drawImage scaling differs per engine (WebKit vs Chromium smoothing), so an iPhone read
+   different pixels than a desktop for the same file (adam_bung140: 5 rooms 22.5 m2 on Safari vs 13 rooms on Chrome). Scaled draws in the
+   reading path go through this JS resampler (bilinear like desktop Chromium for scale >=0.5; strong downscales stay on the browser) so every device gets identical pixels. PF.noJsResample = old. */
+function rsAx(S,n0,n1,st,cnt,ost,ch){/* resample along one axis: S Float32 lines */const O=new Float32Array(cnt*n1*ch);const sc=n0/n1;
+ if(n1*2>=n0){for(let i=0;i<n1;i++){let f=(i+.5)*sc-.5;if(f<0)f=0;if(f>n0-1)f=n0-1;const a=Math.floor(f),b=Math.min(n0-1,a+1),Q=(globalThis.__PF||{}).rsQ,t=Q?Math.round((f-a)*Q)/Q:f-a;for(let l=0;l<cnt;l++){const ia=(l*n0+a)*ch,ib=(l*n0+b)*ch,io=(l*n1+i)*ch;for(let k=0;k<ch;k++)O[io+k]=S[ia+k]*(1-t)+S[ib+k]*t;}}}
+ else{for(let i=0;i<n1;i++){const x0=i*sc,x1=(i+1)*sc;for(let l=0;l<cnt;l++){const io=(l*n1+i)*ch;for(let k=0;k<ch;k++){let s=0;for(let j=Math.floor(x0);j<Math.min(n0,Math.ceil(x1));j++){const w=Math.min(x1,j+1)-Math.max(x0,j);s+=S[(l*n0+j)*ch+k]*w;}O[io+k]=s/sc;}}}}
+ return O;}
+/* desktop/Android Chromium keeps its own drawImage (reference engine, bench of record); WebKit (all iOS browsers), Gecko etc. use the Chromium-like JS path. PF.jsResample forces it everywhere */
+const RS_JS=()=>{try{return !!(globalThis.__PF||{}).jsResample||!/Chrome\/\d/.test(navigator.userAgent)||/CriOS|EdgiOS|FxiOS/.test(navigator.userAgent);}catch(e){return false;}};
+function rsDraw(x,src,sx,sy,sw,sh,dx,dy,dw,dh){dw=Math.round(dw);dh=Math.round(dh);const IW=src.naturalWidth||src.width,IH=src.naturalHeight||src.height;
+ if(!RS_JS()||(globalThis.__PF||{}).noJsResample||(sw===dw&&sh===dh&&sx===Math.round(sx)&&sy===Math.round(sy))||sw<=0||sh<=0||dw<1||dh<1||dw*2<sw||dh*2<sh){/* strong downscale (<0.5): browser mipmaps kept (not reproducible exactly) */x.drawImage(src,sx,sy,sw,sh,dx,dy,dw,dh);return;}
+ /* bilinear on full-image coordinates (fractional source rect, neighbours outside the rect used, clamp at image edge) = desktop Chromium */
+ const X0=Math.max(0,Math.floor(sx)-1),Y0=Math.max(0,Math.floor(sy)-1),X1=Math.min(IW,Math.ceil(sx+sw)+1),Y1=Math.min(IH,Math.ceil(sy+sh)+1),RW=X1-X0,RH=Y1-Y0;
+ const t=mk(RW,RH),tx=t.getContext('2d',{willReadFrequently:true});tx.fillStyle='#fff';tx.fillRect(0,0,RW,RH);tx.drawImage(src,X0,Y0,RW,RH,0,0,RW,RH);const D=tx.getImageData(0,0,RW,RH).data;
+ const P=globalThis.__PF||{},R0=P.rsBias??-.49,o=x.createImageData(dw,dh),od=o.data,kx=sw/dw,ky=sh/dh;
+ const XA=new Int32Array(dw),XB=new Int32Array(dw),XT=new Float32Array(dw);for(let i=0;i<dw;i++){let f=sx+(i+.5)*kx-.5;f=Math.max(0,Math.min(IW-1,f));const a=Math.floor(f);XA[i]=Math.max(0,Math.min(RW-1,a-X0));XB[i]=Math.max(0,Math.min(RW-1,Math.min(IW-1,a+1)-X0));XT[i]=f-a;}
+ for(let j=0;j<dh;j++){let f=sy+(j+.5)*ky-.5;f=Math.max(0,Math.min(IH-1,f));const a=Math.floor(f),ya=Math.max(0,Math.min(RH-1,a-Y0)),yb=Math.max(0,Math.min(RH-1,Math.min(IH-1,a+1)-Y0)),ty=f-a;
+  for(let i=0;i<dw;i++){const tx2=XT[i],p00=(ya*RW+XA[i])*4,p01=(ya*RW+XB[i])*4,p10=(yb*RW+XA[i])*4,p11=(yb*RW+XB[i])*4,q=(j*dw+i)*4;
+   for(let k=0;k<3;k++)od[q+k]=(D[p00+k]*(1-tx2)+D[p01+k]*tx2)*(1-ty)+(D[p10+k]*(1-tx2)+D[p11+k]*tx2)*ty+R0;od[q+3]=255;}}
+ x.putImageData(o,Math.round(dx),Math.round(dy));}
+const srcW=s=>s.naturalWidth||s.width,srcH=s=>s.naturalHeight||s.height;
+function imgCanvas(img,M,cap){const S=Math.min(cap||2.5,M/Math.max(img.width,img.height)),c=mk(Math.max(1,Math.round(img.width*S)),Math.max(1,Math.round(img.height*S)));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);rsDraw(x,img,0,0,srcW(img),srcH(img),0,0,c.width,c.height);return c;}
 function grayOf(c){const W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,g=new Float32Array(W*H);for(let i=0;i<W*H;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;return g;}
 function otsuF(g,step=1){const h=new Float64Array(256);let n=0;for(let i=0;i<g.length;i+=step){h[Math.max(0,Math.min(255,g[i]|0))]++;n++;}let s=0,sB=0,wB=0,b=0,t=128;for(let i=0;i<256;i++)s+=i*h[i];for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=n-wB;if(!wF)break;sB+=i*h[i];const v=wB*wF*(sB/wB-(s-sB)/wF)**2;if(v>b){b=v;t=i;}}return t;}
 // ---------- paper detection + perspective ----------
 function findPaper(c){const s=Math.min(1,360/Math.max(c.width,c.height)),w=Math.max(8,Math.round(c.width*s)),h=Math.max(8,Math.round(c.height*s)),sc=mk(w,h);{// stepwise halving = antialiased downscale (one big drawImage step aliases text into fake edges)
-  let cur=c;while(cur.width>2.2*w){const t=mk(Math.round(cur.width/2),Math.round(cur.height/2));const x=t.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(cur,0,0,t.width,t.height);cur=t;}const x=sc.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(cur,0,0,w,h);}
+  let cur=c;while(cur.width>2.2*w){const t=mk(Math.round(cur.width/2),Math.round(cur.height/2));const x=t.getContext('2d');x.imageSmoothingQuality='high';rsDraw(x,cur,0,0,cur.width,cur.height,0,0,t.width,t.height);cur=t;}const x=sc.getContext('2d');x.imageSmoothingQuality='high';rsDraw(x,cur,0,0,cur.width,cur.height,0,0,w,h);}
  const g=grayOf(sc);// blur 3x3 twice to drop drawing lines
  const t=otsuF(g);const m=new Uint8Array(w*h);for(let i=0;i<w*h;i++)m[i]=g[i]>t?1:0;
  // close lines inside the paper: dilate bright by 2
@@ -332,14 +353,14 @@ function cropChrome(img){const W0=img.width,H0=img.height;if(W0<80||H0<80)return
  if(y0<12&&H0-y1<12&&x0<12&&W0-x1<12)return null;
  if((y1-y0)<.55*H0||(x1-x0)<.55*W0)return null;
  const pad=4;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(W0,x1+pad);y1=Math.min(H0,y1+pad);
- const o=mk(x1-x0,y1-y0);o.getContext('2d').drawImage(img,x0,y0,x1-x0,y1-y0,0,0,o.width,o.height);
+ const o=mk(x1-x0,y1-y0);rsDraw(o.getContext('2d'),img,x0,y0,x1-x0,y1-y0,0,0,o.width,o.height);
  cropChrome.info={box:[x0,y0,x1,y1]};return o;}
 /* White PDF page sitting in a dark letterbox (phone screenshot). Tight crop so the page fills the working canvas. Rejects photos (textured surround) and already-full pages. */
 /* v18: light-mode PDF viewers (iOS Files/Books: #F2F2F7 around a white page) - retry with a threshold between the frame grey and white */
 function cropPage(img){const A=cropPage0(img,0);if(A||(globalThis.__PF||{}).noLight)return A;try{return cropPage0(img,1);}catch(e){return null;}}
 function cropPage0(img,lt){const W0=img.width,H0=img.height;if(W0<80||H0<80)return null;
  const s=Math.min(1,800/Math.max(W0,H0)),W=Math.max(8,Math.round(W0*s)),H=Math.max(8,Math.round(H0*s));
- const c=mk(W,H),x=c.getContext('2d');x.drawImage(img,0,0,W,H);const d=x.getImageData(0,0,W,H).data,m=new Uint8Array(W*H);let thr=210,bgM=0;
+ const c=mk(W,H),x=c.getContext('2d');rsDraw(x,img,0,0,srcW(img),srcH(img),0,0,W,H);const d=x.getImageData(0,0,W,H).data,m=new Uint8Array(W*H);let thr=210,bgM=0;
  if(lt){const fr=[];const bw=Math.max(2,Math.round(.03*W));for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++){if(xx>=bw&&xx<W-bw)continue;const k=(yy*W+xx)*4,g=(d[k]+d[k+1]+d[k+2])/3;if(g>150)fr.push(g);}
   if(fr.length<.5*2*bw*H)return null;fr.sort((a,b)=>a-b);bgM=fr[fr.length>>1];if(bgM<222||bgM>249)return null;thr=(bgM+255)/2;}
  for(let i=0;i<W*H;i++){const g=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(g>thr)m[i]=1;}
@@ -357,7 +378,7 @@ function cropPage0(img,lt){const W0=img.width,H0=img.height;if(W0<80||H0<80)retu
  const X0=Math.max(0,Math.floor(x0/s)),Y0=Math.max(0,Math.floor(y0/s)),X1=Math.min(W0,Math.ceil(x1/s)),Y1=Math.min(H0,Math.ceil(y1/s));
  if(X1-X0<80||Y1-Y0<80)return null;
  const pad=Math.max(6,Math.round(.02*Math.max(X1-X0,Y1-Y0)));const a=Math.max(0,X0-pad),b=Math.max(0,Y0-pad),e=Math.min(W0,X1+pad),f=Math.min(H0,Y1+pad);
- const o=mk(e-a,f-b);o.getContext('2d').drawImage(img,a,b,e-a,f-b,0,0,o.width,o.height);
+ const o=mk(e-a,f-b);rsDraw(o.getContext('2d'),img,a,b,e-a,f-b,0,0,o.width,o.height);
  cropPage.info=lt?{box:[a,b,e,f],page:1,light:1}:{box:[a,b,e,f],page:1};return o;}
 /* Drop a small, far cluster of walls (key-plan thumbnail, elevation) and keep the main unit. */
 function dropSatellites(S){if(!S||S.length<6)return S;
@@ -453,7 +474,7 @@ function areaScale(rooms,areas,prior){if(!rooms||!rooms.length||!areas||!areas.l
  if(!best||best.n<2)return null;return{ppm:best.ppm,n:best.n,src:'areas'};}
 
 export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)return null;const s=Math.min(1,1000/Math.max(W0,H0)),W=Math.max(8,Math.round(W0*s)),H=Math.max(8,Math.round(H0*s));
- const c=mk(W,H),x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.imageSmoothingQuality='high';x.drawImage(img,0,0,W,H);const g=grayOf(c),N=W*H;
+ const c=mk(W,H),x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.imageSmoothingQuality='high';rsDraw(x,img,0,0,srcW(img),srcH(img),0,0,W,H);const g=grayOf(c),N=W*H;
  let nl=0;for(let i=0;i<N;i++)if(g[i]>215)nl++;const light=nl/N,asp=Math.max(W,H)/Math.min(W,H);const info={light:+light.toFixed(2),asp:+asp.toFixed(2)};uploadRegion.info=info;if(light<.6)return null;
  const d=new Uint8Array(N);for(let i=0;i<N;i++)d[i]=g[i]<165?1:0;
  const T=30,Lm=Math.max(24,Math.round(.035*Math.max(W,H)));
@@ -476,7 +497,7 @@ export function uploadRegion(img){const W0=img.width,H0=img.height;if(!W0||!H0)r
  Object.assign(info,{share:+share.toFixed(2),area:+area.toFixed(2),bb:[x0,y0,x1,y1]});
  if(!(share>=.6&&(x1-x0)>=.25*W&&(y1-y0)>=.2*H&&((asp>=1.6&&area<=.5)||area<=.2)))return null;
  const pad=.05*Math.max(x1-x0,y1-y0),X0=Math.max(0,Math.floor((x0-pad)/s)),Y0=Math.max(0,Math.floor((y0-pad)/s)),X1=Math.min(W0,Math.ceil((x1+pad)/s)),Y1=Math.min(H0,Math.ceil((y1+pad)/s));
- const o=mk(X1-X0,Y1-Y0),ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(img,X0,Y0,X1-X0,Y1-Y0,0,0,o.width,o.height);info.crop=[X0,Y0,X1,Y1];return o;}
+ const o=mk(X1-X0,Y1-Y0),ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);rsDraw(ox,img,X0,Y0,X1-X0,Y1-Y0,0,0,o.width,o.height);info.crop=[X0,Y0,X1,Y1];return o;}
 /* v21l RULE (scale bar on screenshots): when the reading has no printed scale (dimensions / scale bar / room sizes), look for a scale-bar
    label ladder on the whole upload - also outside the plan crop - and rescale the reading to it (within 2.5x of the guess). bench: PDF desk / phone */
 function applyScaleK(R,k){const s=v=>Math.round(v*k*100)/100;const seen=new Set(),PFb=globalThis.__PF||{};(R.walls||[]).forEach(w=>{w.start=w.start.map(s);w.end=w.end.map(s);[...(w.openings||[]),...(PFb.noBarOp?[]:(w.op||[]))].forEach(o=>{if(!o||seen.has(o))return;seen.add(o);if(o.offset!=null)o.offset=s(o.offset);if(o.width!=null)o.width=s(o.width);});});
@@ -748,7 +769,10 @@ export function readLabels(ink,W,H,bb,ppm){const out=[];const UNM=[];const T=let
  return out.filter(l=>!(l.n==='Izba'&&out.some(q=>q!==l&&q.n!=='Izba'&&q.x1!=null&&l.x0!=null&&Math.abs(q.p[1]-l.p[1])<.6*Math.max(q.h,l.h)&&q.x1<l.x0+2&&l.x0-q.x1<1.3*Math.max(q.h,l.h))));}
 const RARE=new Set(['Jedáleň','Špajza','Šatník','Komora','Pracovňa','Garáž','Terasa']);/* uncommon room names need a clear shape match */
 const WVOC=[['Izba','Izba'],['Spalna','Spálňa'],['Obyvacka','Obývačka'],['Kuchyna','Kuchyňa'],['Kupelna','Kúpeľňa'],['Kupe','Kúpeľňa'],['Chodba','Chodba'],['Predsien','Predsieň'],['Spajza','Špajza'],['Komora','Komora'],['Pracovna','Pracovňa'],['Satnik','Šatník'],['Jedalen','Jedáleň'],['Detska','Detská izba'],['Garaz','Garáž'],['Terasa','Terasa'],['Kitchen','Kuchyňa'],['Bedroom','Spálňa'],['Bathroom','Kúpeľňa']];
-let WTPL=null;function wordTemplates(){if(WTPL)return WTPL;WTPL=[];const c=mk(900,140),x=c.getContext('2d');
+let WTPL=null;/* v22i: word-shape templates pre-rendered too (wtpl.js, desktop Chromium) - live fonts differ on iPhone (no Comic Sans / other cursive / serif), so room words read differently per device (PF.liveWT = old live rendering) */
+function wordTemplates(){if(WTPL)return WTPL;if(WTJ&&WTJ.length&&!(globalThis.__PF||{}).liveWT){WTPL=WTJ.map(e=>({n:e[0],w:e[1],asp:e[2],g:Float32Array.from(e[3],v=>v/1e4)}));return WTPL;}return wordTemplatesLive();}
+globalThis.__WTlive=()=>{WTPL=null;const r=wordTemplatesLive();WTPL=null;return r.map(t=>[t.n,t.w,t.asp,Array.from(t.g,v=>Math.round(v*1e4))]);};
+function wordTemplatesLive(){WTPL=[];const c=mk(900,140),x=c.getContext('2d');
  for(const f of['sans-serif','serif','cursive','monospace','Comic Sans MS'])for(const[w,n]of WVOC)for(const v of[w,w.toUpperCase()]){x.setTransform(1,0,0,1,0,0);x.fillStyle='#fff';x.fillRect(0,0,900,140);x.fillStyle='#000';x.font=`64px ${f}`;x.textBaseline='alphabetic';x.fillText(v,10,100);
   const d=x.getImageData(0,0,900,140).data,m=new Uint8Array(900*140);let x0=900,y0=140,x1=-1,y1=-1;for(let i=0;i<900*140;i++)if(d[i*4]<128){m[i]=1;const X=i%900,Y=(i/900)|0;if(X<x0)x0=X;if(X>x1)x1=X;if(Y<y0)y0=Y;if(Y>y1)y1=Y;}
   if(x1<0)continue;WTPL.push({n,w:v,asp:(x1-x0+1)/(y1-y0+1),g:wgrid(m,900,x0,y0,x1+1,y1+1)});}
@@ -844,7 +868,7 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
    const mark=u=>{let a=0,b=0;for(let d=3;d<=6;d++){a+=I(u,v+d*side*-1)?1:0;if(u<tu0-1||u>tu1+1)b+=I(u,v+d*side)?1:0;}return a>=2||b>=2;};
    const G=Math.max(3,Math.round(th*1.5));const walk=dir=>{let u=uc,g=0;for(let n=0;n<4000;n++){u+=dir;if(on(u)){g=0;if((dir<0?u<tu0-1:u>tu1+1)&&mark(u)){let e=u;for(let q=u+dir,gq=0;Math.abs(q-u)<16&&gq<=3;q+=dir){if(mark(q)){e=q;gq=0;}else gq++;}return (u+e)/2;}}else if(++g>G)return u-dir*g;}return null;};
    const a=walk(-1),b=walk(1);if(a!=null&&b!=null&&b-a>(tu1-tu0)*1.1){seg=b-a;lineV={rot:S.rot,v,a,b};}}
-  dimScale.log&&dimScale.log.push('@'+best.txt+'>'+seg+':1');if(!seg)continue;
+  dimScale.log&&dimScale.log.push('@'+best.txt+'>'+seg+':1');if(!seg)continue;/* v22i: a dimension text needs real digits - ',,,1' (one digit among 2+ separator marks, e.g. area-label glyphs or tick marks) is not a length (PF.noDimDigits) */{const nd=(best.txt.match(/\d/g)||[]).length;if(!(globalThis.__PF||{}).noDimDigits&&(best.txt.length-nd>=2&&best.txt.length-nd>=nd)){dimScale.log&&dimScale.log.push('digits-reject '+best.txt);continue;}}
   out.push({txt:best.txt,s:+best.s.toFixed(2),ext:seg,vals,rot:S.rot,line:typeof lineV==='object'?lineV:null});}
  if(!out.length)return null;
  // every reading votes for ppm under each unit interpretation; keep the value most strings agree on
