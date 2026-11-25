@@ -1,5 +1,5 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
-import {readPlan} from './plan.js?v=20261122k';
+import {readPlan} from './plan.js?v=20261122l';
 import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261122h';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
@@ -182,6 +182,9 @@ function openZoneCands(R,L){if(!R||!R.g||!R.r)return[];const out=[];
   const raw=(H.rarea||[]).filter(a=>a.level===L&&a.p&&a.v>=3&&a.v<200&&roomAtL(R,a.p)===r.id);
   const seeds=[];const take=(p,v,n)=>{if(!seeds.some(s=>Math.hypot(s.p[0]-p[0],s.p[1]-p[1])<.45&&Math.abs((s.v||0)-(v||0))<.3&&(s.n||'')===(n||'')))seeds.push({p:[p[0],p[1]],v:v||0,n:n||''});};
   labs.forEach(l=>{const a=raw.map(q=>({q,d:Math.hypot(q.p[0]-l.p[0],q.p[1]-l.p[1])})).sort((x,y)=>x.d-y.d)[0];take(l.p,a&&a.d<2.2?a.q.v:0,l.n);});
+  /* v22l RULE (hall zone): a printed hall caption (Chodba / Predsieň / Hala) inside an open space that already carries 2+ living /
+     kitchen / dining captions is its own zone - the corridor is not handed to the dining or living zone. PF.noHallZone. audit: open-zones */
+  if(!(globalThis.__PF||{}).noHallZone&&labs.length>=2)(H.rlab||[]).filter(l=>l.level===L&&l.p&&!l.rt&&/^(Chodba|Predsie|Hala)/.test(l.n||'')&&roomAtL(R,l.p)===r.id).forEach(l=>{const k=seeds.length;take(l.p,0,l.n);if(seeds.length>k)seeds[k].hall=1;});
   const used=new Set(seeds.map(s=>seeds.indexOf(s)));
   /* unnamed printed areas: keep substantial ones (a stray 1.6 m² dimension is not a zone) */
   const rest=raw.filter(a=>!seeds.some(s=>Math.hypot(s.p[0]-a.p[0],s.p[1]-a.p[1])<.8&&Math.abs((s.v||0)-a.v)<.4)).filter(a=>a.v>=5);
@@ -192,7 +195,7 @@ function openZoneCands(R,L){if(!R||!R.g||!R.r)return[];const out=[];
   let pick=seeds;
   if(withA.length>=2){let best=null;const n=withA.length;
    for(let m=2;m<=n;m++){const idx=[...Array(n).keys()];const rec=(i,cur)=>{if(cur.length===m){const sum=cur.reduce((s,j)=>s+withA[j].v,0),e=Math.abs(sum-r.a)/Math.max(r.a,1);if(e<=.3&&(!best||e<best.e-1e-6||(Math.abs(e-best.e)<1e-6&&m>best.m)))best={e,m,cur:cur.slice()};return;}for(let j=i;j<n;j++){cur.push(j);rec(j+1,cur);cur.pop();}};rec(0,[]);if(m===n)break;}
-   if(best){const keep=new Set(best.cur.map(j=>withA[j]));pick=seeds.filter(s=>openKind(s.n)||(s.v>=5&&[...keep].some(k=>k===s||(Math.abs(k.v-s.v)<.05&&Math.hypot(k.p[0]-s.p[0],k.p[1]-s.p[1])<.2))));}}
+   if(best){const keep=new Set(best.cur.map(j=>withA[j]));pick=seeds.filter(s=>openKind(s.n)||s.hall||(s.v>=5&&[...keep].some(k=>k===s||(Math.abs(k.v-s.v)<.05&&Math.hypot(k.p[0]-s.p[0],k.p[1]-s.p[1])<.2))));}}
   if(pick.length<2)return;
   const vs=pick.filter(s=>s.v>=5).map(s=>s.v).sort((a,b)=>b-a);
   const openN=pick.filter(s=>openKind(s.n)).map(s=>openKind(s.n));
@@ -222,7 +225,7 @@ function nameOpenSeeds(seeds,R,L,RS,room){const used=new Set(seeds.map(s=>openKi
  const wetPts=[];(H.rlab||[]).forEach(l=>{if(l.level===L&&/Kúpeľ|WC|Kúpel/.test(l.n||''))wetPts.push(l.p);});
  RS.forEach(q=>{if(q.id!==room.id&&q.a>=2&&q.a<=12&&(q.bb[0]<room.bb[2]+.4&&q.bb[2]>room.bb[0]-.4&&q.bb[1]<room.bb[3]+.4&&q.bb[3]>room.bb[1]-.4))wetPts.push(q.p);});
  const dW=s=>{if(!wetPts.length)return 9;return Math.min(...wetPts.map(p=>Math.hypot(p[0]-s.p[0],p[1]-s.p[1])));};
- const rest=()=>seeds.filter(s=>!openKind(s.n));
+ const rest=()=>seeds.filter(s=>!openKind(s.n)&&!s.hall);
  const rtIn=(H.rlab||[]).some(l=>l.level===L&&l.rt&&l.p&&roomAtL(R,l.p)===room.id);/* v21z: a zone already re-typed from a failed kitchen keeps the kitchen out of this open space */
  if(!used.has('kit')&&!rtIn){const c=rest().filter(s=>!s.v||(s.v>=4.5&&s.v<=16)).sort((a,b)=>dW(a)-dW(b)||(a.v||9)-(b.v||9))[0];if(c)c.n='Kuchyňa';}
  if(!used.has('liv')){const c=rest().slice().sort((a,b)=>(b.v||0)-(a.v||0))[0];if(c)c.n='Obývačka';}
