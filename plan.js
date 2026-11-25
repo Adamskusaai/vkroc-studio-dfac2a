@@ -1,5 +1,5 @@
 import {LTJ} from './ltpl.js?v=20261112i';import {DTJ} from './dtpl.js?v=20261121c';import {WTJ} from './wtpl.js?v=20261122i';
-import {tableAreas,labelAreas,barLadder} from './ocr.js?v=20261122f';
+import {tableAreas,labelAreas,barLadder,ocrPrep,ocrRead} from './ocr.js?v=20261122f';
 import {segPlan} from './seg.js?v=20261118b';
 // plan.js — robust floor-plan reader (plain JS, no deps). prem8.
 // readPlan(img,{rect}) -> {walls:[{start,end,thickness,op:[]}], canvas, w, guess, mode:'plan', conf, scaleSrc, dbg} | null
@@ -659,6 +659,11 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
      // walls that ran on to the removed dimension line overshoot the house: clip them to the span of the perpendicular walls
      const V=S.filter(q=>!q.hz),Hz=S.filter(q=>q.hz);if(V.length>=2&&Hz.length>=2){const xr=[Math.min(...V.map(q=>q.c-q.t/2)),Math.max(...V.map(q=>q.c+q.t/2))],yr=[Math.min(...Hz.map(q=>q.c-q.t/2)),Math.max(...Hz.map(q=>q.c+q.t/2))];
       S=S.map(q=>{const r=q.hz?xr:yr;return(q.a<r[0]-2||q.b>r[1]+2)?{...q,a:Math.max(q.a,r[0]),b:Math.min(q.b,r[1])}:q;}).filter(q=>q.b-q.a>q.t*2);}}}}}catch(e){dbg.dimErr=String(e);}
+ {const PFo=globalThis.__PF||{};try{if(!PFo.noOverallDim&&S.length>=4&&sc.src!=='scalebar'&&sc.src!=='areas'&&!(sc.src==='dims'&&(dbg.dimN||0)>=2)){
+  const V=S.filter(q=>!q.hz),Hz=S.filter(q=>q.hz);if(V.length>=2&&Hz.length>=2){const X0=Math.min(...V.map(q=>q.c-q.t/2)),X1=Math.max(...V.map(q=>q.c+q.t/2)),Y0=Math.min(...Hz.map(q=>q.c-q.t/2)),Y1=Math.max(...Hz.map(q=>q.c+q.t/2));
+   const G=new Float32Array(W*H);for(let i=0;i<W*H;i++)G[i]=n[i]<0?230:Math.min(1.1,n[i])*230;const OD=overallDims(G,W,H,X0,Y0,X1,Y1);dbg.ovd=[OD.h.map(r=>[r.txt,r.v,+r.ppm.toFixed(1),r.conf]),OD.v.map(r=>[r.txt,r.v,+r.ppm.toFixed(1),r.conf])];
+   let bp=null;for(const a of OD.h)for(const b of OD.v){const k=a.ppm/b.ppm;if(Math.abs(k-1)<(PFo.ovdTol??.05)&&(!bp||Math.abs(k-1)<bp.e))bp={e:Math.abs(k-1),ppm:(a.ppm+b.ppm)/2};}
+   if(bp&&(!sc.ppm||(bp.ppm/sc.ppm<1.6&&sc.ppm/bp.ppm<1.6))){dbg.ovdFrom=[sc.src,+(sc.ppm||0).toFixed(1)];sc={ppm:bp.ppm,src:'dims'};dbg.dimVia='overall2';}}}}catch(e){dbg.ovdErr=String(e).slice(0,80);}}
  tm('dims');if(o._chrome&&sc.src==='doors+walls'){const pD=estimateScale.last[0],pT=estimateScale.last[1],lo=Math.min(pD,pT),hi=Math.max(pD,pT);if(lo>0&&hi/lo>1.22&&hi/lo<1.7)sc={ppm:lo,src:pD<=pT?'doors':'walls'};}
  if(o.ppm){sc={ppm:o.ppm,src:'user'};}else if(o.mW>0){sc={ppm:W/o.mW,src:'user'};}
  findOpenings.cTol=(globalThis.__PF||{}).noCTol?0:((globalThis.__PF||{}).cTol||.3);findOpenings.Tm=Math.max(...S.map(q=>q.t));try{ops=(classifyGap.paper=!!(dbg.paper||o.pdfText||o.pdfVec||o._chrome),findOpenings)(S,ink,W,H,sc.ppm,bb);}finally{findOpenings.cTol=0;}
@@ -730,6 +735,31 @@ function pruneLoose(S){let ch=1;while(ch&&S.length>4){ch=0;for(const s of S){con
   if(drop.length&&drop.length<=2){S=S.filter(q=>!drop.includes(q));pruneLoose.spur=drop.length;}}
  return S;}
 
+
+/* v22j RULE (overall dimensions): the overall width / depth figures printed beside the house ('17 925' under the plan, '9 110' rotated at the side) are
+   re-read with the tiny CNN at their own size (thousand-split mm: digits joined across the space). Used only when BOTH sides read and the scales they imply agree
+   within 5 % (independent check on the outline), so a stray number cannot set the scale. PF.noOverallDim disables. */
+function overallDims(G,W,H,X0,Y0,X1,Y1){const out={h:[],v:[]},sw=X1-X0,sh=Y1-Y0;if(sw<40||sh<40)return out;
+ const thr=150,band=Math.round(.12*Math.max(sw,sh));
+ const read=(g,gw,gh)=>{/* comps in a small band, pick the row of small glyphs near the middle of the span, CNN-read it */
+  const lab=new Int32Array(gw*gh),cs=[];let id=0;const st=[];for(let i=0;i<gw*gh;i++){if(g[i]>=thr||lab[i])continue;id++;lab[i]=id;st.push(i);let x0=1e9,y0=1e9,x1=-1,y1=-1;
+   while(st.length){const j=st.pop(),x=j%gw,y=(j/gw)|0;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;for(const k of[j-1,j+1,j-gw,j+gw]){if(k<0||k>=gw*gh||lab[k]||g[k]>=thr)continue;if((k===j-1&&x===0)||(k===j+1&&x===gw-1))continue;lab[k]=id;st.push(k);}}
+   const w=x1-x0+1,h=y1-y0+1;if(h>=3&&h<=24&&w<=2.2*h&&w>=1)cs.push({x0,y0,x1:x1+1,y1:y1+1,cy:(y0+y1)/2,cx:(x0+x1)/2,h});}
+  const mid=cs.filter(c=>c.cx>.3*gw&&c.cx<.7*gw);let best=null;
+  for(const c of mid){const row=cs.filter(d=>Math.abs(d.cy-c.cy)<.5*c.h&&Math.abs(d.h-c.h)<.5*c.h);row.sort((a,b)=>a.x0-b.x0);
+   // chain neighbours (gap < 1.6 glyph heights) around c
+   const i0=row.indexOf(c);let a=i0,b=i0;while(a>0&&row[a].x0-row[a-1].x1<1.6*c.h)a--;while(b<row.length-1&&row[b+1].x0-row[b].x1<1.6*c.h)b++;const R=row.slice(a,b+1);
+   if(R.length>=4&&R.length<=7&&(!best||R.length>best.length))best=R;}
+  if(!best)return null;const x0=Math.max(0,Math.min(...best.map(c=>c.x0))-2),x1=Math.min(gw,Math.max(...best.map(c=>c.x1))+2),y0=Math.max(0,Math.min(...best.map(c=>c.y0))-2),y1=Math.min(gh,Math.max(...best.map(c=>c.y1))+2);
+  const P=ocrPrep(g,gw,x0,y0,x1,y1,2),r=ocrRead(P.v,P.W);const dg=(r.s.match(/\d/g)||[]).join('');const v=+dg;
+  return (dg.length>=4&&dg.length<=5&&v>=3000&&v<=60000&&r.conf>.2)?{v,conf:+r.conf.toFixed(2),txt:r.s,n:best.length}:null;};
+ const sub=(x0,y0,x1,y1,rot)=>{x0=Math.max(0,x0|0);y0=Math.max(0,y0|0);x1=Math.min(W,x1|0);y1=Math.min(H,y1|0);const w=x1-x0,h=y1-y0;if(w<8||h<8)return null;
+  if(!rot){const g=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++)g[y*w+x]=G[(y+y0)*W+x+x0];return read(g,w,h);}
+  // vertical text: rotate the band both ways, keep the reading that parses
+  let best=null;for(const cw of[0,1]){const g=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const u=cw?h-1-y:y,vv=cw?x:w-1-x;g[vv*h+u]=G[(y+y0)*W+x+x0];}const r=read(g,h,w);if(r&&(!best||r.conf>best.conf))best=r;}return best;};
+ for(const r of[sub(X0,Y1+2,X1,Y1+band,0),sub(X0,Y0-band,X1,Y0-2,0)])if(r)out.h.push({...r,ppm:sw/(r.v/1000)});
+ for(const r of[sub(X1+2,Y0,X1+band,Y1,1),sub(X0-band,Y0,X0-2,Y1,1)])if(r)out.v.push({...r,ppm:sh/(r.v/1000)});
+ return out;}
 // ---------- room labels (printed words, letter templates + fuzzy dictionary; SK/CZ/DE/EN incl. abbreviations) ----------
 let LTPL=null;const LCH='ABCDEFGHIJKLMNOPRSTUVWZYabcdefghijklmnoprstuvwzy';
 /* v12i: letter templates are pre-rendered (ltpl.js) so text reading is identical on every device/font set */function letterTemplates(){if(LTPL)return LTPL;if(LTJ&&LTJ.length&&!(globalThis.__PF||{}).liveLT){LTPL=LTJ.map(e=>({ch:e[0],g:Float32Array.from(e[1],v=>v/255),asp:e[2],top:e[3],bot:e[4]}));return LTPL;}return letterTemplatesLive();}
@@ -847,7 +877,7 @@ export function dimScale(ink,W,H,bb,tWall,prior){const out=[];const pad=Math.max
    if(g.length>=2&&g.length<=8)strings.push({rot,g});}}
  for(const S of strings){const ord=S.rot?[...S.g].sort((a,b)=>b.y0-a.y0):S.g;// vertical text reads bottom->top
   let best=null;for(const dir of S.rot?[1,-1]:[0]){const chars=S.rot?(dir>0?ord:[...ord].reverse()):ord;const r=readString(chars,ink,W,dir);if(!best||r.s>best.s)best={...r,dir};}
-  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app. Screenshot area tables sit beside the plan (outside the wall bbox); OCR often drops the comma ('1975' = 19.75). */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=dimScale.loose?best.txt.match(/^(\d{1,3})[,.](\d{1,2})(?:(\d{1,3}|m\d?))?,?$/):best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);const g=(!m||!(dimScale.loose||m[3]))&&dimScale.loose&&best.txt.match(/^(\d{1,2})(\d{2})$/);const v=m&&(dimScale.loose||m[3])?+(m[1]+'.'+m[2]):(g?+(g[1]+'.'+g[2]):0);if(v>=1&&v<=150&&!(g&&v<5)){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length;if(dimScale.loose||(cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3]))dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;if(dimScale.txts){const xs0=Math.min(...S.g.map(c=>c.x0)),xs1=Math.max(...S.g.map(c=>c.x1)),ys0=Math.min(...S.g.map(c=>c.y0)),ys1=Math.max(...S.g.map(c=>c.y1));dimScale.txts.push({txt:best.txt,vals,rot:S.rot,b:[xs0,ys0,xs1,ys1]});}
+  dimScale.log&&dimScale.log.push(best.txt+':'+best.s.toFixed(2));if((globalThis.__PF||{}).dbgDims)(globalThis.__dimAll=globalThis.__dimAll||[]).push([best.txt,+best.s.toFixed(2),S.rot,S.g[0].x0,S.g[0].y0,S.g[S.g.length-1].x1,S.g[S.g.length-1].y1,W,H]);/* v12b: printed room areas ('12,18 m²' -> '12,1802') inside the house = scale witnesses for the app. Screenshot area tables sit beside the plan (outside the wall bbox); OCR often drops the comma ('1975' = 19.75). */if(dimScale.areas&&!S.rot&&best.s>=.72){const m=dimScale.loose?best.txt.match(/^(\d{1,3})[,.](\d{1,2})(?:(\d{1,3}|m\d?))?,?$/):best.txt.match(/^(\d{1,3})[,.](\d{2})(\d{1,3}|m\d?)?,?$/);const g=(!m||!(dimScale.loose||m[3]))&&dimScale.loose&&best.txt.match(/^(\d{1,2})(\d{2})$/);const v=m&&(dimScale.loose||m[3])?+(m[1]+'.'+m[2]):(g?+(g[1]+'.'+g[2]):0);if(v>=1&&v<=150&&!(g&&v<5)){const xs=S.g.map(c=>(c.x0+c.x1)/2),ys=S.g.map(c=>(c.y0+c.y1)/2),cx=xs.reduce((s,v)=>s+v,0)/xs.length,cy=ys.reduce((s,v)=>s+v,0)/ys.length;if(dimScale.loose||(cx>bb[0]&&cx<bb[2]&&cy>bb[1]&&cy<bb[3]))dimScale.areas.push({v,p:[cx,cy]});}}if(best.s<.78)continue;const vals=parseDim(best.txt);if(!vals.length)continue;if(dimScale.txts){const xs0=Math.min(...S.g.map(c=>c.x0)),xs1=Math.max(...S.g.map(c=>c.x1)),ys0=Math.min(...S.g.map(c=>c.y0)),ys1=Math.max(...S.g.map(c=>c.y1));dimScale.txts.push({txt:best.txt,vals,rot:S.rot,b:[xs0,ys0,xs1,ys1]});}
   // dimension line next to the text, then the nearest perpendicular marks (ticks / extension lines) on each side
   const x0=Math.min(...S.g.map(c=>c.x0)),x1=Math.max(...S.g.map(c=>c.x1)),y0=Math.min(...S.g.map(c=>c.y0)),y1=Math.max(...S.g.map(c=>c.y1)),th=S.rot?x1-x0:y1-y0;
   // work in (u along line, v across) coordinates
