@@ -1,5 +1,5 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
-import {readPlan} from './plan.js?v=20261122l';
+import {readPlan} from './plan.js?v=20261122m';
 import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261122h';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
@@ -1070,6 +1070,16 @@ function closeGaps(L){closeGaps.log=[];const ws=()=>H.walls.filter(q=>q.level===
 /* v12b: an uploaded plan must never open as an empty house - every level with rooms and no furniture is furnished once (H.autoF), the user can still clear or re-roll it */
 function autoFurn(){if(!H||!H.levels)return;H.autoF=H.autoF||{};const L0=lvl;let did=0;for(const lv of H.levels){const L=lv.name;if(H.autoF[L]||(H.furn||[]).some(f=>f.level===L))continue;if(!H.walls.some(w=>w.level===L))continue;H.autoF[L]=1;if(!rooms(L).length)continue;lvl=L;furnish({auto:1});did++;}if(lvl!==L0){lvl=L0;draw();}if(did)save();}
 window.__autoFurn=autoFurn;window.__furnish=furnish;
+/* v22l RULE (sister-zone decor): virtual zones of one open space are furnished one by one, so a plant / floor lamp set near the shared
+   (wall-less) border can stand inside a solid piece of the neighbour zone (3D meshes interpenetrate). After furnishing, such a decor
+   piece is dropped - furniture is never moved. PF.noZoneDecor. audit: furn-overlap3d */
+function zoneDecor(L){if((globalThis.__PF||{}).noZoneDecor)return 0;rooms(L);const R=RC[L];if(!R||!R.r)return 0;const zg=new Map(R.r.filter(q=>q.zg).map(q=>[q.id,q.zg]));if(!zg.size)return 0;
+ const rc=f=>{const d=f.w&&f.d?[f.w,f.d]:ldim(f.t),o=(f.r||0)%2;const w=o?d[1]:d[0],dd=o?d[0]:d[1];return[f.p[0]-w/2,f.p[1]-dd/2,f.p[0]+w/2,f.p[1]+dd/2];};
+ const SOFTD=new Set(['rug','runner','art','mirror','tvw','curtain','plant','lamp','clock']);let nd=0;
+ H.furn=(H.furn||[]).filter(f=>{if(f.level!==L||!(f.t==='plant'||f.t==='lamp')||!zg.has(f.rid))return true;const a=rc(f);
+  const bad=H.furn.some(o=>o!==f&&o.level===L&&o.rid!==f.rid&&zg.get(o.rid)===zg.get(f.rid)&&!SOFTD.has(o.t)&&(b=>Math.min(a[2],b[2])-Math.max(a[0],b[0])>.02&&Math.min(a[3],b[3])-Math.max(a[1],b[1])>.02)(rc(o)));
+  if(bad)nd++;return !bad;});window.__zoneDecorN=nd;return nd;}
+window.__zoneDecor=L=>zoneDecor(L||lvl);
 function furnish(op){const dm=!!(op&&op.demo===1);
  /* v22d RULE (wet-room stubs): a short wall piece (<= 2.2 m) with the SAME small (< 8 m2) bathroom / WC on both of its faces separates nothing - it is a bath or
     shower outline read as a wall - so it is dropped before furnishing and the fixtures fit. PF.noWetStub. audit: fixture-missing */
@@ -1125,6 +1135,7 @@ function furnish(op){const dm=!!(op&&op.demo===1);
     H.rlab=(H.rlab||[]).filter(l=>!(l.level===lvl&&l.rt&&roomAt(R,l.p)===c.r.id));if(p)H.rlab.push({level:lvl,p,n:'Jedáleň',rt:1});}
    window.__dinFb=[c.r.n,liv?c.ty:'Jedáleň'];break;}}}
  H.dinAuto=Object.assign({},H.dinAuto||{},{[lvl]:1});if(!dm&&!window.__rfOff)try{rulesFix({noDoors:1});}catch(e){console.warn("rulesFix",e);}/* v22c RULE (late dining): when the plausibility fixes only put the kitchen run in after furnishing (type swap / re-lay) and the storey has no dining table, the storey is furnished once more with those names kept, so the dining fallback sees the kitchen. PF.noDinLate. audit: dining-present */if(!dm&&!(op&&op.__dl)&&!(globalThis.__PF||{}).noDinLate){const F=(H.furn||[]).filter(f=>f.level===lvl);if(F.some(f=>f.t==='kitch')&&!F.some(f=>f.t==='table')){window.__dinLate=1;return furnish({...(op||{}),__rt:1,__dl:1});}}/* plausibility auto-fixes right after furnishing, so Kontrola shows what is really left */
+ zoneDecor(lvl);
  const V=validateAll();window.__furnMs=Math.round(performance.now()-t0);
  if(dm){window.__furnEmpty=empty;return V;}
  save();draw();toast('Zariadené – variant '+(H.fv+1)+'/4 ('+n+' ks).'+(fixes.filter(f=>!/^suggest/.test(f.fix)).length?' Opravené dvere/okná: '+fixes.filter(f=>!/^suggest/.test(f.fix)).length+'.':'')+(empty.length?' Bez nábytku: '+empty.join(', '):'')+(V.length?' Kontrola: '+V.length+' porušení.':' Kontrola pravidiel: OK.'),V.length?'warn':'ok',5000);window.__furnEmpty=empty;}
