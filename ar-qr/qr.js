@@ -4,7 +4,7 @@
    Image anchor frame (ARKit): X = image right, Y = out of the paper (up when flat), Z = image bottom (towards the reader). Units: metres.
    Layout numbers (mm on the A4 page, origin top-left) are shared with the flyer builder (/workspace/vk_ar_qa/qr_build.py) via LAYOUT. */
 import * as THREE from 'three';
-import {buildModel,toUSDZ,cluster,levelsOf} from '../ar.js?v=20261126c';
+import {buildModel,toUSDZ,cluster,levelsOf} from '../ar.js?v=20261126d';
 export const QR_V='20261126c';
 export const LAYOUT={markerMM:80,marker:[57,240],plan:[105,118],planBox:[186,120]}; // centres in mm; plan box = max printed plan size
 export const MARKER_PNG='assets/ar/marker_ref_20261125b.png';
