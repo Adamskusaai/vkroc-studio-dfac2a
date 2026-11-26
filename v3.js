@@ -731,6 +731,19 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
     while(a1+1<NX){let ok=true;for(let k=b;k<=b1;k++)if(G[(a1+1)*NZ+k]!==1||used[(a1+1)*NZ+k]){ok=false;break;}if(!ok)break;a1++;}
     for(let p=a;p<=a1;p++)for(let k=b;k<=b1;k++)used[p*NZ+k]=1;const r=[X0+a*S,Z0+b*S,X0+(a1+1)*S,Z0+(b1+1)*S];if((r[2]-r[0])*(r[3]-r[1])<.04)continue;DG.push(r);}
    DG.forEach(r=>{dc.push(r);const dk=add(new THREE.BoxGeometry(r[2]-r[0],.04,r[3]-r[1]),M.deck,(r[0]+r[2])/2,lh+.22,(r[1]+r[3])/2,0,1);dk.userData.lroof=1;DECKS.push([up.name,...r]);});
+   /* v22r LOGIC RULE (upper deck cover, PF.noDeckCover): a walkable roof terrace gets a light anthracite pergola like the ground-floor terrace - slim posts only on
+      the deck's outer corners (never inside the terrace where merged deck pieces meet), a perimeter beam 2.45 m above the deck and slats every 45 cm. Tagged
+      roof+pergola+deckCover, so 'Bez strechy' (studio and AR) hides it like the roof. Pieces < 4 m2 or narrower than 1.5 m stay open. audit: deck-cover */
+   if(!(globalThis.__PF||{}).noDeckCover){const xt=Math.max(.3,...lw.filter(w=>w._ext).map(w=>w.thickness||.3))/2;const CV=[];DG.slice().sort((p,q)=>(q[2]-q[0])*(q[3]-q[1])-(p[2]-p[0])*(p[3]-p[1])).forEach(r0=>{const w0=r0[2]-r0[0],d0=r0[3]-r0[1];if(w0*d0<4||Math.min(w0,d0)<1.5)return;
+    // one cover per terrace: a deck piece whose frame would overlap an already covered piece stays open (no doubled beams, no coplanar overlap)
+    if(CV.some(c=>r0[0]-xt-.1<c[2]&&r0[2]+xt+.1>c[0]&&r0[1]-xt-.1<c[3]&&r0[3]+xt+.1>c[1]))return;CV.push([r0[0]-xt,r0[1]-xt,r0[2]+xt,r0[3]+xt]);
+    // frame = deck grown to the parapet centre line: posts stand ON the parapet (outside the walking area, never in furniture), beams and slats span over the deck
+    const r=[r0[0]-xt,r0[1]-xt,r0[2]+xt,r0[3]+xt],w=r[2]-r[0],d=r[3]-r[1],y0=lh+.24,h=2.45,PM=M.frame,tg=o=>{o.userData.roof=1;o.userData.pergola=1;o.userData.deckCover=1;return o;};
+    const inOther=(x,z)=>DG.some(q=>q!==r0&&x>q[0]-.08&&x<q[2]+.08&&z>q[1]-.08&&z<q[3]+.08)||unU(x,z);
+    [[r[0],r[1],-1,-1],[r[2],r[1],1,-1],[r[0],r[3],-1,1],[r[2],r[3],1,1]].forEach(([x,z,sx,sz])=>{const ix=x-sx*xt,iz=z-sz*xt;if(inOther(ix-sx*.25,iz)||inOther(ix,iz-sz*.25)||inOther(ix+sx*.3,iz)||inOther(ix,iz+sz*.3))return;
+     tg(add(new THREE.BoxGeometry(.1,h+.24-.4-.12,.1),PM,x,lh+.4+(h+.24-.4-.12)/2,z,0,1));});
+    [[r[0],r[2],r[1]-.05,r[1]+.05],[r[0],r[2],r[3]-.05,r[3]+.05],[r[0]-.05,r[0]+.05,r[1]+.05,r[3]-.05],[r[2]-.05,r[2]+.05,r[1]+.05,r[3]-.05]].forEach(([a0,a1,b0,b1])=>tg(add(new THREE.BoxGeometry(a1-a0,.12,b1-b0),PM,(a0+a1)/2,y0+h-.06,(b0+b1)/2,0,1)));
+    const along=w>=d;for(let s=(along?r[0]:r[1])+.45;s<(along?r[2]:r[3])-.3;s+=.45){if(along)tg(add(new THREE.BoxGeometry(.05,.09,d),PM,s,y0+h+.045,(r[1]+r[3])/2,0,1));else tg(add(new THREE.BoxGeometry(w,.09,.05),PM,(r[0]+r[2])/2,y0+h+.045,s,0,1));}});}
    // open edges: deck cell whose neighbour is neither deck nor under the upper floor
    const ED=[];const g=(a,b)=>a<0||b<0||a>=NX||b>=NZ?0:G[a*NZ+b];
    for(let a=0;a<NX;a++)for(let b=0;b<NZ;b++){if(g(a,b)!==1)continue;[[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dz])=>{if(g(a+dx,b+dz))return;
