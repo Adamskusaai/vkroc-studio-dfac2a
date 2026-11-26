@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 const Q=new URLSearchParams(location.search);
 const $=id=>document.getElementById(id);
-export const AR_V='20261125b';
+export const AR_V='20261126c';
 const LOD_T=+(Q.get('arlodt')||1500),LOD_C=+(Q.get('arlodc')||0.02); // usdz: dense glTF decor (> LOD_T triangles) simplified by 2 cm vertex clustering (?arlod=0 = off)
 const SKIP=['lawn','drive','site','outdoor','sky','wx','helper'];           // real ground / surroundings: the real world replaces them
 const TOP=['roof','lroof','ceil','gutter','hopper','dpipe','flash','cope','cap']; // toggled by "Strecha" (dollhouse view in AR)
@@ -60,8 +60,15 @@ export function cluster(g,c){const P=g.attributes.position,I=g.index.array,map=n
 
 /* Build the AR model from the studio world. Returns a Group whose origin is the middle of the street-side facade edge at ground level,
    the house extending to +z; front = the street side (-z in the studio after streetTurn). */
-export function buildModel(world,{merge=!Q.has('arraw'),usdz=false,top=true,side=0}={}){
+/* storey levels = distinct bottom heights of wallCut wall pieces (world y, >= 1.8 m apart), lowest first */
+export function levelsOf(world){const ys=[];world.updateMatrixWorld(true); // from userData.wallCut {base,h}: independent of the viewer's cut-away scaling
+ world.traverse(o=>{const w=o.userData&&o.userData.wallCut;if(w&&w.h>=2&&visUp(o,world))ys.push(w.base+(o.parent?o.parent.matrixWorld.elements[13]:0));}); // full-height walls only (parapets / knee walls are not storeys)
+ ys.sort((a,c)=>a-c);const L=[];for(const y of ys)if(!L.length||y-L[L.length-1]>1.8)L.push(y);return L;}
+/* v20261126c variants (iOS Quick Look cannot toggle inside AR): floor = storey index to show (-1 all; everything whose centre is above the next storey's
+   floor minus 0.35 m is dropped, so you look into that storey), furn=false drops the app's furniture (userData.furn). Off: ?arvar=0 */
+export function buildModel(world,{merge=!Q.has('arraw'),usdz=false,top=true,side=0,floor=-1,furn=true}={}){
  if(!world)return null;const t0=performance.now();
+ const VAR=Q.get('arvar')!=='0',LVs=VAR&&floor>=0?levelsOf(world):[],cutY=floor>=0&&floor+1<LVs.length?LVs[floor+1]-.35:Infinity;
  const W=world.clone(true);
  W.traverse(o=>{const u=o.userData||{};
   if(u.wallCut){const{base,h}=u.wallCut;o.scale.y=1;o.position.y=base+h/2;o.visible=true;}
@@ -79,6 +86,8 @@ export function buildModel(world,{merge=!Q.has('arraw'),usdz=false,top=true,side
   if(tagUp(o,SKIP,W)){stat.skipped++;return;}
   if(!near.isEmpty()&&o.geometry&&o.geometry.attributes.position){if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();ob.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
    if(!(near.containsBox(ob)||(tagUp(o,YARD_TAGS,W)&&yard.containsBox(ob)))){stat.skipped++;return;}}
+  if(VAR&&!furn&&tagUp(o,['furn'],W)){stat.noFurn=(stat.noFurn||0)+1;return;}
+  if(cutY<Infinity&&o.geometry&&o.geometry.attributes.position){if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();ob.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);if((ob.min.y+ob.max.y)/2>cutY){stat.cutFloor=(stat.cutFloor||0)+1;return;}}
   const g=o.geometry;if(!g||!g.attributes||!g.attributes.position)return;stat.src++;
   const isTop=!!tagUp(o,TOP,W);if(isTop&&!top)return;
   const mats=Array.isArray(o.material)?o.material:[o.material];
@@ -111,7 +120,7 @@ export function setTop(G,on){G.traverse(o=>{if(o.userData&&o.userData.top!==unde
    (assets/ar/marker_*.png, 18 cm wide) stands at the front-left corner, face to the street; along = metres from the corner towards the right corner,
    front = metres in front of the facade (street side), h = height of the sign centre above ground (post only).
    Image anchor axes (ARKit): X = right edge of the image, Y = normal out of the printed face, Z = towards the image bottom. */
-export const MARKER={png:'assets/ar/marker_ref_'+AR_V+'.png',cm:18};
+export const MARKER={png:'assets/ar/marker_ref_20261125b.png',cm:18};
 export function anchorMatrix(F,a){const sx=F.width/2-(+a.along||0),sz=-(+a.front||0),sy=a.mode==='ground'?0:(a.h==null?1:+a.h),M=new THREE.Matrix4();
  if(a.mode==='ground')M.set(-1,0,0,sx, 0,1,0,-sy, 0,0,-1,sz, 0,0,0,1);   // sign flat on the ground, top edge towards the house
  else M.set(-1,0,0,sx, 0,0,-1,sz, 0,-1,0,sy, 0,0,0,1);                   // upright sign facing the street
@@ -136,7 +145,8 @@ const CSS=`#arov{position:fixed;inset:0;z-index:90;pointer-events:none;font:500 
 #arov button{height:46px;padding:0 16px;border-radius:12px;border:0;background:#0b0b0bcc;color:#fff;font:600 14px inherit}#arov button.go{background:#E2552D}
 #arov .dot{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px;border:2px solid #fff;border-radius:50%;opacity:.8}
 #ardlg{position:fixed;inset:0;z-index:80;background:rgba(11,11,11,.45);display:grid;place-items:center;font:500 14px/1.45 Inter,system-ui,sans-serif}
-#ardlg .c{background:#fff;color:#0b0b0b;border-radius:16px;padding:18px;width:min(420px,92vw);box-shadow:0 10px 40px #0004}
+#ardlg .c{background:#fff;color:#0b0b0b;border-radius:16px;padding:18px;width:min(420px,92vw);box-shadow:0 10px 40px #0004;max-height:92vh;overflow:auto}
+#ardlg .seg{display:flex;gap:6px;margin:4px 0 8px}#ardlg .seg button{flex:1;min-height:40px;border-radius:10px;border:1px solid #E3DFD8;background:#fff;font:600 13px Inter,system-ui,sans-serif;padding:4px}#ardlg .seg button.on{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
 #ardlg h3{margin:0 0 8px;font:800 18px Archivo,Inter,sans-serif}#ardlg p{margin:6px 0;color:#3a3a3a}#ardlg ol{margin:6px 0;padding-left:20px;color:#3a3a3a}
 #ardlg .r{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}#ardlg button,#ardlg a.b{height:44px;padding:0 16px;border-radius:11px;border:1px solid #E3DFD8;background:#fff;font:600 14px inherit;display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#0b0b0b;cursor:pointer}
 #ardlg .ck{display:flex;gap:8px;align-items:center;margin:6px 0}#ardlg .ck input{width:18px;height:18px;accent-color:#E2552D;flex:none}#ardlg .ln{display:flex;gap:8px;align-items:center;margin:6px 0}#ardlg .ln select,#ardlg .ln input{flex:1;min-width:0;height:36px;border-radius:9px;border:1px solid #E3DFD8;padding:0 8px;font:inherit}#ardlg .ln input{max-width:90px}#ardlg .an{background:#F3F1ED;border-radius:12px;padding:6px 10px;margin:4px 0}#ardlg .an button{height:36px;margin:4px 0}#ardlg a{color:#E2552D}#ardlg .c{max-height:92vh;overflow:auto}
@@ -201,45 +211,59 @@ async function onAR(){if(busy)return;const V=window.__vk&&window.__vk.m,world=V&
  if(!world){toast('Najprv vytvorte 3D model domu.','warn');return;}
  try{window.vkA&&window.vkA('ar_open');}catch(e){}
  const md=Q.get('armode')||await mode();
- if(md==='none'){dlg('<h3>Dom v skutočnej veľkosti</h3><p>Otvorte tento projekt na mobile (Android v Chrome alebo iPhone v Safari) a ťuknite na AR. Dom sa zobrazí na vašom pozemku v mierke 1:1.</p><div class="r"><button class="go" data-x>Rozumiem</button></div>').d.querySelector('[data-x]').onclick=e=>e.target.closest('#ardlg').remove();return;}
+ /* v20261126c AR panel (all devices): place = on the plot 1:1 | on the table on the printed plan 1:Sf | bigger 1:Sf/2; variants chosen BEFORE opening AR
+    (iOS Quick Look cannot toggle anything inside AR): roof, which storey (upper storeys removed), furniture. Built on demand in the phone, nothing is uploaded. */
  busy=true;
  try{
-  if(md==='webxr'){const D=dlg('<h3>Dom v skutočnej veľkosti</h3><ol><li>Postavte sa na rovnú zem pred miesto, kde bude dom (strana k ulici).</li><li>Ťuknite na <b>ľavý</b> a potom na <b>pravý</b> predný roh domu na zemi.</li><li>Dom sa postaví v mierke 1:1, môžete ho obísť aj vojsť dnu.</li></ol>'+'<label style="display:flex;gap:8px;align-items:center;margin:8px 0">Predná strana <select id="arside" style="flex:1;height:38px;border-radius:10px;border:1px solid #E3DFD8;padding:0 8px"><option value="0">k ulici (štandard)</option><option value="1">ľavý bok (pri pohľade z ulice)</option><option value="2">zadná strana</option><option value="3">pravý bok (pri pohľade z ulice)</option></select></label>'+'<small>Ak plán nemá zadanú ulicu, predná strana je horná strana pôdorysu. Kamera sa používa len vo vašom telefóne, nič sa neodosiela.</small><div class="r"><button data-x>Zrušiť</button><button class="go" data-go>Spustiť AR</button></div>');
-   D.d.querySelector('[data-x]').onclick=()=>{D.close();busy=false;};
-   D.d.querySelector('[data-go]').onclick=async()=>{const side=+D.d.querySelector('#arside').value;D.close();try{const G=buildModel(world,{side});if(Q.get('arrods')!=='0')addRods(G);console.info('[ar] model',JSON.stringify(G.userData.stat),JSON.stringify(G.userData.front));await startXR(G,{onEnd:()=>{busy=false;}});}catch(e){busy=false;console.warn('[ar]',e);toast('AR sa nepodarilo spustiť: '+(e&&e.message||e),'err');}};
-   return;}
-  // iPhone / iPad
-  const D=dlg('<h3>Dom v skutočnej veľkosti</h3><p id="arst">Pripravujem model…</p><div class="r"><button data-x>Zavrieť</button></div>');
-  let url=null;const done=()=>{D.close();busy=false;if(url){const u=url;setTimeout(()=>URL.revokeObjectURL(u),60000);}};
-  D.d.querySelector('[data-x]').onclick=done;
-  const O={top:!(V.isDoll&&V.isDoll()),side:0,rods:Q.get('arrods')!=='0',anc:false,mode:'post',h:1,along:0,front:0};
+  const LV=levelsOf(world),D=dlg('<h3>Dom v AR</h3><p>Pripravujem…</p>');let url=null,glb=null;
+  const done=()=>{D.close();busy=false;for(const u of [url,glb])if(u)setTimeout(()=>URL.revokeObjectURL(u),60000);url=glb=null;};
+  const QRm=await import('./ar-qr/qr.js?v='+AR_V);
+  const O={place:'site',top:!(V.isDoll&&V.isDoll()),floor:-1,furn:true,side:0,rods:Q.get('arrods')!=='0',anc:false,mode:'post',h:1,along:0,front:0};
+  const F0=buildModel(world,{usdz:false,merge:false,top:false,furn:false}).userData.front,Sf=QRm.flyerScale(F0),SC={site:1,tN:Sf,tB:Sf/2};
+  const lvName=i=>i===0?'prízemie':i+'. poschodie';
   const SEL='<label class="ln">Predná strana <select id="arside"><option value="0">k ulici (štandard)</option><option value="1">ľavý bok (pri pohľade z ulice)</option><option value="2">zadná strana</option><option value="3">pravý bok (pri pohľade z ulice)</option></select></label>';
   const num=(id,lab,v)=>'<label class="ln">'+lab+' <input id="'+id+'" type="number" step="0.05" inputmode="decimal" value="'+v+'"> m</label>';
-  const make=async()=>{const t0=performance.now();const c=D.d.querySelector('.c');if(url){URL.revokeObjectURL(url);url=null;}
-   c.innerHTML='<h3>Dom v skutočnej veľkosti</h3><p>Pripravujem model…</p>';await new Promise(r=>setTimeout(r,30));
-   const G=buildModel(world,{usdz:true,top:O.top,side:O.side});if(O.rods)addRods(G);
-   const anchor=O.anc?{mode:O.mode,h:O.h,along:O.along,front:O.front}:null;
-   const blob=await toUSDZ(G,{anchor});url=URL.createObjectURL(blob);const mb=(blob.size/1048576).toFixed(1).replace('.',',');const F=G.userData.front;
-   window.__vkARusdz={ms:Math.round(performance.now()-t0),size:blob.size,stat:G.userData.stat,front:F,url,opts:{...O},anchor:anchor&&anchorMatrix(F,anchor).toArray()};console.info('[ar] usdz',blob.size,JSON.stringify(G.userData.stat));
-   const steps=O.anc?'<ol><li>Vytlačte <a href="ar-preview/tabula_a4_'+AR_V+'.pdf" target="_blank">tabuľu (A4, PDF)</a> v mierke 100 % a nalepte ju na tvrdú dosku.</li><li>'+(O.mode==='post'?'Postavte ju zvislo na <b>ľavý predný roh</b> domu (pri pohľade z ulice), lícom k ulici, stred obrázka '+fm(O.h)+' nad terénom.':'Položte ju na zem na <b>ľavý predný roh</b> domu, hornou hranou k domu.')+'</li><li>Ťuknite na <b>Otvoriť v AR</b> a namierte telefón na tabuľu z 1–2 m. Keď ju telefón rozpozná, dom sa postaví sám na svoje miesto.</li></ol>'
-    :'<ol><li>Postavte sa na rovnú zem pred miesto, kde bude dom.</li><li>Ťuknite na <b>Otvoriť v AR</b>. Dom sa položí na zem pred vami, <b>fasádou k vám</b>, v mierke 1:1.</li><li>Jedným prstom ho posuniete tak, aby predná hrana sedela s rohmi domu na zemi, dvoma prstami ho otočíte. Potom ho obíďte alebo vojdite dnu.</li></ol>';
-   c.innerHTML='<h3>Dom v skutočnej veľkosti</h3>'+steps+
-    '<label class="ck"><input type="checkbox" id="artop" '+(O.top?'checked':'')+'>So strechou</label>'+
-    '<label class="ck"><input type="checkbox" id="arrods" '+(O.rods?'checked':'')+'>Kontrolné tyče 1 m na rohoch (na overenie veľkosti)</label>'+
-    '<label class="ck"><input type="checkbox" id="aranc" '+(O.anc?'checked':'')+'>Ukotviť na tabuľu (presné umiestnenie na pozemku)</label>'+
-    (O.anc?'<div class="an"><label class="ln">Tabuľa <select id="armode"><option value="post">zvislo na kolíku, lícom k ulici</option><option value="ground">na zemi, hornou hranou k domu</option></select></label>'+(O.mode==='post'?num('arh','Výška stredu tabule',O.h):'')+num('aralong','Posun od rohu pozdĺž fasády',O.along)+num('arfront','Posun pred fasádu (k ulici)',O.front)+'<button id="arapply">Použiť</button></div>':'')+
-    SEL+'<small>Šírka domu '+fm(F.width)+', hĺbka '+fm(F.depth)+'. Model sa vytvoril priamo v telefóne ('+mb+' MB), nič sa neodosiela.</small><div class="r"><button data-x>Zavrieť</button><a class="b" rel="ar" id="arql" href="'+url+'#allowsContentScaling=0"><img alt="" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22%3E%3Cpath d=%22M12 2l9 5v10l-9 5-9-5V7z%22/%3E%3Cpath d=%22M12 12l9-5M12 12v10M12 12L3 7%22/%3E%3C/svg%3E">Otvoriť v AR</a></div>';
-   if(!quickLook()){const a=c.querySelector('#arql');a.removeAttribute('rel');a.setAttribute('download',(document.title||'dom').replace(/\W+/g,'_')+'.usdz');a.lastChild.textContent='Stiahnuť model (USDZ)';}
-   c.querySelector('[data-x]').onclick=done;
-   const re=()=>make().catch(fail),q=k=>c.querySelector(k),rd=k=>{const e=q(k);if(!e)return null;const v=parseFloat(String(e.value).replace(',','.'));return isFinite(v)?Math.max(-50,Math.min(50,v)):0;};
-   q('#artop').onchange=e=>{O.top=e.target.checked;re();};q('#arrods').onchange=e=>{O.rods=e.target.checked;re();};q('#aranc').onchange=e=>{O.anc=e.target.checked;re();};
+  const btn=(h,id,t)=>'<a class="b" id="'+id+'" href="'+h+'"><img alt="" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22%3E%3Cpath d=%22M12 2l9 5v10l-9 5-9-5V7z%22/%3E%3Cpath d=%22M12 12l9-5M12 12v10M12 12L3 7%22/%3E%3C/svg%3E">'+t+'</a>';
+  const make=async()=>{const t0=performance.now(),c=D.d.querySelector('.c');for(const u of [url,glb])if(u)URL.revokeObjectURL(u);url=glb=null;
+   c.innerHTML='<h3>Dom v AR</h3><p>Pripravujem model…</p>';await new Promise(r=>setTimeout(r,30));
+   const S=SC[O.place],table=O.place!=='site',vo={top:O.top,side:O.side,floor:O.floor,furn:O.furn};let blob=null,F=null,info='';
+   if(md==='usdz'||md==='none'){
+    if(table){blob=await QRm.tableUSDZ(world,{S,...vo});F=F0;}
+    else{const G=buildModel(world,{usdz:true,...vo});if(O.rods)addRods(G);F=G.userData.front;const anchor=O.anc?{mode:O.mode,h:O.h,along:O.along,front:O.front}:null;blob=await toUSDZ(G,{anchor});}
+    url=URL.createObjectURL(blob);}
+   if(md==='none'||(md==='webxr'&&table)){const gb=await QRm.tableGLB(world,{S:table?S:1,...vo});glb=URL.createObjectURL(gb);if(!blob)blob=gb;F=F||F0;}
+   F=F||F0;const mb=blob?(blob.size/1048576).toFixed(1).replace('.',','):'';
+   window.__vkARusdz={ms:Math.round(performance.now()-t0),size:blob?blob.size:0,url,glb,opts:{...O},S,Sf,levels:LV.length,front:F};console.info('[ar] panel',JSON.stringify({place:O.place,S,size:blob&&blob.size,ms:window.__vkARusdz.ms}));
+   const seg='<div class="seg">'+[['site','Na pozemku 1:1'],['tN','Na pláne 1:'+Sf],['tB','Na stole 1:'+(Sf/2)]].map(([k,t])=>'<button data-pl="'+k+'" class="'+(O.place===k?'on':'')+'">'+t+'</button>').join('')+'</div>';
+   const vars='<label class="ck"><input type="checkbox" id="artop" '+(O.top?'checked':'')+'>So strechou</label>'+(LV.length>1?'<label class="ln">Zobraziť <select id="arfl"><option value="-1">celý dom</option>'+LV.map((_,i)=>'<option value="'+i+'">'+lvName(i)+(i<LV.length-1?' (vyššie poschodia preč)':'')+'</option>').join('')+'</select></label>':'')+'<label class="ck"><input type="checkbox" id="arfu" '+(O.furn?'checked':'')+'>S nábytkom</label>';
+   let steps,go;
+   if(table){steps='<ol><li><a href="#" id="arpdf">Stiahnite leták A4 (PDF)</a> s pôdorysom 1:'+Sf+' a vytlačte ho v mierke 100 %.</li><li>Položte ho na stôl, ťuknite na <b>Otvoriť v AR</b> a namierte mobil na obrázok VKROČ z 30–40 cm.</li><li>'+(md==='usdz'?'Dom sa postaví na pôdorys'+(O.place==='tB'?' (dvakrát väčší, presahuje papier)':'')+'.':'Na Androide dom zatiaľ položíte na papier ručne (stiahnutý model GLB).')+'</li></ol>';}
+   else if(md==='webxr')steps='<ol><li>Postavte sa na rovnú zem pred miesto, kde bude dom (strana k ulici).</li><li>Ťuknite na <b>ľavý</b> a potom na <b>pravý</b> predný roh domu na zemi.</li><li>Dom sa postaví v mierke 1:1, môžete ho obísť aj vojsť dnu.</li></ol>';
+   else steps=O.anc?'<ol><li>Vytlačte <a href="ar-preview/tabula_a4_20261125b.pdf" target="_blank">tabuľu (A4, PDF)</a> v mierke 100 % a nalepte ju na tvrdú dosku.</li><li>'+(O.mode==='post'?'Postavte ju zvislo na <b>ľavý predný roh</b> domu (pri pohľade z ulice), lícom k ulici, stred obrázka '+fm(O.h)+' nad terénom.':'Položte ju na zem na <b>ľavý predný roh</b> domu, hornou hranou k domu.')+'</li><li>Ťuknite na <b>Otvoriť v AR</b> a namierte telefón na tabuľu z 1–2 m. Keď ju telefón rozpozná, dom sa postaví sám na svoje miesto.</li></ol>'
+    :'<ol><li>Postavte sa na rovnú zem pred miesto, kde bude dom.</li><li>Ťuknite na <b>Otvoriť v AR</b>. Dom sa položí na zem pred vami, <b>fasádou k vám</b>, v mierke 1:1.</li><li>Jedným prstom ho posuniete, dvoma otočíte. Potom ho obíďte alebo vojdite dnu.</li></ol>';
+   if(md==='usdz')go=btn(url+'#allowsContentScaling=0','arql','Otvoriť v AR');
+   else if(md==='webxr')go=table?btn(glb,'arglb','Stiahnuť model (GLB)'):'<button class="go" id="arxr">Spustiť AR</button>';
+   else go=btn(url,'arql','Stiahnuť model (USDZ)')+btn(glb,'arglb','GLB');
+   c.innerHTML='<h3>Dom v AR</h3>'+seg+steps+vars+(!table?'<label class="ck"><input type="checkbox" id="arrods" '+(O.rods?'checked':'')+'>Kontrolné tyče 1 m na rohoch</label>'+(md!=='webxr'?'<label class="ck"><input type="checkbox" id="aranc" '+(O.anc?'checked':'')+'>Ukotviť na tabuľu (presné umiestnenie na pozemku)</label>':''):'')+
+    (O.anc&&!table&&md!=='webxr'?'<div class="an"><label class="ln">Tabuľa <select id="armode"><option value="post">zvislo na kolíku, lícom k ulici</option><option value="ground">na zemi, hornou hranou k domu</option></select></label>'+(O.mode==='post'?num('arh','Výška stredu tabule',O.h):'')+num('aralong','Posun od rohu pozdĺž fasády',O.along)+num('arfront','Posun pred fasádu (k ulici)',O.front)+'<button id="arapply">Použiť</button></div>':'')+
+    SEL+'<small>Šírka domu '+fm(F.width)+', hĺbka '+fm(F.depth)+'.'+(mb?' Model sa vytvoril priamo v telefóne ('+mb+' MB), nič sa neodosiela.':' Nič sa neodosiela.')+(md==='none'?' AR otvorte na mobile (iPhone v Safari, Android v Chrome).':'')+'</small><div class="r"><button data-x>Zavrieť</button>'+go+'</div>';
+   const q=k=>c.querySelector(k),re=()=>make().catch(fail);
+   if(md==='usdz'&&!quickLook()&&q('#arql')){const a=q('#arql');a.setAttribute('download','dom.usdz');a.lastChild.textContent='Stiahnuť model (USDZ)';}else if(q('#arql')&&md==='usdz')q('#arql').setAttribute('rel','ar');
+   if(md==='none'&&q('#arql'))q('#arql').setAttribute('download','dom.usdz');if(q('#arglb'))q('#arglb').setAttribute('download','dom.glb');
+   q('[data-x]').onclick=done;
+   c.querySelectorAll('[data-pl]').forEach(b=>b.onclick=()=>{O.place=b.dataset.pl;re();});
+   q('#artop').onchange=e=>{O.top=e.target.checked;re();};q('#arfu').onchange=e=>{O.furn=e.target.checked;re();};if(q('#arfl')){q('#arfl').value=O.floor;q('#arfl').onchange=e=>{O.floor=+e.target.value;re();};}
+   if(q('#arrods'))q('#arrods').onchange=e=>{O.rods=e.target.checked;re();};if(q('#aranc'))q('#aranc').onchange=e=>{O.anc=e.target.checked;re();};
    const sl=q('#arside');sl.value=O.side;sl.onchange=e=>{O.side=+e.target.value;re();};
-   if(O.anc){q('#armode').value=O.mode;q('#armode').onchange=e=>{O.mode=e.target.value;re();};q('#arapply').onclick=()=>{const h=rd('#arh');if(h!=null)O.h=Math.max(0,h);O.along=rd('#aralong');O.front=rd('#arfront');re();};}};
+   const rd=k=>{const e=q(k);if(!e)return null;const v=parseFloat(String(e.value).replace(',','.'));return isFinite(v)?Math.max(-50,Math.min(50,v)):0;};
+   if(q('#armode')){q('#armode').value=O.mode;q('#armode').onchange=e=>{O.mode=e.target.value;re();};q('#arapply').onclick=()=>{const h=rd('#arh');if(h!=null)O.h=Math.max(0,h);O.along=rd('#aralong');O.front=rd('#arfront');re();};}
+   if(q('#arpdf'))q('#arpdf').onclick=async e=>{e.preventDefault();const a=e.target;a.textContent='Pripravujem leták…';try{const pb=await QRm.flyerPDF(world,{S:Sf,floor:O.floor,furn:O.furn,side:O.side,title:document.title&&!/Vkro/.test(document.title)?document.title:'Váš dom'});const u=URL.createObjectURL(pb);window.__vkARpdf={size:pb.size,url:u};const d=document.createElement('a');d.href=u;d.download='letak_dom_AR.pdf';document.body.appendChild(d);d.click();d.remove();a.textContent='Leták stiahnutý (znova)';}catch(err){console.warn('[ar] pdf',err);a.textContent='Leták sa nepodarilo vytvoriť';}};
+   if(q('#arxr'))q('#arxr').onclick=async()=>{D.close();try{const G=buildModel(world,vo);if(O.rods)addRods(G);await startXR(G,{onEnd:()=>{busy=false;}});}catch(e){busy=false;console.warn('[ar]',e);toast('AR sa nepodarilo spustiť: '+(e&&e.message||e),'err');}};};
   const fail=e=>{busy=false;console.warn('[ar]',e);toast('AR model sa nepodarilo pripraviť.','err');const d=$('ardlg');if(d)d.remove();};
   await make();
  }catch(e){busy=false;console.warn('[ar]',e);toast('AR model sa nepodarilo pripraviť.','err');const d=$('ardlg');if(d)d.remove();}
 }
-export function mount(){if(Q.get('ar')==='0'||$('mAR'))return;const modes=$('modes');if(!modes){setTimeout(mount,400);return;}
+export function mount(){if(Q.get('ar')==='0'||(globalThis.__PF||{}).noAR||$('mAR'))return;const modes=$('modes');if(!modes){setTimeout(mount,400);return;}
  const b=document.createElement('button');b.id='mAR';b.title='Dom v skutočnej veľkosti na vašom pozemku (mobil)';b.innerHTML='<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M12 7l5 2.8v4.4L12 17l-5-2.8V9.8z"/></svg><span>AR</span>';
  b.onclick=onAR;const vr=$('mVR');modes.insertBefore(b,vr?vr.nextSibling:null);window.__vkARmount=1;}
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else mount();}
