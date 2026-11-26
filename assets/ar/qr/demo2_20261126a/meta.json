@@ -1,0 +1,21 @@
+{
+ "v": "20261126a",
+ "id": "demo2_20261126a",
+ "title": "Ukážkový rodinný dom",
+ "width": 14.9,
+ "depth": 7.44,
+ "scales": [
+  100,
+  50
+ ],
+ "markerMM": 80,
+ "url": "https://adamskusaai.github.io/vkroc-studio-dfac2a/ar-qr/index.html?v=20261126a&m=demo2_20261126a",
+ "files": [
+  "s100.glb",
+  "s100.usdz",
+  "s100_open.usdz",
+  "s50.glb",
+  "s50.usdz",
+  "s50_open.usdz"
+ ]
+}
