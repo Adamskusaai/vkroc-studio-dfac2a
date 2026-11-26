@@ -51,7 +51,7 @@ function piece(g,mw,start,count){let s=g;
  return out;}
 
 /* Vertex clustering: snap vertices to a c-metre grid, keep the first vertex of each cell, drop collapsed triangles. O(n), keeps the silhouette. */
-function cluster(g,c){const P=g.attributes.position,I=g.index.array,map=new Map(),rep=new Int32Array(P.count),keep=[];
+export function cluster(g,c){const P=g.attributes.position,I=g.index.array,map=new Map(),rep=new Int32Array(P.count),keep=[];
  for(let i=0;i<P.count;i++){const k=Math.floor(P.getX(i)/c)+','+Math.floor(P.getY(i)/c)+','+Math.floor(P.getZ(i)/c);let r=map.get(k);if(r==null){r=keep.length;map.set(k,r);keep.push(i);}rep[i]=r;}
  const ix=[];for(let i=0;i<I.length;i+=3){const a=rep[I[i]],b=rep[I[i+1]],d=rep[I[i+2]];if(a!==b&&b!==d&&a!==d)ix.push(a,b,d);}
  if(ix.length/3>I.length/3*.92)return g; // nothing gained
@@ -116,13 +116,13 @@ export function anchorMatrix(F,a){const sx=F.width/2-(+a.along||0),sz=-(+a.front
  if(a.mode==='ground')M.set(-1,0,0,sx, 0,1,0,-sy, 0,0,-1,sz, 0,0,0,1);   // sign flat on the ground, top edge towards the house
  else M.set(-1,0,0,sx, 0,0,-1,sz, 0,-1,0,sy, 0,0,0,1);                   // upright sign facing the street
  return M;}
-export async function toUSDZ(G,{maxTex=+(Q.get('artex')||512),anchor=null}={}){
+export async function toUSDZ(G,{maxTex=+(Q.get('artex')||512),anchor=null,matrix=null,marker=null}={}){ // matrix+marker: custom image anchoring (ar-qr tabletop flyer), marker={png,cm}
  const {USDZExporter}=await import('./ar-usdz.js?v='+AR_V);
  const S=new THREE.Scene(),R=new THREE.Group();R.add(G);S.add(R);
  let ar={anchoring:{type:'plane'},planeAnchoring:{alignment:'horizontal'}};
- if(anchor){R.matrixAutoUpdate=false;R.matrix.copy(anchorMatrix(G.userData.front,anchor));
-  const bytes=new Uint8Array(await (await fetch(MARKER.png)).arrayBuffer());
-  ar={anchoring:{type:'image'},imageAnchoring:{file:'marker/vkroc_marker.png',physicalWidth:MARKER.cm,bytes}};}
+ if(anchor||matrix){const mk=marker||MARKER;R.matrixAutoUpdate=false;R.matrix.copy(matrix||anchorMatrix(G.userData.front,anchor));
+  const bytes=new Uint8Array(await (await fetch(mk.png)).arrayBuffer());
+  ar={anchoring:{type:'image'},imageAnchoring:{file:'marker/vkroc_marker.png',physicalWidth:mk.cm,bytes}};}
  else R.rotation.y=Math.PI;  // facade faces the viewer when the AR viewer drops it in front
  S.updateMatrixWorld(true);
  const buf=await new USDZExporter().parseAsync(S,{quickLookCompatible:true,maxTextureSize:maxTex,jpeg:Q.get('arjpeg')!=='0',ar});

@@ -1,0 +1,58 @@
+<!doctype html><html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Vkroč · Dom na pláne (AR)</title>
+<!-- v20261126b: Android = Scene Viewer intent (1.0, package com.google.ar.core, absolute https GLB, fallback URL with &sv=0) + watchdog: if the browser stays
+     on the page 2.5 s after the tap, a Slovak message and an in-page 3D viewer (three.js) appear, so the AR button never does nothing.
+     v20261126a "QR na pláne": the printed flyer's QR opens this page with ?m=<flyer id>; static files from assets/ar/qr/<id>/ (meta.json, s100.usdz, s50.usdz, *_open.usdz, s100.glb, s50.glb, plan.png).
+     Without ?m it is the entry page (link target for the studio's secondary option "AR / QR na pláne"). No tracking, no uploads. -->
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+<style>body{margin:0;font:15px/1.45 Inter,system-ui,sans-serif;color:#1b1b1b;background:#FAF8F5}main{max-width:560px;margin:0 auto;padding:18px}
+h1{font-size:22px;margin:4px 0 2px}.s{color:#666;font-size:13.5px}.card{background:#fff;border:1px solid #E3DFD8;border-radius:16px;padding:14px;margin:14px 0}
+img.plan{width:100%;border-radius:10px;border:1px solid #eee}.seg{display:flex;gap:8px;margin:10px 0}.seg button{flex:1;height:42px;border-radius:12px;border:1px solid #E3DFD8;background:#fff;font:600 15px Inter,system-ui}
+.seg button.on{background:#1b1b1b;color:#fff;border-color:#1b1b1b}.go{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:14px;background:#E2552D;color:#fff;font-weight:700;font-size:17px;text-decoration:none;margin-top:10px}
+.go img{width:22px;height:22px}ol{padding-left:20px;margin:6px 0}label.ck{display:flex;gap:8px;align-items:center;margin:6px 0}a{color:#C2401C}.warn{color:#9a3412}.msg{background:#FFF4E5;border:1px solid #F5C58A;border-radius:12px;padding:10px 12px;margin-top:10px;font-size:14px}.sec{display:block;text-align:center;margin-top:10px;font-weight:600}
+#v3{position:fixed;inset:0;background:#FAF8F5;z-index:50;display:flex;flex-direction:column}#v3 canvas{flex:1;width:100%;touch-action:none}#v3 .bar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:14px}#v3 button{height:40px;border-radius:12px;border:1px solid #E3DFD8;background:#fff;font:600 15px Inter,system-ui;padding:0 14px}</style></head>
+<body><main id="m"></main>
+<script>
+(function(){const V='20261126b',Q=new URLSearchParams(location.search),id=Q.get('m')||'',M=document.getElementById('m');
+const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1),and=/Android/i.test(navigator.userAgent);
+const ql=(()=>{const a=document.createElement('a');return !!(a.relList&&a.relList.supports&&a.relList.supports('ar'));})();
+const ICON='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22%3E%3Cpath d=%22M12 2l9 5v10l-9 5-9-5V7z%22/%3E%3Cpath d=%22M12 12l9-5M12 12v10M12 12L3 7%22/%3E%3C/svg%3E';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+if(!/^[a-z0-9_]{3,60}$/.test(id)){ // entry page
+ M.innerHTML='<h1>Dom na pláne (AR)</h1><div class="s">Vytlačený plán alebo leták s QR kódom. Klient ho naskenuje mobilom a 3D model domu sa postaví priamo na papier v mierke 1:100 alebo 1:50.</div>'+
+ '<div class="card"><b>Vyskúšajte ukážku</b><ol><li>Vytlačte <a href="letak_demo2_20261126a.pdf" target="_blank">ukážkový leták (A4, PDF)</a> v mierke 100 %.</li><li>Položte ho na stôl a naskenujte QR kód iPhonom.</li><li>Ťuknite na <b>Otvoriť v AR</b> a namierte mobil na obrázok vľavo dole. Dom sa postaví na pôdorys.</li></ol>'+
+ '<a class="go" href="index.html?v='+V+'&m=demo2_20261126a"><img alt="" src="'+ICON+'">Otvoriť ukážku</a></div>'+
+ '<div class="card s">Leták pre váš vlastný projekt zatiaľ pripravujeme my (prototyp). Na iPhone dom sedí presne na pláne. Na Androide ho zatiaľ položíte na stôl ručne.</div>';return;}
+const base='../assets/ar/qr/'+id+'/';const notChrome=and&&(/SamsungBrowser|Firefox|FxiOS|OPR|EdgA|MiuiBrowser|HuaweiBrowser|YaBrowser|; wv\)/.test(navigator.userAgent)||!/Chrome\//.test(navigator.userAgent));
+let left=false,wd=0;document.addEventListener('visibilitychange',()=>{if(document.hidden)left=true;});window.addEventListener('pagehide',()=>{left=true;});
+const MSG='<div class="msg fb"><b>AR sa neotvorilo.</b> Telefón asi nemá službu <b>Google Play Services for AR</b> (ARCore) alebo prehliadač nepovolil otvorenie. Nainštalujte ju z Obchodu Play a skúste znova v Chrome, alebo si dom pozrite v 3D nižšie.</div>';
+async function view3d(url,top){const T=await import('three'),{GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js'),{OrbitControls}=await import('three/addons/controls/OrbitControls.js');
+ const d=document.createElement('div');d.id='v3';d.innerHTML='<div class="bar"><span id="v3s">Načítavam 3D model…</span><button>Zavrieť</button></div>';document.body.appendChild(d);
+ const r=new T.WebGLRenderer({antialias:true});r.setPixelRatio(Math.min(2,devicePixelRatio));d.appendChild(r.domElement);const sc=new T.Scene();sc.background=new T.Color(0xFAF8F5);
+ sc.add(new T.HemisphereLight(0xffffff,0x998877,2.5));const dl=new T.DirectionalLight(0xffffff,1.5);dl.position.set(1,2,1.5);sc.add(dl);
+ const cam=new T.PerspectiveCamera(40,1,.001,10),oc=new OrbitControls(cam,r.domElement);oc.enableDamping=true;let on=true;
+ const fit=()=>{const w=d.clientWidth,h=d.clientHeight-60;r.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix();};fit();addEventListener('resize',fit);
+ d.querySelector('button').onclick=()=>{on=false;r.dispose();d.remove();removeEventListener('resize',fit);};
+ (function loop(){if(!on)return;oc.update();r.render(sc,cam);requestAnimationFrame(loop);})();
+ new GLTFLoader().load(url,g=>{const o=g.scene;sc.add(o);const b=new T.Box3().setFromObject(o),c=b.getCenter(new T.Vector3()),z=b.getSize(new T.Vector3()).length();
+  oc.target.copy(c);const kk=cam.aspect<1?1.1/cam.aspect:1;cam.position.set(c.x+z*.2*kk,c.y+z*.6*kk,c.z+z*.8*kk);cam.near=z/100;cam.far=z*20;cam.updateProjectionMatrix();d.querySelector('#v3s').textContent='3D náhľad (otáčajte prstom)';window.__qr3d=1;},
+  undefined,()=>{d.querySelector('#v3s').textContent='3D model sa nepodarilo načítať.';});}let S=100,top=true,meta=null;
+const fm=x=>(+x).toFixed(2).replace('.',',');
+function draw(){const f=base+'s'+S+(top?'':'_open')+'.usdz',abs=new URL(base+'s'+S+'.glb',location.href).href;
+ let btn='';
+ if(ios||ql)btn='<a class="go" rel="ar" id="arql" href="'+f+'#allowsContentScaling=0"><img alt="" src="'+ICON+'">Otvoriť v AR</a>';
+ else if(and){const fb=new URL(location.href);fb.searchParams.set('sv','0');
+  const sv='intent://arvr.google.com/scene-viewer/1.0?file='+encodeURIComponent(abs)+'&mode=ar_preferred&resizable=false&title='+encodeURIComponent(meta.title)+'#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url='+encodeURIComponent(fb.href)+';end;';
+  btn='<a class="go" id="arsv" href="'+sv+'"><img alt="" src="'+ICON+'">Otvoriť v AR</a>'+(notChrome?'<div class="msg">Ak sa AR neotvorí, otvorte tento odkaz v prehliadači <b>Chrome</b>.</div>':'')+(Q.get('sv')==='0'?MSG:'')+'<a class="sec" href="#" id="v3b">Zobraziť dom v 3D priamo tu</a><div class="s">Android: dom položte na papier ručne (presné ukotvenie na plán zatiaľ len na iPhone).</div>';}
+ else btn='<div class="s warn">Otvorte túto stránku na mobile (iPhone v Safari alebo Android v Chrome) naskenovaním QR kódu na letáku.</div><div class="s"><a href="'+f+'" download>Stiahnuť model (USDZ)</a> · <a href="'+base+'s'+S+'.glb" download>GLB</a></div>';
+ M.innerHTML='<h1>'+esc(meta.title)+'</h1><div class="s">Šírka '+fm(meta.width)+' m · hĺbka '+fm(meta.depth)+' m</div>'+
+ '<div class="card"><img class="plan" src="'+base+'plan.png" alt="Pôdorys">'+
+ '<div class="seg"><button data-s="100" class="'+(S===100?'on':'')+'">1:100 (na pláne)</button><button data-s="50" class="'+(S===50?'on':'')+'">1:50 (väčší)</button></div>'+
+ '<label class="ck"><input type="checkbox" id="top" '+(top?'checked':'')+'>So strechou (bez strechy uvidíte izby)</label>'+btn+
+ '<ol class="s"><li>Leták položte na stôl, rovno a dobre osvetlený.</li><li>Ťuknite na <b>Otvoriť v AR</b> a namierte mobil na obrázok s nápisom VKROČ z 30–40 cm.</li><li>Dom sa postaví na pôdorys'+(S===50?' (v 1:50 je dvakrát väčší a presahuje papier)':'')+'. Potom môžete chodiť okolo.</li></ol></div>';
+ const sb=M.querySelector('#arsv');if(sb)sb.addEventListener('click',()=>{left=false;clearTimeout(wd);wd=setTimeout(()=>{if(!left&&!document.hidden){const b=M.querySelector('#v3b');if(b&&!M.querySelector('.msg.fb'))b.insertAdjacentHTML('beforebegin',MSG);}},2500);});
+ const vb=M.querySelector('#v3b');if(vb)vb.onclick=e=>{e.preventDefault();view3d(base+'s'+S+'.glb',top);};
+ M.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{S=+b.dataset.s;draw();});M.querySelector('#top').onchange=e=>{top=e.target.checked;draw();};}
+fetch(base+'meta.json').then(r=>{if(!r.ok)throw 0;return r.json();}).then(j=>{meta=j;draw();}).catch(()=>{M.innerHTML='<h1>Model sa nenašiel</h1><div class="s">Skontrolujte QR kód alebo <a href="index.html?v='+V+'">otvorte ukážku</a>.</div>';});
+})();
+</script></body></html>
