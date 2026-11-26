@@ -1,5 +1,5 @@
 import {detectWalls,gapMerge} from './cv.js?v=20261112j';
-import {readPlan} from './plan.js?v=20261122m';
+import {readPlan} from './plan.js?v=20261122n';
 import {makeRoom,layoutRoom,validateRoom,sanitizeOpenings,DIM3} from './layout.js?v=20261122h';
 import {I,paint} from './icons.js?v=20261112j';
 paint();
@@ -314,14 +314,18 @@ function assignTypes(R,L){const RS=R.r;if(!RS.length)return {};const key=R.k+'|'
    const smallRest=free().filter(r=>r.a>=8).length;/* v21e: a living room holding 2+ printed room areas is an open plan read as one room - its kitchen is inside it, not next door */const livN=liv?(H.rarea||[]).filter(q=>q.level===L&&q.p&&q.v>=1&&roomAtL(R,q.p)===liv.id).length:0;if(c&&!(liv&&liv.a>=26&&smallRest<3)&&!(livN>=2&&liv.a>=26&&!(globalThis.__PF||{}).noOpenKit))T[c.id]='Kuchyňa';else if(liv)T[liv.id]='Obývačka s kuchyňou';}
   // bathroom next to the WC (or the smallest wet-size room)
   if(!has('Kúpeľňa')){const wc=M.find(r=>T[r.id]==='WC');const c=free().filter(r=>r.a>=2.8&&r.a<=11).sort((a,b)=>(wc?dist(a,wc):a.a)+nD(a)-(wc?dist(b,wc):b.a)-nD(b))[0];if(c)T[c.id]='Kúpeľňa';}
-  free().forEach(r=>{const I=info(r);if((r.a<10&&adj[r.id].size>=3)||(I.fill<.6&&I.mn<2.4&&r.a<20))hall(r);});
+  /* v22n RULE (suite, PF.noSuite): a room whose door neighbours, all but one, are small dead-end rooms (< 5 m2, entered only from it) is a bedroom
+     with its own bathroom / walk-in closet, not a hallway; such a dead-end room behind a bedroom that is still untyped is its Šatník. audit: room-type */
+  const NOS=(globalThis.__PF||{}).noSuite,dead=q=>q&&q.a<5&&adj[q.id]&&adj[q.id].size===1,suite=r=>{if(NOS)return false;const nb=[...adj[r.id]].map(i=>RS.find(q=>q.id===i)).filter(Boolean);return nb.length>=3&&nb.filter(q=>dead(q)&&adj[q.id].has(r.id)).length>=nb.length-1;};
+  free().forEach(r=>{const I=info(r);if(suite(r))return;if((r.a<10&&adj[r.id].size>=3)||(I.fill<.6&&I.mn<2.4&&r.a<20))hall(r);});
   if(!has('WC')){const c=free().filter(r=>r.a<4).sort((a,b)=>a.a-b.a)[0];if(c)T[c.id]='WC';}
   if(!has('Kúpeľňa')&&M.length>=3){/* a home always has a bathroom: smallest free room up to 14 m2 */const wc=M.find(r=>T[r.id]==='WC');const c=free().filter(r=>r.a>=2.5&&r.a<=14).sort((a,b)=>a.a-b.a+(wc?.3*(dist(a,wc)-dist(b,wc)):0)+nD(a)-nD(b))[0];if(c)T[c.id]='Kúpeľňa';}
   // bedrooms and the rest
   /* v12g: a plan that captions its bedrooms plainly 'IZBA' keeps them 'Izba' (no invented Spálňa/Detská/Pracovňa) */const LBN=(H.rlab||[]).filter(l=>l.level===L).map(l=>l.n),izP=LBN.includes('Izba')&&!LBN.some(n=>/^(Spálňa|Detská|Pracovňa)/.test(n));
   const BIG=izP?['Izba']:['Spálňa','Detská izba','Detská izba','Pracovňa','Izba'],MID=['Pracovňa','Detská izba','Šatník','Izba'],SM=['Technická miestnosť','Šatník','Komora','Špajza'];let bi=0,mi=0,si=0;
   if(has('Spálňa'))bi=1;
-  free().forEach(r=>{if(ext.has(r.id)&&r.a<9&&!has('Predsieň')){T[r.id]='Predsieň';return;}/* v12g: small room behind an exterior door = entrance, not a technical room */if(r.a>=9||(izP&&r.a>=7))T[r.id]=BIG[Math.min(bi++,BIG.length-1)];else if(r.a>=5)T[r.id]=MID[Math.min(mi++,MID.length-1)];else T[r.id]=SM[Math.min(si++,SM.length-1)];});}
+  free().forEach(r=>{if(!NOS&&dead(r)&&r.a>=1.5){const b=RS.find(q=>adj[r.id].has(q.id));if(b&&(suite(b)||/^(Izba|Spálňa|Detská)/.test(T[b.id]||''))&&(T[b.id]||free().includes(b))){r._sat=1;}}});
+  free().forEach(r=>{if(r._sat){delete r._sat;T[r.id]='Šatník';return;}if(ext.has(r.id)&&r.a<9&&!has('Predsieň')){T[r.id]='Predsieň';return;}/* v12g: small room behind an exterior door = entrance, not a technical room */if(r.a>=9||(izP&&r.a>=7))T[r.id]=BIG[Math.min(bi++,BIG.length-1)];else if(r.a>=5)T[r.id]=MID[Math.min(mi++,MID.length-1)];else T[r.id]=SM[Math.min(si++,SM.length-1)];});}
  // unique names: second "Detská izba" -> "Detská izba 2"
  const cnt={},seen={};Object.values(T).forEach(n=>cnt[n]=(cnt[n]||0)+1);
  RS.slice().sort((a,b)=>b.a-a.a).forEach(r=>{const n=T[r.id];if(cnt[n]>1){seen[n]=(seen[n]||0)+1;if(seen[n]>1||n==='Izba')T[r.id]=n+' '+seen[n];}/* Izba 1..n */});

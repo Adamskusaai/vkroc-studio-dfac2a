@@ -692,7 +692,7 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
   const s0=ss[0];walls.push(s0.hz?{start:[r(a),r(cc)],end:[r(b),r(cc)],thickness:th,op}:{start:[r(cc),r(a)],end:[r(cc),r(b)],thickness:th,op});}
  /* v22k RULE (bump-out cut, PF.noBumpCut): a wall piece between two cross walls that both run on to a parallel wall beyond it, with almost no wall ink along the piece,
     is a line continued through a room that bumps out (bungalow 'IZBA 1' 12.0 m2 cut to 8.6 by the outer line drawn on through it). The piece is removed, openings outside kept. */
- if((globalThis.__PF||{}).dbgInk){const hz=w=>Math.abs(w.start[1]-w.end[1])<1e-6;dbg.wInk=walls.map(w=>{let n=0,on=0;const h=hz(w),c=h?w.start[1]:w.start[0],a=h?Math.min(w.start[0],w.end[0]):Math.min(w.start[1],w.end[1]),b=h?Math.max(w.start[0],w.end[0]):Math.max(w.start[1],w.end[1]);for(let u=a;u<=b;u+=.05){n++;const X=Math.round((h?u:c)*ppm),Y=Math.round((h?c:u)*ppm);if(X>=0&&Y>=0&&X<W&&Y<H&&ink[Y*W+X])on++;}return +(on/Math.max(1,n)).toFixed(2);});}
+ if((globalThis.__PF||{}).dbgInk){const hz=w=>Math.abs(w.start[1]-w.end[1])<1e-6;dbg.wInk=walls.map(w=>{let n=0,on=0;const h=hz(w),c=h?w.start[1]:w.start[0],a=h?Math.min(w.start[0],w.end[0]):Math.min(w.start[1],w.end[1]),b=h?Math.max(w.start[0],w.end[0]):Math.max(w.start[1],w.end[1]);for(let u=a;u<=b;u+=.05){n++;const X=Math.round((h?u:c)*ppm),Y=Math.round((h?c:u)*ppm);if(X>=0&&Y>=0&&X<W&&Y<H&&ink[Y*W+X])on++;}return +(on/Math.max(1,n)).toFixed(2);});}if((globalThis.__PF||{}).dbgInk){const hz=w=>Math.abs(w.start[1]-w.end[1])<1e-6;dbg.wProf=walls.map(w=>{const h=hz(w),c=h?w.start[1]:w.start[0],a=h?Math.min(w.start[0],w.end[0]):Math.min(w.start[1],w.end[1]),b=h?Math.max(w.start[0],w.end[0]):Math.max(w.start[1],w.end[1]);let st='';for(let u=a;u<=b;u+=.1){let on=0;for(let v=-.04;v<=.041;v+=.04){const X=Math.round((h?u:c+v)*ppm),Y=Math.round((h?c+v:u)*ppm);if(X>=0&&Y>=0&&X<W&&Y<H&&ink[Y*W+X])on++;}st+=on?'#':'.';}let ex='';for(let u=b+.1;u<=b+2.5;u+=.1){let on=0;for(let v=-.04;v<=.041;v+=.04){const X=Math.round((h?u:c+v)*ppm),Y=Math.round((h?c+v:u)*ppm);if(X>=0&&Y>=0&&X<W&&Y<H&&ink[Y*W+X])on++;}ex+=on?'#':'.';}return [r(a),r(b),r(c),h?'h':'v',st,ex];});}
  if(!(globalThis.__PF||{}).noBumpCut&&walls.length>=6){let nb=0;const hz=w=>Math.abs(w.start[1]-w.end[1])<1e-6,lo=w=>hz(w)?Math.min(w.start[0],w.end[0]):Math.min(w.start[1],w.end[1]),hi=w=>hz(w)?Math.max(w.start[0],w.end[0]):Math.max(w.start[1],w.end[1]),cc=w=>hz(w)?w.start[1]:w.start[0];
   const inkAt=(x,y)=>{const X=Math.round(x*ppm),Y=Math.round(y*ppm);return X>=0&&Y>=0&&X<W&&Y<H&&ink[Y*W+X];};
   const Tmx=Math.max(...walls.map(w=>w.thickness)),ax=walls.flatMap(w=>[w.start[0],w.end[0]]),az=walls.flatMap(w=>[w.start[1],w.end[1]]),mx=(Math.min(...ax)+Math.max(...ax))/2,mz=(Math.min(...az)+Math.max(...az))/2;
@@ -710,6 +710,33 @@ function readPlan1(img,o={}){const dbg={},T0=performance.now(),tm=k=>{dbg.t=dbg.
      walls.splice(k,1,...[w1,w2].filter(w=>hi(w)-lo(w)>.2));nb++;dbg.bumpCut=(dbg.bumpCut||[]).concat([[+c.toFixed(2),+u1.toFixed(2),+u2.toFixed(2),+(on/n).toFixed(2)]]);k=-1;break;}
     if(k===-1)break;}
    if(nb>6)break;}}
+ /* v22n RULE (T-swap, PF.noTSwap): at a T where wall B ends on wall A, A's piece beyond the T (to its end) is almost bare (< tsA ink) while B's own
+    line continued across to the next parallel wall (<= 3 m) is well inked (>= tsB) - the T is the other way round: A stops at the T and B runs on,
+    its longest bare run (>= .6 m) a door (bungalow: the Šatník side wall was drawn on through IZBA 2 over the bed, the Šatník front with sliding doors lost). */
+ if(!(globalThis.__PF||{}).noTSwap&&walls.length>=6){const PFt=globalThis.__PF||{},tA=PFt.tsA??.35,tB=PFt.tsB??.45;const hz=w=>Math.abs(w.start[1]-w.end[1])<1e-6,lo=w=>hz(w)?Math.min(w.start[0],w.end[0]):Math.min(w.start[1],w.end[1]),hi=w=>hz(w)?Math.max(w.start[0],w.end[0]):Math.max(w.start[1],w.end[1]),cc=w=>hz(w)?w.start[1]:w.start[0];
+  const inkAt=(x,y)=>{const X=Math.round(x*ppm),Y=Math.round(y*ppm);return X>=0&&Y>=0&&X<W&&Y<H&&ink[Y*W+X];};
+  const frac=(h,c,u1,u2,t)=>{let n=0,on=0,runs=[],r0=null;for(let u=u1;u<=u2;u+=.05){n++;let f=0;for(const v of[-t/3,0,t/3])if(h?inkAt(u,c+v):inkAt(c+v,u))f++;if(f){on++;if(r0!=null){runs.push([r0,u]);r0=null;}}else if(r0==null)r0=u;}if(r0!=null)runs.push([r0,u2]);return{f:n?on/n:1,runs};};
+  const Tmx=Math.max(...walls.map(w=>w.thickness));let ns=0;
+  for(let bi=0;bi<walls.length&&ns<3;bi++){const B=walls[bi];if(B.thickness>=.75*Tmx)continue;const hb=hz(B),cb=cc(B);
+   for(const end of[0,1]){const ue=end?hi(B):lo(B),dir=end?1:-1;
+    const A=walls.find(q=>q!==B&&hz(q)!==hb&&q.thickness<.75*Tmx&&Math.abs(cc(q)-ue)<=q.thickness/2+.08&&lo(q)<cb-.3&&hi(q)>cb+.3);if(!A)continue;const ca=cc(A);
+    /* A's piece beyond the T on each side; the bare one (with no window) is the candidate */
+    for(const sd of[-1,1]){const p1=sd>0?cb+B.thickness/2:lo(A),p2=sd>0?hi(A):cb-B.thickness/2;if(p2-p1<1)continue;
+     if((A.op||[]).some(o=>o.type==='window'&&lo(A)+o.offset<p2&&lo(A)+o.offset+o.width>p1))continue;
+     const fa=frac(!hb,ca,p1+.1,p2-.1,A.thickness).f;if(fa>=tA)continue;
+     /* B continued: up to the first wall parallel to A crossing B's line */
+     const Q=walls.filter(q=>q!==A&&hz(q)===hz(A)&&(cc(q)-ca)*dir>.6&&(cc(q)-ca)*dir<=3&&lo(q)<=cb+.05&&hi(q)>=cb-.05).sort((m,k)=>(cc(m)-ca)*dir-(cc(k)-ca)*dir)[0];if(!Q)continue;
+     const e1=ca+dir*A.thickness/2,e2=cc(Q)-dir*Q.thickness/2,x1=Math.min(e1,e2),x2=Math.max(e1,e2);const fb=frac(hb,cb,x1,x2,Math.max(.08,B.thickness));if(fb.f<tB)continue;
+     /* a parallel wall already closing that gap -> nothing missing */
+     if(walls.some(q=>q!==B&&hz(q)===hb&&Math.abs(cc(q)-cb)<.25&&lo(q)<x2-.3&&hi(q)>x1+.3))continue;
+     const run=fb.runs.filter(r2=>r2[1]-r2[0]>=.6).sort((m,k)=>(k[1]-k[0])-(m[1]-m[0]))[0];
+     /* trim A: keep its other side (openings there kept, re-offset) */
+     const a0=lo(A),keep=sd>0?[a0,cb]:[cb,hi(A)],mk=(h,c,p0,p1)=>h?{start:[p0,c],end:[p1,c]}:{start:[c,p0],end:[c,p1]};
+     const A2={...mk(!hb,ca,keep[0],keep[1]),thickness:A.thickness,op:(A.op||[]).filter(o=>a0+o.offset>=keep[0]-.01&&a0+o.offset+o.width<=keep[1]+.01).map(o=>({...o,offset:+(a0+o.offset-keep[0]).toFixed(2)}))};
+     const nb0=Math.min(lo(B),cc(Q)),nb1=Math.max(hi(B),cc(Q));const B2={...mk(hb,cb,nb0,nb1),thickness:B.thickness,op:(B.op||[]).map(o=>({...o,offset:+(lo(B)+o.offset-nb0).toFixed(2)}))};
+     if(run)B2.op.push({type:'door',offset:+(run[0]-nb0).toFixed(2),width:+Math.min(1.6,run[1]-run[0]).toFixed(2),height:2.05});
+     walls[walls.indexOf(A)]=A2;walls[bi]=B2;ns++;dbg.tSwap=(dbg.tSwap||[]).concat([[+ca.toFixed(2),+cb.toFixed(2),+fa.toFixed(2),+fb.f.toFixed(2),run?+(run[1]-run[0]).toFixed(2):0]]);break;}
+    if(walls[bi]!==B)break;}}}
  // confidence: closed outline + reasonable count + interior walls
  const cov=sideCoverage(S,bb);const conf=Math.min(1,(cov.n/4)*.6+(S.length>=6?.25:S.length/24)+(ops.length?.15:0));
  dbg.cov=cov;dbg.ops=ops.length;dbg.scale=sc.src;dbg.ppm=+ppm.toFixed(2);
