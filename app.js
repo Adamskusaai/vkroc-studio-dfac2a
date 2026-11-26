@@ -347,7 +347,7 @@ function align(b,a){GUIDES=[];const tol=10*devicePixelRatio/view.s;let bx=null,b
 let WLB=[];
 function draw(){WLB=[];cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#FAF9F6';cx.fillRect(0,0,cv.width,cv.height);
  if(EXP){cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);}
- if(bg&&!EXP){const P=toS([0,0]),w=bgW*view.s;cx.globalAlpha=.6;cx.drawImage(bg,P[0],P[1],w,w*bg.height/bg.width);cx.globalAlpha=1;}
+ if(bg&&!EXP){const P=toS([H.underlay&&H.underlay.ox||0,H.underlay&&H.underlay.oz||0]),w=bgW*view.s;cx.globalAlpha=.6;cx.drawImage(bg,P[0],P[1],w,w*bg.height/bg.width);cx.globalAlpha=1;}
  cx.lineWidth=1;if(!EXP){const gs=i=>cx.strokeStyle=i%5?'#EEEBE5':'#E0DBD2';const x0=Math.floor(view.x),y0=Math.floor(view.y);for(let i=x0;i<x0+cv.width/view.s+1;i++){gs(i);const a=toS([i,0])[0];cx.beginPath();cx.moveTo(a,0);cx.lineTo(a,cv.height);cx.stroke();}
  for(let i=y0;i<y0+cv.height/view.s+1;i++){gs(i);const a=toS([0,i])[1];cx.beginPath();cx.moveTo(0,a);cx.lineTo(cv.width,a);cx.stroke();}}
  if(H.plot&&H.plot.pts.length>2){cx.beginPath();H.plot.pts.forEach((p,i)=>{const P=toS(p);i?cx.lineTo(...P):cx.moveTo(...P);});cx.closePath();cx.fillStyle='rgba(122,154,90,.13)';cx.fill();cx.setLineDash([8*devicePixelRatio,6*devicePixelRatio]);cx.strokeStyle=H.plot.fence?'#5f7f42':'#7a9a5a';cx.lineWidth=(H.plot.fence?2.5:1.5)*devicePixelRatio;cx.stroke();cx.setLineDash([]);
@@ -604,7 +604,7 @@ window.__labStat=(L=lvl)=>{const RS=rooms(L),R=RC[L];if(!R)return null;const A=(
  RS.forEach(r=>{const v=by[r.id];if(v&&v.length===1&&Math.abs(Math.log(r.a/v[0])-mu)<.2)ok++;});
  return{det:A.map(a=>{const id=roomAtL(R,a.p),r=RS.find(r=>r.id===id);return [a.v,r?r.n:id,r?+r.a.toFixed(1):null];}),mu:+mu.toFixed(2),lab:A.length,rooms:RS.length,single:ids.filter(k=>by[k].length===1).length,merged:ids.filter(k=>by[k].length>1).length,lost,ok};};
 function scaleBy(f){snap();bgW=Math.round(bgW*f*100)/100;H.underlay.w=bgW;H.underlay.cal=1;$('imw').value=bgW;H.walls.forEach(w=>{w.start=w.start.map(c=>Math.round(c*f*100)/100);w.end=w.end.map(c=>Math.round(c*f*100)/100);});if(H.plot&&H.plot.pts)H.plot.pts=H.plot.pts.map(p=>[Math.round(p[0]*f*100)/100,Math.round(p[1]*f*100)/100]);const sp=o=>{o.p=[Math.round(o.p[0]*f*100)/100,Math.round(o.p[1]*f*100)/100];};(H.rlab||[]).forEach(sp);(H.rn||[]).forEach(sp);(H.rarea||[]).forEach(o=>{if(o.p)sp(o);});(H.furn||[]).forEach(sp);save();fit();banner();}
-$('rec').onclick=()=>recog();$('recx').onclick=()=>{const n=H.walls.filter(w=>w.auto&&w.level===lvl).length;if(!n)return;snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));save();draw();$('hint').textContent='Rozpoznané steny vymazané ('+n+'). Späť ich vráti.';toast('Vymazaných '+n+' rozpoznaných stien.','ok');};let sT;$('sens').oninput=()=>{clearTimeout(sT);sT=setTimeout(()=>H.underlay&&recog(1),350);};$('banc').onclick=()=>$('cal').click();
+$('rec').onclick=()=>recogA();$('recx').onclick=()=>{const n=H.walls.filter(w=>w.auto&&w.level===lvl).length;if(!n)return;snap();H.walls=H.walls.filter(w=>!(w.auto&&w.level===lvl));save();draw();$('hint').textContent='Rozpoznané steny vymazané ('+n+'). Späť ich vráti.';toast('Vymazaných '+n+' rozpoznaných stien.','ok');};let sT;$('sens').oninput=()=>{clearTimeout(sT);sT=setTimeout(()=>H.underlay&&recog(1),350);};$('banc').onclick=()=>$('cal').click();
 function afterImg(ns){const go=()=>{fit();recog(1,ns===2);};bg.complete&&bg.width?go():bg.onload=()=>{draw();go();};}
 const pickImg=m=>{imgMode=m;$('img').value='';$('img').click();};
 $('upl').onclick=()=>pickImg('ask');
@@ -652,12 +652,36 @@ async function plotDlg(st,stn){const p=H.plot,xs=p?p.pts.map(q=>q[0]):[],zs=p?p.
  const x0=r2(cx0-w/2),z0=r2(cz0-d/2);H.plot={pts:[[x0,z0],[x0+w,z0],[x0+w,z0+d],[x0,z0+d]],fence:r.f.fence?1:0};save();fit();toast('Pozemok '+w+' × '+d+' m'+(H.plot.fence?' s plotom':'')+'.','ok');return r;}
 async function wizNew(){const n=await dlg('Ako sa bude projekt volať?','<input type="text" value="Nový dom" placeholder="napr. Rodinný dom Kováč">',[['Zrušiť',null],['Vytvoriť',1,'go','next']],{step:[0,3]});if(!n)return;
  newP(n.name||'Nový dom');let r=await plotDlg(1,3);if(!r)return;r=await houseDlg(2,3);if(r&&r.v==='s'&&!H.walls.length)toast('Ťahaním po ploche nakreslite prvú stenu.','info');}
-$('imgs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,'sk',{numeric:true}));if(!fs.length)return;const n=await askName(fs[0].name.replace(/[-_ ]*\d*\.[^.]+$/,'')||'Nový dom');if(!n)return;
+/* v22o RULE (floor order, PF.noFloorGuess): several plan files for one house are ordered by the floor named in the file name
+   (suterén/pivnica < prízemie/1NP < poschodie/2NP < podkrovie/3NP), else by name with numbers in order; the user can reorder them before reading. */
+const FLK=[[/sutere|pivnic|podzem|(^|[^a-z0-9])(1\.?\s?pp|pp1)/i,0],[/prizem|prízem|(^|[^0-9])1\.?\s?np|np1|parter/i,1],[/poschod|(^|[^0-9])2\.?\s?np|np2|1\.?\s?posch/i,2],[/podkrov|(^|[^0-9])3\.?\s?np|np3|strech|povala/i,3]];
+function floorOrder(names){const ix=names.map((n,i)=>i).sort((a,b)=>names[a].localeCompare(names[b],'sk',{numeric:true}));if((globalThis.__PF||{}).noFloorGuess)return ix;
+ const rk=n=>{const t=n.normalize('NFD').replace(/[\u0300-\u036f]/g,'');for(const[re,k]of FLK)if(re.test(t)||re.test(n))return k;return -1;};const R=names.map(rk);if(R.filter(k=>k>=0).length<2)return ix;
+ return ix.map((i,o)=>[i,R[i]>=0?R[i]:1.5,o]).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(a=>a[0]);}
+/* v22o RULE (floor align, PF.noFloorAlign): each upper floor read from its own sheet sits wherever that sheet put it - its walls are moved so the
+   centre of its wall outline lies on the centre of the ground floor outline (all items of the floor and its underlay move with it). */
+function shiftLvl(L,dx,dz){const mv=a=>{if(Array.isArray(a)&&a.length>=2&&typeof a[0]==='number'){a[0]=r2(a[0]+dx);a[1]=r2(a[1]+dz);}};
+ H.walls.forEach(w=>{if(w.level===L){mv(w.start);mv(w.end);}});['furn','rlab','rarea','rn','stairs','decks','balc'].forEach(k=>(H[k]||[]).forEach(o=>{if(o.level!==L)return;mv(o.p);mv(o.pos);if(Array.isArray(o.r)&&o.r.length===4){o.r[0]=r2(o.r[0]+dx);o.r[1]=r2(o.r[1]+dz);o.r[2]=r2(o.r[2]+dx);o.r[3]=r2(o.r[3]+dz);}}));
+ const lv=H.levels.find(l=>l.name===L),u=(H.ulv||H.levels[0].name)===L?H.underlay:lv&&lv.ul;if(u){u.ox=r2((u.ox||0)+dx);u.oz=r2((u.oz||0)+dz);}if(window.__rcClear)window.__rcClear();}
+function lvBox(L){const ws=H.walls.filter(w=>w.level===L);if(ws.length<3)return null;const xs=ws.flatMap(w=>[w.start[0],w.end[0]]),zs=ws.flatMap(w=>[w.start[1],w.end[1]]);return[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];}
+function alignFloors(){if((globalThis.__PF||{}).noFloorAlign||H.levels.length<2)return[];const b0=lvBox(H.levels[0].name);if(!b0)return[];const c0=[(b0[0]+b0[2])/2,(b0[1]+b0[3])/2],out=[];
+ for(const l of H.levels.slice(1)){const b=lvBox(l.name);if(!b)continue;const dx=r2(c0[0]-(b[0]+b[2])/2),dz=r2(c0[1]-(b[1]+b[3])/2);if(Math.hypot(dx,dz)<.05)continue;shiftLvl(l.name,dx,dz);out.push([l.name,dx,dz]);}return out;}
+/* a floor moved by alignFloors keeps its underlay offset: reading it again reads in sheet coordinates and moves the result back */
+async function recogA(...a){const u=H.underlay,ox=u&&u.ox||0,oz=u&&u.oz||0;if(!ox&&!oz)return recog(...a);shiftLvl(lvl,-ox,-oz);try{return await recog(...a);}finally{shiftLvl(lvl,ox,oz);draw();}}
+window.__floorOrder=floorOrder;window.__alignFloors=alignFloors;window.__shiftLvl=shiftLvl;
+async function floorDlg(fs){const ord=floorOrder(fs.map(f=>f.name)),def=fs[ord[0]].name.replace(/[-_ ]*\d*\.[^.]+$/,'').replace(/[-_ ]*(pr[ií]zemie|poschodie|podkrovie|suter[eé]n|\d\.?\s?np)$/i,'')||'Nový dom';
+ const row=(i,k)=>'<div class="flr" data-f="'+i+'"><b>'+(k+1)+'. podlažie</b><span>'+esc(fs[i].name)+'</span><button type="button" class="fu" title="Vyššie">↑</button><button type="button" class="fd" title="Nižšie">↓</button><input type="hidden" name="o'+k+'" value="'+i+'"></div>';
+ const P=dlg('Viacpodlažný dom','<input type="text" value="'+esc(def)+'" placeholder="napr. Rodinný dom Kováč"><p class="fls">Poradie podlaží – zdola nahor. Prvé je prízemie (alebo suterén).</p><div id="flrs">'+ord.map(row).join('')+'</div><label class="chk"><input type="checkbox" name="al" checked> Zarovnať podlažia na seba podľa obvodových stien</label>',[['Zrušiť',null],['Vytvoriť 3D',1,'go']]);
+ const box=$('flrs'),re=()=>[...box.children].forEach((d,k)=>{d.querySelector('b').textContent=(k+1)+'. podlažie';d.querySelector('input').name='o'+k;});
+ box.onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.closest('.flr');if(b.classList.contains('fu')&&d.previousElementSibling)box.insertBefore(d,d.previousElementSibling);else if(b.classList.contains('fd')&&d.nextElementSibling)box.insertBefore(d.nextElementSibling,d);re();};
+ const r=await P;if(!r)return null;return{name:r.name||def,order:fs.map((_,k)=>+r.f['o'+k]),align:r.f.al!==false};}
+$('imgs').onchange=async e=>{const fs0=[...e.target.files];e.target.value='';if(!fs0.length)return;const D=await floorDlg(fs0);if(!D)return;const fs=D.order.map(i=>fs0[i]),n=D.name;
  const srcs=[];for(let i=0;i<fs.length;i++){busy('Načítavam obrázok '+(i+1)+' / '+fs.length+'…');const s=await readImg(fs[i]);if(s)srcs.push(s);}busy(0);if(!srcs.length)return;
  newP(n,[],null);H.levels=srcs.map((_,i)=>({name:(i+1)+'NP',elevation:Math.round(i*3.05*100)/100,height:2.8}));
  for(let i=0;i<srcs.length;i++){lvl=H.levels[i].name;H.underlay={src:srcs[i],w:20};H.ulv=lvl;setBg();await new Promise(r=>bg.complete&&bg.width?r():bg.onload=r);fit();await recog(1,true);if(i<srcs.length-1){LV().ul=H.underlay;H.underlay=null;}}
+ const AL=D.align?alignFloors():[];window.__lastAlign=AL;
  for(let i=0;i<H.levels.length-1;i++){const ws=H.walls.filter(w=>w.level===H.levels[i].name);if(ws.length){const xs=ws.flatMap(w=>[w.start[0],w.end[0]]),zs=ws.flatMap(w=>[w.start[1],w.end[1]]);(H.stairs=H.stairs||[]).push({level:H.levels[i].name,pos:[r2(Math.min(...xs)+.6),r2(Math.min(...zs)+.6)],dir:0,width:1,length:3.6});}}
- goLvl(H.levels[0].name);lvUI();save();toast(srcs.length+' podlažia, '+H.walls.length+' stien. Prepínajte podlažia vľavo hore.','ok',5000);};
+ goLvl(H.levels[0].name);lvUI();save();toast(srcs.length+' podlažia, '+H.walls.length+' stien'+(AL.length?', podlažia zarovnané na seba':'')+'. Prepínajte podlažia vľavo hore.','ok',5000);};
 $('ld').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(!j.walls)throw 0;j.name=j.name||f.name.replace(/\.json$/,'');openP('p'+Date.now(),j);}catch(_){toast('Neplatný súbor projektu.','err');}});};
 addEventListener('resize',()=>{if(H&&$('ed').classList.contains('on'))fit();});
 /* v20261117a: keep the canvas bitmap in sync with its CSS box. The header grows when the editor toolbar appears (main = 100% - --hh), which shrank the canvas without a refit, so the bitmap was squeezed vertically and every click landed lower than the cursor. */
