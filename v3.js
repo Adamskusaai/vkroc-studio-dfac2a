@@ -452,11 +452,13 @@ export function dollhouse(on){DIRTY=Math.max(DIRTY,180);if(!world)return;setWalk
  else{resetExterior();place(false,false);}
 }
 
+function deckStayY(p,pad=.12){if((globalThis.__PF||{}).noDeckStay||!DECKS||!DECKS.length)return null;for(const d of DECKS){if(p.x>=d[1]-pad&&p.x<=d[3]+pad&&p.z>=d[2]-pad&&p.z<=d[4]+pad){const y=d.length>5?d[5]:null;if(y!=null&&p.y>y-.9)return y;}}return null;}
+function snapWalkY(p){const hold=deckStayY(p);const y=body&&body.floor?body.floor(p):null;if((globalThis.__PF||{}).noDeckStay)return y;if(hold!=null)return hold;if(y!=null&&y<p.y-1)return p.y;return y;}
 function walkTick(dt){if(fly){const cancel=keys.KeyW||keys.KeyS||keys.KeyA||keys.KeyD||keys.ArrowUp||keys.ArrowDown||joy[0]||joy[1];if(cancel)fly=null;else{flyTick(dt);if(window.__onWalk)window.__onWalk(hereInfo());return;}}
  let f=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-joy[1],r=(keys.KeyD?1:0)-(keys.KeyA?1:0)+joy[0];
  if(keys.ArrowLeft)yaw-=dt*1.8;if(keys.ArrowRight)yaw+=dt*1.8;const sp=1.6*dt*(keys.ShiftLeft?2:1),p=rig.position;
  if(f||r){p.x+=(Math.sin(yaw)*f+Math.cos(yaw)*r)*sp;p.z+=(-Math.cos(yaw)*f+Math.sin(yaw)*r)*sp;if(body)body.resolve(p);}
- if(body){const y=body.floor(p);if(y!==null)p.y=y;}cam.position.set(0,1.6,0);cam.rotation.set(0,0,0);rig.rotation.set(0,0,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));if(window.__onWalk)window.__onWalk(hereInfo());}
+ if(body){const y=snapWalkY(p);if(y!==null)p.y=y;}cam.position.set(0,1.6,0);cam.rotation.set(0,0,0);rig.rotation.set(0,0,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));if(window.__onWalk)window.__onWalk(hereInfo());}
 function cells(ws,stairsHole){const C=.1;let xs=[],zs=[];ws.forEach(w=>{xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);});const x0=Math.min(...xs)-.5,z0=Math.min(...zs)-.5,
  nx=Math.ceil((Math.max(...xs)+.5-x0)/C),nz=Math.ceil((Math.max(...zs)+.5-z0)/C),g=new Uint8Array(nx*nz);
  ws.forEach(w=>{const G=geo(w),n=Math.ceil(G.L/(C/2)),t=w.thickness/2+.06;for(let i=0;i<=n;i++){const s=i*G.L/n;for(let k=-t;k<=t;k+=C/2){const x=G.x0+G.u[0]*s-G.u[1]*k,z=G.z0+G.u[1]*s+G.u[0]*k,ix=((x-x0)/C)|0,iz=((z-z0)/C)|0;if(ix>=0&&iz>=0&&ix<nx&&iz<nz)g[iz*nx+ix]=1;}}});
@@ -731,7 +733,8 @@ const m=add(fg,mat,cx,l.elevation+.03+.001*i,cz);m.receiveShadow=false;m.userDat
    for(let a=0;a<NX;a++)for(let b=0;b<NZ;b++){if(G[a*NZ+b]!==1||used[a*NZ+b])continue;let b1=b;while(b1+1<NZ&&G[a*NZ+b1+1]===1&&!used[a*NZ+b1+1])b1++;let a1=a;
     while(a1+1<NX){let ok=true;for(let k=b;k<=b1;k++)if(G[(a1+1)*NZ+k]!==1||used[(a1+1)*NZ+k]){ok=false;break;}if(!ok)break;a1++;}
     for(let p=a;p<=a1;p++)for(let k=b;k<=b1;k++)used[p*NZ+k]=1;const r=[X0+a*S,Z0+b*S,X0+(a1+1)*S,Z0+(b1+1)*S];if((r[2]-r[0])*(r[3]-r[1])<.04)continue;DG.push(r);}
-   DG.forEach(r=>{dc.push(r);const dk=add(new THREE.BoxGeometry(r[2]-r[0],.04,r[3]-r[1]),M.deck,(r[0]+r[2])/2,lh+.22,(r[1]+r[3])/2,0,1);dk.userData.lroof=1;DECKS.push([up.name,...r]);});
+   /* v22u RULE (upper deck stay, PF.noDeckStay): walkable roof-terrace decking is solid underfoot, so walking there keeps you on that storey instead of dropping through noCol planks onto the floor below. audit: deck-stay */
+   DG.forEach(r=>{dc.push(r);const stay=!(globalThis.__PF||{}).noDeckStay;const dk=add(new THREE.BoxGeometry(r[2]-r[0],.04,r[3]-r[1]),M.deck,(r[0]+r[2])/2,lh+.22,(r[1]+r[3])/2,0,stay?0:1);dk.userData.lroof=1;dk.userData.deck=1;dk.userData.walkDeck=1;DECKS.push([up.name,...r,lh+.24]);});
    /* v22r LOGIC RULE (upper deck cover, PF.noDeckCover): a walkable roof terrace gets a light anthracite pergola like the ground-floor terrace - slim posts only on
       the deck's outer corners (never inside the terrace where merged deck pieces meet), a perimeter beam 2.45 m above the deck and slats every 45 cm. Tagged
       roof+pergola+deckCover, so 'Bez strechy' (studio and AR) hides it like the roof. Pieces < 4 m2 or narrower than 1.5 m stay open. audit: deck-cover */
@@ -1087,7 +1090,7 @@ export function kindsAgree(){const bad=[];(H.levels||[]).forEach(l=>{const RK=ro
 export function streetInfo(){return SR&&{st:SR.st,dr:SR.dr,c:SR.c};}
 export function gen(h,anim){try{window.__entPath=null;}catch(e){}DIRTY=Math.max(DIRTY,90);H=streetTurn(h);init();const keep=(walk&&!anim&&rig)?{x:rig.position.x,y:rig.position.y,z:rig.position.z,yaw,pitch}:null;doGrow=!!anim;if(world){scene.remove(world);world.traverse(o=>o.geometry&&o.geometry.dispose());}DECKS=[];LROOF=[];world=build();doGrow=false;if(!world)return false;interiorFinish(world);backsplash(world);world.traverse(o=>{if(o.isMesh&&(o.material===M.path||o.material===M.deck)&&o.geometry.type==='BoxGeometry'){boxUV(o.geometry,o.position.x,o.position.z);}});dedupMats(world);scene.add(world);fitSun(world.userData.fp);nightLights();if(wxObj)makeWx();
  const colRoot=new THREE.Group();world.updateMatrixWorld(true);world.traverse(o=>{if(o.isMesh&&!o.userData.noCol&&!(o.parent&&o.parent.userData.noCol)){const m=o.clone();m.matrixAutoUpdate=false;m.matrix.copy(o.matrixWorld);colRoot.add(m);}});colRoot.updateMatrixWorld(true);
- try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
+ try{const col=colliderFromObject(colRoot);body=new Body(col,{radius:.18});if(!(globalThis.__PF||{}).noDeckStay){const raw=body.floor.bind(body);body.floor=function(p){const d=deckStayY(p),y=raw(p);if(d!=null&&(y==null||d>=y-.02))return d;return y;};}if(!loco)loco=new Locomotion({renderer:R,rig,camera:cam,scene,body,speed:1.4,snapDeg:30});else loco.body=body;}catch(err){console.warn('kolízie',err);}
  walk=walk&&!anim;
  if(keep&&walk){orb.enabled=false;if($('joy'))$('joy').style.display=!(R&&R.xr&&R.xr.isPresenting)&&isTouch()?'block':'none';setInteriorViz();bindJoy();
   rig.position.set(keep.x,keep.y,keep.z);yaw=keep.yaw;pitch=keep.pitch;nudgeFree(rig.position);if(cam){cam.position.set(0,1.6,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));}}
@@ -1296,6 +1299,9 @@ function walkAudit(P){if(!H||!H.levels)return;
 
 let DECKS=[],LROOF=[];
 export function decks(){return DECKS;}
+/* v22u: place the walk rig on a walkable roof terrace in world space (for stay-on-storey). */
+export function lookWalk(yw,pt){if(yw!=null)yaw=yw;if(pt!=null)pitch=pt;if(cam){cam.position.set(0,1.6,0);cam.rotation.set(0,0,0);if(rig)rig.rotation.set(0,0,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));}DIRTY=Math.max(DIRTY,30);return{yaw,pitch};}
+export function standDeck(i){const ds=(DECKS||[]).slice().sort((a,b)=>(b[3]-b[1])*(b[4]-b[2])-(a[3]-a[1])*(a[4]-a[2]));const d=ds[i||0];if(!d||!rig)return null;const x=(d[1]+d[3])/2,z=(d[2]+d[4])/2,y=d[5];fly=null;if(!walk)setWalk(true);rig.position.set(x,y,z);if(body&&body.resolve)body.resolve(rig.position);const yy=snapWalkY(rig.position);if(yy!=null)rig.position.y=yy;let tx=0,tz=0,n=0;(H.walls||[]).filter(w=>w.level===d[0]).forEach(w=>{tx+=w.start[0]+w.end[0];tz+=w.start[1]+w.end[1];n+=2;});if(n){yaw=Math.atan2((tx/n)-x,-((tz/n)-z));}pitch=.22;cam.position.set(0,1.6,0);cam.rotation.set(0,0,0);rig.rotation.set(0,0,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));DIRTY=Math.max(DIRTY,90);if(window.__onWalk)window.__onWalk(hereInfo());return{x,z,y:rig.position.y,L:d[0],want:y,w:d[3]-d[1],d:d[4]-d[2]};}
 export function audit(){const P=[],inR=(p,r,m=0)=>p[0]>r[0]-m&&p[0]<r[2]+m&&p[1]>r[1]-m&&p[1]<r[3]+m;if(!H||!H.levels)return P;
  (H.furn||[]).forEach(f=>{const li=H.levels.findIndex(l=>l.name===f.level);if(li<1)return;const cs=CELLS[f.level]||[];if(cs.some(r=>inR(f.p,r,.05)))return;
   if(!DECKS.some(d=>d[0]===f.level&&inR(f.p,[d[1],d[2],d[3],d[4]],.05)))P.push({rule:'furniture-on-slab',t:f.t,level:f.level,p:f.p});});
@@ -1572,7 +1578,7 @@ export function flyTo(x,z,e){if(!cam||!rig)return jump(x,z,e);[x,z]=srP([x,z]);c
  fly={t:0,t0:performance.now(),dur,sx:p.x,sy:p.y,sz:p.z,sh:cam.position.y||1.6,syaw:yaw,spitch:pitch,ex:x,ey:e||0,ez:z,eh:h,eyaw:tyaw,epitch:V&&V.p||0};DIRTY=Math.max(DIRTY,240);return fly;}
 export function isFlying(){return!!fly;}
 function flyTick(dt){if(!fly||!rig)return;fly.t=Math.min(1,(performance.now()-fly.t0)/(fly.dur*1000));const u=easeInOut(fly.t),p=rig.position;p.x=fly.sx+(fly.ex-fly.sx)*u;p.y=fly.sy+(fly.ey-fly.sy)*u;p.z=fly.sz+(fly.ez-fly.sz)*u;yaw=lerpAng(fly.syaw,fly.eyaw,u);pitch=fly.spitch+(fly.epitch-fly.spitch)*u;cam.position.set(0,fly.sh+(fly.eh-fly.sh)*u,0);cam.rotation.set(0,0,0);rig.rotation.set(0,0,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));DIRTY=Math.max(DIRTY,4);
- if(fly.t>=1){if(body&&body.resolve)body.resolve(p);const y=body&&body.floor&&body.floor(p);p.y=(y!=null&&Math.abs(y-fly.ey)<.7)?y:fly.ey;cam.position.set(0,fly.eh,0);fly=null;if(window.__onWalk)window.__onWalk(hereInfo());}}
+ if(fly.t>=1){if(body&&body.resolve)body.resolve(p);const hold=deckStayY(p);const y=body&&body.floor&&body.floor(p);p.y=hold!=null?hold:((y!=null&&Math.abs(y-fly.ey)<.7)?y:fly.ey);cam.position.set(0,fly.eh,0);fly=null;if(window.__onWalk)window.__onWalk(hereInfo());}}
 function greyMats(){if(!GREYM&&typeof THREE!=='undefined'){GREYM=new THREE.MeshStandardMaterial({color:0xb3b3ae,roughness:.92,metalness:.02,envMapIntensity:.35});GREYG=new THREE.MeshStandardMaterial({color:0x5c5c5a,roughness:.3,metalness:.04,transparent:true,opacity:.38,depthWrite:false,envMapIntensity:.2});}return GREYM;}
 function isFurnish(o){for(let x=o;x;x=x.parent){const u=x.userData||{};if(u.furn||u.bsp||u.wetTile)return true;if(u.doorLeaf)return false;}return false;}
 export function applyGrey(){if(!world)return;greyMats();world.traverse(o=>{if(o.userData.gHid){o.visible=true;o.userData.gHid=0;}if(o.userData.gMat){o.material=o.userData.gMat;o.userData.gMat=null;}});
