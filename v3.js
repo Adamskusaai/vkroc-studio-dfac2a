@@ -405,14 +405,14 @@ function tagLv(){if(!world||!H||world.userData.lvTag)return;world.userData.lvTag
 function applyCut(){if(!world)return;const on=DOLL&&LVCUT!=null&&H&&H.levels&&H.levels.length>1;if(on)tagLv();
  world.traverse(o=>{if(o.userData.cutHid){o.visible=true;o.userData.cutHid=0;}if(o.userData.m0){o.material=o.userData.m0;o.userData.m0=null;}});
  if(!on)return;if(!GHOST)GHOST=new THREE.MeshBasicMaterial({color:0xe6e0d8,transparent:true,opacity:.32,depthWrite:false});
- world.traverse(o=>{const lv=o.userData.lv;if(lv==null)return;if(lv>LVCUT){if(o.visible){o.visible=false;o.userData.cutHid=1;}}else if(lv<LVCUT&&o.userData.inH){o.traverse(x=>{if(x.isMesh&&!x.userData.m0){x.userData.m0=x.material;x.material=GHOST;}});}});DIRTY=Math.max(DIRTY,90);}
+ world.traverse(o=>{const lv=o.userData.lv;if(lv==null)return;if(lv>LVCUT){if(o.visible){o.visible=false;o.userData.cutHid=1;}}else if(lv<LVCUT&&o.userData.inH){o.traverse(x=>{if(x.isMesh&&!x.userData.m0){x.userData.m0=x.material;x.material=GHOST;}});}});if(GREY)applyGrey();DIRTY=Math.max(DIRTY,90);}
 export function setLevelCut(k){LVCUT=(k==null||k<0||!H||!H.levels||k>=H.levels.length)?null:k;applyCut();return LVCUT;}
 export function getLevelCut(){return LVCUT;}
 function resetExterior(){finishGrow();DOLL=false;roofTgt=(roof==='none')?0:1;roofVis=roofTgt;if(!world)return;applyCut();
  world.traverse(o=>{if(o.userData.roofP0)o.position.copy(o.userData.roofP0);if(o.userData.roof){o.visible=roof!=='none';if(o.material&&o.userData.roofMat){o.material.opacity=1;o.material.transparent=false;o.material.depthWrite=true;}}
   if(o.userData.ceil)o.visible=false;if(o.userData.cap)o.visible=false;if(o.isLight&&o.userData.ceil)o.visible=false;
   if(o.userData.wallCut){const{base,h}=o.userData.wallCut;o.scale.y=1;o.position.y=base+h/2;}if(o.userData.doorLeaf)o.scale.y=1;
- });DIRTY=Math.max(DIRTY,90);}
+ });if(GREY)applyGrey();DIRTY=Math.max(DIRTY,90);}
 function setDollViz(on){finishGrow();DOLL=!!on;roofTgt=on?0:1;roofVis=on?0:1;if(!world)return;
  // Adam: dollhouse keeps FULL-HEIGHT walls; only roof + ceilings removed
  world.traverse(o=>{if(o.userData.roofP0)o.position.copy(o.userData.roofP0);if(o.userData.roof){if(o.material&&!o.userData.roofMat){o.material=o.material.clone();o.userData.roofMat=1;}if(o.material){o.material.transparent=true;o.material.opacity=on?0:1;o.material.depthWrite=!on;}o.visible=!on;}
@@ -420,7 +420,7 @@ function setDollViz(on){finishGrow();DOLL=!!on;roofTgt=on?0:1;roofVis=on?0:1;if(
   if(o.userData.wallCut){const{base,h}=o.userData.wallCut;o.scale.y=1;o.position.y=base+h/2;}
   if(o.userData.doorLeaf)o.scale.y=1;
   if(o.userData.cap)o.visible=!!on; // prem8: dark wall tops in dollhouse
- });DIRTY=Math.max(DIRTY,90);}
+ });if(GREY)applyGrey();DIRTY=Math.max(DIRTY,90);}
 /** Full-height walls + ceilings for interior/walk (never keep dollhouse cut). */
 function setInteriorViz(){finishGrow();DOLL=false;roofTgt=0;roofVis=0;if(!world)return;
  world.traverse(o=>{if(o.userData.roofP0)o.position.copy(o.userData.roofP0);
@@ -428,7 +428,7 @@ function setInteriorViz(){finishGrow();DOLL=false;roofTgt=0;roofVis=0;if(!world)
   if(o.userData.doorLeaf)o.scale.y=1;
   if(o.userData.roof){o.visible=false;if(o.material&&o.userData.roofMat){o.material.opacity=0;o.material.transparent=true;o.material.depthWrite=false;}}
   if(o.userData.ceil)o.visible=true;if(o.userData.cap)o.visible=false;if(o.isLight&&o.userData.ceil)o.visible=true;
- });DIRTY=Math.max(DIRTY,90);}
+ });if(GREY)applyGrey();DIRTY=Math.max(DIRTY,90);}
 
 export function playCam(kind,speed=1,extra={}){startCam({kind,speed,...extra});}
 /** Steep top-down over a room centre for marketing room crops. */
@@ -452,10 +452,11 @@ export function dollhouse(on){DIRTY=Math.max(DIRTY,180);if(!world)return;setWalk
  else{resetExterior();place(false,false);}
 }
 
-function walkTick(dt){let f=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-joy[1],r=(keys.KeyD?1:0)-(keys.KeyA?1:0)+joy[0];
+function walkTick(dt){if(fly){const cancel=keys.KeyW||keys.KeyS||keys.KeyA||keys.KeyD||keys.ArrowUp||keys.ArrowDown||joy[0]||joy[1];if(cancel)fly=null;else{flyTick(dt);if(window.__onWalk)window.__onWalk(hereInfo());return;}}
+ let f=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-joy[1],r=(keys.KeyD?1:0)-(keys.KeyA?1:0)+joy[0];
  if(keys.ArrowLeft)yaw-=dt*1.8;if(keys.ArrowRight)yaw+=dt*1.8;const sp=1.6*dt*(keys.ShiftLeft?2:1),p=rig.position;
  if(f||r){p.x+=(Math.sin(yaw)*f+Math.cos(yaw)*r)*sp;p.z+=(-Math.cos(yaw)*f+Math.sin(yaw)*r)*sp;if(body)body.resolve(p);}
- if(body){const y=body.floor(p);if(y!==null)p.y=y;}cam.position.set(0,1.6,0);cam.rotation.set(0,0,0);rig.rotation.set(0,0,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));}
+ if(body){const y=body.floor(p);if(y!==null)p.y=y;}cam.position.set(0,1.6,0);cam.rotation.set(0,0,0);rig.rotation.set(0,0,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));if(window.__onWalk)window.__onWalk(hereInfo());}
 function cells(ws,stairsHole){const C=.1;let xs=[],zs=[];ws.forEach(w=>{xs.push(w.start[0],w.end[0]);zs.push(w.start[1],w.end[1]);});const x0=Math.min(...xs)-.5,z0=Math.min(...zs)-.5,
  nx=Math.ceil((Math.max(...xs)+.5-x0)/C),nz=Math.ceil((Math.max(...zs)+.5-z0)/C),g=new Uint8Array(nx*nz);
  ws.forEach(w=>{const G=geo(w),n=Math.ceil(G.L/(C/2)),t=w.thickness/2+.06;for(let i=0;i<=n;i++){const s=i*G.L/n;for(let k=-t;k<=t;k+=C/2){const x=G.x0+G.u[0]*s-G.u[1]*k,z=G.z0+G.u[1]*s+G.u[0]*k,ix=((x-x0)/C)|0,iz=((z-z0)/C)|0;if(ix>=0&&iz>=0&&ix<nx&&iz<nz)g[iz*nx+ix]=1;}}});
@@ -1056,10 +1057,10 @@ function place(inside,anim){if(!world)return;const fp=world.userData.fp,c=[(fp[0
  if(R.xr.isPresenting||inside){rig.position.set(c[0],H.levels[0].elevation,c[1]);if(body){body.resolve(rig.position);}cam.position.set(0,R.xr.isPresenting?0:1.6,0);yaw=0;pitch=0;}
  else{cam.quaternion.identity();const el=R.domElement,ar=innerWidth/Math.max(1,innerHeight),S=Math.max(fp[2]-fp[0],fp[3]-fp[1],6)*(ar<1?Math.min(2,1/ar*.75):1),b=new THREE.Vector3(c[0]+S*.95,S*.75,c[1]+S*1.25);orb.target.set(c[0],1.2,c[1]);
   if(anim){const a=new THREE.Vector3(c[0]-S*1.6,S*2.2,c[1]+S*2.6);cam.position.copy(a);intro={a,b,t:0};}else cam.position.copy(b);orb.update();}}
-export function setWalk(v,xr){DIRTY=Math.max(DIRTY,90);walk=v;orb.enabled=!v;if($('joy'))$('joy').style.display=v&&!xr&&isTouch()?'block':'none';bindJoy();
+export function setWalk(v,xr,keep){DIRTY=Math.max(DIRTY,90);walk=v;orb.enabled=!v;if($('joy'))$('joy').style.display=v&&!xr&&isTouch()?'block':'none';bindJoy();
  if(v||xr){setInteriorViz();}
  else if(!DOLL){world&&world.traverse(o=>{if(o.userData.roof)o.visible=roof!=='none';if(o.userData.ceil)o.visible=false;});}
- place(v||xr);return walk;}
+ if(!keep)place(v||xr);else if(v||xr){orb.enabled=false;if(cam){cam.up.set(0,1,0);}}return walk;}
 export function setRoof(r,smooth){DIRTY=Math.max(DIRTY,90);const prev=roof;roof=r;if(smooth&&world){if(r==='none'||DOLL){roofTgt=0;}else{roofTgt=1;world.traverse(o=>{if(o.userData.roof)o.visible=true;});} }else{roofTgt=(r==='none'||DOLL)?0:1;roofVis=roofTgt;}}
 export const isWalk=()=>walk;
 /* v21g RULE (street side): the site generator lays the street along the plot's -z edge. When the auto plot's street lies on another side (plot.st = garage /
@@ -1090,7 +1091,7 @@ export function gen(h,anim){try{window.__entPath=null;}catch(e){}DIRTY=Math.max(
  walk=walk&&!anim;
  if(keep&&walk){orb.enabled=false;if($('joy'))$('joy').style.display=!(R&&R.xr&&R.xr.isPresenting)&&isTouch()?'block':'none';setInteriorViz();bindJoy();
   rig.position.set(keep.x,keep.y,keep.z);yaw=keep.yaw;pitch=keep.pitch;nudgeFree(rig.position);if(cam){cam.position.set(0,1.6,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));}}
- else setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;lmHook();return true;}
+ else setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;lmHook();if(GREY)applyGrey();return true;}
 /* v20261117d BAKED LIGHTMAPS (pipeline: /workspace/bake/bake_house.sh). Static architecture meshes (walls, floors, ceilings, slabs, roof, facade, plot)
    get a sky-light bake (direct sky + all bounces + AO) from headless Blender/Cycles in ONE atlas on uv1. The live sun + its shadows stay real-time, so the
    time-of-day slider keeps working: the bake replaces the hemisphere/fill/IBL ambient by day and fades out towards dusk/night (live lights take over).
@@ -1460,7 +1461,7 @@ const FM={};function fm(c,soft){const k=c+(soft?'~f':'');return FM[k]||(FM[k]=ne
 const FLO={dub:[0xbea07d,'wood',.55],orech:[0x8a6448,'wood',.55],dlazba:[0xe6e2da,'tile',.35],beton:[0xb0aea8,'beton',.85],tmave:[0x5a4636,'wood',.6]};
 /* v20261117i: style/colour switches only touch materials in place; lightmapped clones follow their source (colour, map, roughness) so 'Steny dnu' also recolours baked walls */
 function lmSync(){LMSRC.forEach(([a,b])=>{if(a.color&&b.color)b.color.copy(a.color);if(b.map!==a.map){b.map=a.map;b.needsUpdate=true;}if(a.roughness!=null)b.roughness=a.roughness;});}
-export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;queueMicrotask(lmSync);M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');FLATM.color.set(o.roof||'#3e444c').lerp(new THREE.Color(0xb8b8b4),.55);const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;}}
+export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;queueMicrotask(lmSync);M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');FLATM.color.set(o.roof||'#3e444c').lerp(new THREE.Color(0xb8b8b4),.55);const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;};if(GREY)applyGrey();}
 let SUNK=1,roofFillL=null,hemiL=null,fillL=null,skyDay=null,ATM={t:'day',w:'sun'},wxObj=null,nightG=null;
 let sunH=16.5,lastFp=null,doorMode='open',doorPivs=[],mktGlass=false;
 export function checkClearances(){
@@ -1560,6 +1561,25 @@ function interiorFinish(root){const P=[];root.traverse(o=>{if(o.isMesh&&o.userDa
 export function qaWalk(x,z,e,tx,tz,pt){jump(x,z,e);rig.position.set(x,e,z);if(body&&body.resolve)body.resolve(rig.position);yaw=Math.atan2(tx-x,-(tz-z));pitch=-(pt||0)*Math.PI/180;if(cam){cam.fov=62;cam.updateProjectionMatrix();cam.position.set(0,1.6,0);}DIRTY=Math.max(DIRTY,90);}
 export function jump(x,z,e){[x,z]=srP([x,z]);return jumpS(x,z,e);}
 function jumpS(x,z,e){DIRTY=Math.max(DIRTY,90);if(!walk)setWalk(true);const V=viewFrom(x,z);if(V){x=V.x;z=V.z;if(!(R.xr&&R.xr.isPresenting)){yaw=V.yaw;pitch=V.p||0;}}if(cam&&!(R.xr&&R.xr.isPresenting)){const fv=(V&&V.fov)||58;if(cam.fov!==fv){cam.fov=fv;cam.updateProjectionMatrix();}}rig.position.set(x,e,z);if(body&&body.resolve)body.resolve(rig.position);cam.position.set(0,V&&V.h&&!(R.xr&&R.xr.isPresenting)?V.h:1.6,0);}
+/* v22s: smooth eye-height fly into a room (plan coords, same as jump); grey massing vs finished look */
+let fly=null,GREY=false,GREYM=null,GREYG=null;
+const srInv=p=>{if(!SR||!p)return p;const x=p[0]-SR.c[0],z=p[1]-SR.c[1];return[SR.c[0]+SR.m[0]*x+SR.m[2]*z,SR.c[1]+SR.m[1]*x+SR.m[3]*z,...p.slice(2)];};
+const lerpAng=(a,b,t)=>{let d=b-a;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;return a+d*t;};
+export function hereInfo(){if(!rig)return null;const x=rig.position.x,z=rig.position.z,y=rig.position.y,[px,pz]=srInv([x,z]);let L=null,li=0,e=0;if(H&&H.levels)H.levels.forEach((l,i)=>{if(y>=(l.elevation||0)-.45){L=l.name;li=i;e=l.elevation||0;}});const rec=window.__roomAt&&window.__roomAt([px,pz],L);return{x:px,z:pz,sx:x,sz:z,y,yaw,pitch,walk,L,li,n:rec&&rec.n,id:rec&&rec.id,e,fly:!!fly};}
+export function hereRoom(){return hereInfo();}
+function adoptWalkFromCam(){if(!cam||!rig)return;const w=cam.getWorldPosition(new THREE.Vector3()),q=cam.getWorldQuaternion(new THREE.Quaternion()),eu=new THREE.Euler().setFromQuaternion(q,'YXZ');yaw=-eu.y;pitch=-eu.x;rig.position.set(w.x,w.y-1.6,w.z);rig.rotation.set(0,0,0);cam.position.set(0,1.6,0);cam.rotation.set(0,0,0);cam.up.set(0,1,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));}
+export function flyTo(x,z,e){if(!cam||!rig)return jump(x,z,e);[x,z]=srP([x,z]);const was=walk;if(!walk){setWalk(true,null,true);adoptWalkFromCam();}const V=viewFrom(x,z);if(V){x=V.x;z=V.z;if(!(R&&R.xr&&R.xr.isPresenting))pitch=V.p||0;}const fv=(V&&V.fov)||58;if(cam&&cam.fov!==fv&&!(R&&R.xr&&R.xr.isPresenting)){cam.fov=fv;cam.updateProjectionMatrix();}const h=V&&V.h&&!(R&&R.xr&&R.xr.isPresenting)?V.h:1.6,tyaw=V?V.yaw:yaw,p=rig.position,d=Math.hypot(x-p.x,z-p.z)+Math.abs((e||0)-p.y)*.4,dur=Math.max(.85,Math.min(2.2,.7+d*.22));
+ fly={t:0,t0:performance.now(),dur,sx:p.x,sy:p.y,sz:p.z,sh:cam.position.y||1.6,syaw:yaw,spitch:pitch,ex:x,ey:e||0,ez:z,eh:h,eyaw:tyaw,epitch:V&&V.p||0};DIRTY=Math.max(DIRTY,240);return fly;}
+export function isFlying(){return!!fly;}
+function flyTick(dt){if(!fly||!rig)return;fly.t=Math.min(1,(performance.now()-fly.t0)/(fly.dur*1000));const u=easeInOut(fly.t),p=rig.position;p.x=fly.sx+(fly.ex-fly.sx)*u;p.y=fly.sy+(fly.ey-fly.sy)*u;p.z=fly.sz+(fly.ez-fly.sz)*u;yaw=lerpAng(fly.syaw,fly.eyaw,u);pitch=fly.spitch+(fly.epitch-fly.spitch)*u;cam.position.set(0,fly.sh+(fly.eh-fly.sh)*u,0);cam.rotation.set(0,0,0);rig.rotation.set(0,0,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));DIRTY=Math.max(DIRTY,4);
+ if(fly.t>=1){if(body&&body.resolve)body.resolve(p);const y=body&&body.floor&&body.floor(p);p.y=(y!=null&&Math.abs(y-fly.ey)<.7)?y:fly.ey;cam.position.set(0,fly.eh,0);fly=null;if(window.__onWalk)window.__onWalk(hereInfo());}}
+function greyMats(){if(!GREYM&&typeof THREE!=='undefined'){GREYM=new THREE.MeshStandardMaterial({color:0xb3b3ae,roughness:.92,metalness:.02,envMapIntensity:.35});GREYG=new THREE.MeshStandardMaterial({color:0x5c5c5a,roughness:.3,metalness:.04,transparent:true,opacity:.38,depthWrite:false,envMapIntensity:.2});}return GREYM;}
+function isFurnish(o){for(let x=o;x;x=x.parent){const u=x.userData||{};if(u.furn||u.bsp||u.wetTile)return true;if(u.doorLeaf)return false;}return false;}
+export function applyGrey(){if(!world)return;greyMats();world.traverse(o=>{if(o.userData.gHid){o.visible=true;o.userData.gHid=0;}if(o.userData.gMat){o.material=o.userData.gMat;o.userData.gMat=null;}});
+ if(!GREY){DIRTY=Math.max(DIRTY,90);return;}world.traverse(o=>{const u=o.userData||{};if(isFurnish(o)){if(o.visible){o.visible=false;u.gHid=1;}return;}if(!o.isMesh||!o.material||u.doorLeaf)return;const mats=Array.isArray(o.material)?o.material:[o.material],gl=mats.some(m=>m===M.glass||(m&&m.transparent&&m.opacity<.5&&m!==GREYG));u.gMat=o.material;o.material=Array.isArray(o.material)?o.material.map(m=>m===M.glass||(m&&m.transparent&&m.opacity<.5)?GREYG:GREYM):((o.material===M.glass||gl)?GREYG:GREYM);});DIRTY=Math.max(DIRTY,90);}
+export function setGrey(on){GREY=!!on;applyGrey();return GREY;}
+export function isGrey(){return!!GREY;}
+
 
 const WP=[M.wall,M.wall,M.wall,M.wall,M.fac,M.wall],WN=[M.wall,M.wall,M.wall,M.wall,M.wall,M.fac];
 export function setAuto(v,spd){DIRTY=Math.max(DIRTY,90);if(!orb)return;orb.autoRotate=!!v;orb.autoRotateSpeed=spd!=null?spd:0.55;}
