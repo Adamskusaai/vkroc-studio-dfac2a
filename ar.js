@@ -271,8 +271,10 @@ async function onAR(){if(busy)return;const V=window.__vk&&window.__vk.m,world=V&
           const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');
           const gb=await new GLTFExporter().parseAsync(G,{binary:true,maxTextureSize:512});glb=new Blob([gb],{type:'model/gltf-binary'});}
         const title=document.title&&!/Vkro/.test(document.title)?document.title:'Váš dom';
-        const r=await R2.upload({glb,usdz,meta:{title,width:F.width,depth:F.depth,scale:table?S:1}});
-        if(!r.ok){b.disabled=false;b.textContent='Vytvoriť odkaz a QR';toast('Odkaz sa nepodarilo vytvoriť. Ostáva doterajší postup, nič sa neuložilo.','warn');return;}
+        const meta={title,width:F.width,depth:F.depth,scale:table?S:1};
+        let r=await R2.upload({glb,usdz,meta});
+        if(!r.ok&&r.error==='too-large'&&!table){b.textContent='Zmenšujem model…';const G2=buildModel(world,{usdz:true,...vo});if(O.rods)addRods(G2);usdz=await toUSDZ(G2,{maxTex:256,anchor:O.anc?{mode:O.mode,h:O.h,along:O.along,front:O.front}:null});const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');const gb2=await new GLTFExporter().parseAsync(G2,{binary:true,maxTextureSize:256});glb=new Blob([gb2],{type:'model/gltf-binary'});r=await R2.upload({glb,usdz,meta});}
+        if(!r.ok){b.disabled=false;b.textContent='Vytvoriť odkaz a QR';toast(r.message||'Odkaz sa nepodarilo vytvoriť. Ostáva doterajší postup, nič sa neuložilo.','warn');return;}
         window.__vkARshare=r;
         const exp=r.expiresAt?new Date(r.expiresAt):null;const expTxt=exp?exp.getDate()+'. '+(exp.getMonth()+1)+'. '+exp.getFullYear():'90 dní';
         box.innerHTML='<b>Odkaz je pripravený</b><div class="row"><img class="qr" alt="QR" src="'+r.qr+'"><div style="flex:1;min-width:160px"><input class="url" id="arshareurl" readonly value="'+r.url+'"><div class="row"><button type="button" class="sb" id="arsharecopy">Kopírovať</button><button type="button" class="sb" id="arsharedel">Zmazať odkaz</button></div><small>Platí do '+expTxt+'. Ktokoľvek s odkazom alebo QR ho otvorí; vo verejnom zozname nie je.</small></div></div>';

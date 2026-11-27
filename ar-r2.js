@@ -3,6 +3,15 @@
    or the switch is on, nothing is uploaded and the studio keeps today's behaviour
    (local USDZ/GLB only, flyer without a QR for user projects). */
 export const R2_V = '20261127t';
+export const MAX_FILE = 24 * 1024 * 1024; // 1 MiB under the KV 25 MiB value cap
+export const MAX_TOTAL = 48 * 1024 * 1024;
+
+export function tooLargeMessage({ size, maxFile = MAX_FILE, name } = {}) {
+  const mb = n => (Number(n) / 1048576).toFixed(1).replace('.', ',');
+  const what = name ? 'Súbor ' + name : 'Súbor';
+  return what + ' je príliš veľký (' + mb(size) + ' MiB). Maximum je ' + mb(maxFile) + ' MiB na súbor (limit voľného úložiska). Skúste model bez nábytku alebo s nižšími textúrami. Nič sa neodoslalo.';
+}
+
 
 function qs(ctx) {
   try { return new URLSearchParams(((ctx && ctx.location) || globalThis.location || {}).search || ''); }
@@ -48,11 +57,17 @@ export async function upload({ glb, usdz, plan, meta } = {}, ctx = globalThis) {
   const reason = skipReason(ctx);
   if (reason) return { ok: false, skipped: true, reason };
   const base = origin(ctx);
-  const maxFile = Number(cfg(ctx).maxFile) || 25 * 1024 * 1024;
-  const maxTotal = Number(cfg(ctx).maxTotal) || 40 * 1024 * 1024;
+  const maxFile = Number(cfg(ctx).maxFile) || MAX_FILE;
+  const maxTotal = Number(cfg(ctx).maxTotal) || MAX_TOTAL;
   if (!glb || !usdz) return { ok: false, error: 'missing-models' };
   const sizes = [glb.size, usdz.size, plan && plan.size || 0];
-  if (sizes.some(s => s > maxFile) || sizes.reduce((a, b) => a + b, 0) > maxTotal) return { ok: false, error: 'too-large' };
+  const over = [glb.size, usdz.size, plan && plan.size || 0].reduce((best, s, i) => s > maxFile && s > (best.size || 0) ? { size: s, name: ['model.glb', 'model.usdz', 'plan.png'][i] } : best, {});
+  const total = sizes.reduce((a, b) => a + b, 0);
+  if (over.size || total > maxTotal) {
+    const size = over.size || total;
+    const name = over.name || '';
+    return { ok: false, error: 'too-large', maxFileBytes: maxFile, fileBytes: size, message: tooLargeMessage({ size, maxFile, name }) };
+  }
   const tRes = await doFetch(ctx, base + '/api/ticket', { method: 'POST' });
   if (!tRes.ok) return { ok: false, error: 'ticket', status: tRes.status };
   const { ticket } = await tRes.json();
@@ -71,6 +86,15 @@ export async function upload({ glb, usdz, plan, meta } = {}, ctx = globalThis) {
       body: blob
     });
     if (!r.ok) {
+      let body = {};
+      try { body = await r.json(); } catch (e) {}
+      if (body && body.error === 'too-large') {
+        const err = new Error(body.message || 'too-large');
+        err.status = r.status;
+        err.error = 'too-large';
+        err.body = body;
+        throw err;
+      }
       const err = new Error('put ' + name);
       err.status = r.status;
       err.error = 'put';
@@ -82,6 +106,7 @@ export async function upload({ glb, usdz, plan, meta } = {}, ctx = globalThis) {
     await put('model.usdz', usdz, 'model/vnd.usdz+zip');
     if (plan) await put('plan.png', plan, 'image/png');
   } catch (e) {
+    if (e.body && e.error === 'too-large') return e.body;
     return { ok: false, error: e.error || 'put', status: e.status };
   }
   const cRes = await doFetch(ctx, base + '/api/complete/' + id, {
