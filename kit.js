@@ -67,7 +67,9 @@ const cache = new Map();
 let ready = null;
 
 function std(c, rough = 0.7, metal = 0) {
-  return new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: rough, metalness: metal });
+  const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: rough, metalness: metal });
+  if (metal >= 0.45) m.userData.sk = 'metal';
+  return m;
 }
 
 function rbox(w, h, d, r = 0.04, seg = 2) {
@@ -179,6 +181,7 @@ function stdT(c, kind, rough, metal = 0) {
   const k = c + '|' + kind + '|' + rough + '|' + metal; if (MC.has(k)) return MC.get(k);
   let map = null; try { if (typeof document !== 'undefined') map = ptex(kind === 'velvet' ? 'fabric' : kind === 'stone' ? 'leather' : kind); } catch (e) { map = null; }
   const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: rough, metalness: metal, map });
+  m.userData.sk = kind === 'wood' ? 'wood' : kind === 'leather' ? 'leather' : (kind === 'fabric' || kind === 'velvet') ? 'fab' : kind;
   if (PHK[kind]) {
     m.userData.muv = 1;
     if (map) { map = map.clone(); const T = PHK[kind][1] * 3; map.repeat.set(1 / T, 1 / T); m.map = map; }

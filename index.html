@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/","three-mesh-bvh":"https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.1/build/index.module.js"}}</script>
-<link rel="modulepreload" href="app.js?v=20261127v"><link rel="modulepreload" href="icons.js?v=20261112j">
+<link rel="modulepreload" href="app.js?v=20261127w"><link rel="modulepreload" href="icons.js?v=20261112j">
 <style>
 :root{--ink:#0B0B0B;--paper:#F3F1ED;--w:#fff;--or:#E2552D;--orh:#C8461F;--g:#6B6B6B;--l:#E3DFD8;--l2:#ECE9E3;--r:14px;--sh:0 1px 2px rgba(11,11,11,.06),0 8px 24px rgba(11,11,11,.06);--f:Inter,system-ui,-apple-system,Segoe UI,sans-serif;--h:Archivo,Inter,sans-serif;--ease:cubic-bezier(.2,.8,.2,1)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:500 14px/1.45 var(--f);overflow:hidden}
@@ -146,6 +146,11 @@ body.pres:has(#agent:not([hidden])) #jumps{left:16px;right:auto;transform:transl
 #greybar{position:fixed;right:14px;top:118px;display:flex;align-items:center;gap:8px;padding:7px 12px;background:#0B0B0BE8;border-radius:99px;z-index:30;box-shadow:0 6px 20px #0004;color:#fff;font:600 11.5px Inter,system-ui;white-space:nowrap}
 #greybar[hidden]{display:none}
 #greybar input[type=range]{width:72px;accent-color:#E2552D;cursor:pointer}
+#stylebar{position:fixed;right:14px;top:162px;z-index:30;display:flex;flex-direction:column;gap:6px;padding:8px;background:#0B0B0BE8;border-radius:16px;box-shadow:0 6px 20px #0004;color:#fff;font:600 12px Inter,system-ui;max-width:168px}
+#stylebar[hidden]{display:none!important}
+#stylebar .scap{font:600 10px Inter,system-ui;letter-spacing:.04em;text-transform:uppercase;opacity:.7;padding:0 6px}
+#stylebar button{display:block;width:100%;min-height:40px;padding:8px 10px;background:#ffffff14;color:#fff;border:0;border-radius:10px;font:600 12.5px Inter,system-ui;cursor:pointer;text-align:left;-webkit-tap-highlight-color:transparent;touch-action:manipulation;line-height:1.2}
+#stylebar button.on{background:#E2552D;color:#fff}
 #jbtn{display:none;position:fixed;left:10px;top:calc(var(--hh,104px) + 10px);z-index:33;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#0B0B0BE8;color:#fff;border:0;border-radius:99px;font:600 13px Inter,system-ui;box-shadow:0 6px 20px #0004;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 #jbtn[hidden]{display:none!important}
 #jbtn[aria-expanded="true"]{background:#E2552D}
@@ -159,6 +164,10 @@ body.pres:has(#agent:not([hidden])) #jumps{left:16px;right:auto;transform:transl
   #jumps button.on::after{width:2.1em}
   #greybar{top:calc(var(--hh,104px) + 10px);right:10px;bottom:auto;padding:6px 10px;font-size:10.5px;gap:6px}
   #greybar input[type=range]{width:56px}
+  #stylebar{right:10px;left:auto;top:min(calc(var(--hh,104px) + 50px),calc(100dvh - 220px - 148px - 60px - env(safe-area-inset-bottom)));bottom:auto;flex-direction:row;flex-wrap:nowrap;align-items:stretch;width:auto;max-width:calc(100vw - 140px);padding:4px;gap:4px;border-radius:14px}
+  #stylebar .scap{display:none}
+  #stylebar button{min-height:44px;min-width:64px;font-size:11px;padding:6px 8px;text-align:center;line-height:1.15}
+  body.pres #stylebar:not([hidden]){top:min(calc(var(--hh,0px) + 50px),calc(100dvh - 220px - 148px - 60px - env(safe-area-inset-bottom)));bottom:auto}
   #mmap{right:10px;top:auto;bottom:calc(220px + env(safe-area-inset-bottom));width:128px;padding:6px;z-index:30}
   #mmapc{width:116px;height:116px}
   body.pres #jbtn:not([hidden]){top:calc(var(--hh,0px) + 10px)}
@@ -166,7 +175,8 @@ body.pres:has(#agent:not([hidden])) #jumps{left:16px;right:auto;transform:transl
 }
 body.pres #mmap{bottom:calc(18px + env(safe-area-inset-bottom));right:14px}
 body.pres #greybar{top:76px}
-</style><style>/* v12g: leaving 3D hides every 3D-only overlay */body:not(.in3d) #dock3,body:not(.in3d) #stypick,body:not(.in3d) #look,body:not(.in3d) #tbvw,body:not(.in3d) #jumps,body:not(.in3d) #jbtn,body:not(.in3d) #lvpick,body:not(.in3d) #mmap,body:not(.in3d) #greybar,body:not(.in3d) #pbar,body:not(.in3d) #agent,body:not(.in3d) #VRButton{display:none!important}</style><style id="dock3css">/* v12d: visible 3D settings dock (replaces the hidden ✦ Vzhľad menu) */
+body.pres #stylebar{top:122px}
+</style><style>/* v12g: leaving 3D hides every 3D-only overlay */body:not(.in3d) #dock3,body:not(.in3d) #stypick,body:not(.in3d) #look,body:not(.in3d) #tbvw,body:not(.in3d) #jumps,body:not(.in3d) #jbtn,body:not(.in3d) #lvpick,body:not(.in3d) #mmap,body:not(.in3d) #greybar,body:not(.in3d) #stylebar,body:not(.in3d) #pbar,body:not(.in3d) #agent,body:not(.in3d) #VRButton{display:none!important}</style><style id="dock3css">/* v12d: visible 3D settings dock (replaces the hidden ✦ Vzhľad menu) */
 #dock3{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));display:flex;gap:2px;padding:5px;background:#0B0B0BE6;border-radius:18px;z-index:32;max-width:96vw;overflow-x:auto;box-shadow:0 6px 20px #0004;scrollbar-width:none}
 #dock3::-webkit-scrollbar{display:none}
 #dock3 button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:60px;height:54px;padding:4px 6px;color:#fff;background:none;border:0;border-radius:13px;font:600 11px/1.1 inherit;cursor:pointer;flex:0 0 auto}
@@ -228,5 +238,5 @@ body.pres #greybar{top:76px}
 </div></main>
 <div id="toasts"></div>
 <div id="ov"><div id="ovb"></div></div><input type="file" id="img" accept="image/*,application/pdf,.pdf,.heic,.heif" hidden><input type="file" id="imgs" accept="image/*,application/pdf,.pdf" multiple hidden><input type="file" id="ld" accept=".json" hidden>
-<script src="ar-r2-config.js?v=20261127v"></script><script type="module" src="analytics.js?v=20261113b"></script><script type="module" src="app.js?v=20261127v"></script><script type="module" src="ar.js?v=20261127v"></script>
-<button type="button" id="jbtn" hidden aria-controls="jumps" aria-expanded="false">Miestnosti</button><div id="jumps" hidden></div><div id="mmap" hidden><canvas id="mmapc" width="304" height="304"></canvas><div id="mmapleg"><i></i>si tu</div></div><div id="greybar" hidden><span>Sivý model</span><input id="greys" type="range" min="0" max="1" step="1" value="1" aria-label="Sivý model alebo hotová izba"><span>Hotová izba</span></div><div id="lvpick" role="group" aria-label="Podlažie" hidden></div><div id="pbar"><div class="pbrand"><b class="pl">VKRO<em>Č</em></b><span id="prn"></span></div><div class="pbtn"><button id="ptour" class="go"><i data-i="next"></i><span>Auto-prehliadka</span></button><button id="pdoll"><i data-i="layers"></i><span>Bez strechy</span></button><button id="pext"><i data-i="home"></i><span>Exteriér</span></button><button id="pexit"><i data-i="x"></i><span>Ukončiť</span></button></div></div><div id="agent" hidden></div></body></html>
+<script src="ar-r2-config.js?v=20261127v"></script><script type="module" src="analytics.js?v=20261113b"></script><script type="module" src="app.js?v=20261127w"></script><script type="module" src="ar.js?v=20261127v"></script>
+<button type="button" id="jbtn" hidden aria-controls="jumps" aria-expanded="false">Miestnosti</button><div id="jumps" hidden></div><div id="mmap" hidden><canvas id="mmapc" width="304" height="304"></canvas><div id="mmapleg"><i></i>si tu</div></div><div id="greybar" hidden><span>Sivý model</span><input id="greys" type="range" min="0" max="1" step="1" value="1" aria-label="Sivý model alebo hotová izba"><span>Hotová izba</span></div><div id="stylebar" hidden role="group" aria-label="Štýl nábytku"><span class="scap">Štýl</span><button type="button" data-s="moderny">Moderný</button><button type="button" data-s="skandi">Škandinávsky</button><button type="button" data-s="tmavy">Tmavý elegantný</button></div><div id="lvpick" role="group" aria-label="Podlažie" hidden></div><div id="pbar"><div class="pbrand"><b class="pl">VKRO<em>Č</em></b><span id="prn"></span></div><div class="pbtn"><button id="ptour" class="go"><i data-i="next"></i><span>Auto-prehliadka</span></button><button id="pdoll"><i data-i="layers"></i><span>Bez strechy</span></button><button id="pext"><i data-i="home"></i><span>Exteriér</span></button><button id="pexit"><i data-i="x"></i><span>Ukončiť</span></button></div></div><div id="agent" hidden></div></body></html>

@@ -4,8 +4,8 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {VRButton} from 'three/addons/webxr/VRButton.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 import {Body,Locomotion,colliderFromObject} from './vm.js';
-import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261121m';
-onPhSwap(()=>{DIRTY=Math.max(DIRTY,30);});
+import {loadKit,makeFurn,makeTree,makeShrub,makeCar,onPhSwap,PH_STATS,phPending} from './kit.js?v=20261127w';
+onPhSwap(()=>{DIRTY=Math.max(DIRTY,30);if(TSTYLE&&!(globalThis.__PF||{}).noStyleSwitch)applyStyle(TSTYLE);});
 export function phInfo(){return PH_STATS;}
 export function phWait(){return phPending();}
 const $=id=>document.getElementById(id),TCH=matchMedia('(pointer:coarse)').matches,isTouch=()=>TCH||(typeof navigator!=='undefined'&&navigator.maxTouchPoints>0)||!!(typeof window!=='undefined'&&window.__vkTouch);
@@ -1094,7 +1094,7 @@ export function gen(h,anim){try{window.__entPath=null;}catch(e){}DIRTY=Math.max(
  walk=walk&&!anim;
  if(keep&&walk){orb.enabled=false;if($('joy'))$('joy').style.display=!(R&&R.xr&&R.xr.isPresenting)&&isTouch()?'block':'none';setInteriorViz();bindJoy();
   rig.position.set(keep.x,keep.y,keep.z);yaw=keep.yaw;pitch=keep.pitch;nudgeFree(rig.position);if(cam){cam.position.set(0,1.6,0);cam.quaternion.setFromEuler(new THREE.Euler(-pitch,-yaw,0,'YXZ'));}}
- else setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;lmHook();if(GREY)applyGrey();return true;}
+ else setWalk(walk);if(anim&&!walk){place(false,true);wallGrow={t:0,dur:2.6};DIRTY=Math.max(DIRTY,180);}else wallGrow=null;lmHook();if(!(globalThis.__PF||{}).noStyleSwitch){if(!TSTYLE){try{const q=new URLSearchParams(location.search).get('style');if(q)TSTYLE=styleId(q);}catch(e){}}if(TSTYLE)applyStyle(TSTYLE);}if(GREY)applyGrey();return true;}
 /* v20261117d BAKED LIGHTMAPS (pipeline: /workspace/bake/bake_house.sh). Static architecture meshes (walls, floors, ceilings, slabs, roof, facade, plot)
    get a sky-light bake (direct sky + all bounces + AO) from headless Blender/Cycles in ONE atlas on uv1. The live sun + its shadows stay real-time, so the
    time-of-day slider keeps working: the bake replaces the hemisphere/fill/IBL ambient by day and fades out towards dusk/night (live lights take over).
@@ -1468,6 +1468,90 @@ const FLO={dub:[0xbea07d,'wood',.55],orech:[0x8a6448,'wood',.55],dlazba:[0xe6e2d
 /* v20261117i: style/colour switches only touch materials in place; lightmapped clones follow their source (colour, map, roughness) so 'Steny dnu' also recolours baked walls */
 function lmSync(){LMSRC.forEach(([a,b])=>{if(a.color&&b.color)b.color.copy(a.color);if(b.map!==a.map){b.map=a.map;b.needsUpdate=true;}if(a.roughness!=null)b.roughness=a.roughness;});}
 export function setMat(o={}){DIRTY=Math.max(DIRTY,90);if(!M)return;queueMicrotask(lmSync);M.wall.color.set(o.wall||'#f2ebe3');M.fac.color.set(o.fac||'#f7f5f0');M.roof.color.set(o.roof||'#3e444c');FLATM.color.set(o.roof||'#3e444c').lerp(new THREE.Color(0xb8b8b4),.55);const f=FLO[o.floor||'dub']||FLO.dub;M.floor.map=f[1]==='wood'?wood:f[1]==='tile'?tile:f[1]==='beton'?beton:null;M.floor.color.setHex(f[0]);M.floor.roughness=f[2];M.floor.needsUpdate=true;if(M.floor.map){M.floor.map.colorSpace=THREE.SRGBColorSpace;M.floor.map.needsUpdate=true;};if(GREY)applyGrey();}
+
+/* v22w live tour furniture style / colour switch (no rebuild) */
+const TOURSTY={
+  moderny:{name:'Moderný',wood:0xdcc8a4,fab:0x8b9098,bed:0xe6e4e0,ward:0xf3f2ef,kitch:0xf3f2ef,table:0xdcc8a4,ctable:0xdcc8a4,desk:0xdcc8a4,shelf:0xdcc8a4,sideb:0xf3f2ef,chair:0x8b9098,sofa:0x8b9098,armch:0x8b9098,lounge:0x8b9098,curtain:0xe8eaee,rug:0xb4b8c0,runner:0xb4b8c0,metal:0xc5c9ce,wall:'#f4f3f0',floor:'dub',floorTint:0xe2d0b0},
+  skandi:{name:'Škandinávsky',wood:0xebd6ae,fab:0xd2c0ae,bed:0xf3e6d6,ward:0xf7f1e8,kitch:0xf7f1e8,table:0xebd6ae,ctable:0xebd6ae,desk:0xebd6ae,shelf:0xebd6ae,sideb:0xf7f1e8,chair:0xe2d4c2,sofa:0xd2c0ae,armch:0xc5d0c4,lounge:0xd4c4c8,curtain:0xeadcc8,rug:0xe0d0bc,runner:0xe0d0bc,metal:0xd4c8b8,wall:'#f6f1ea',floor:'dub',floorTint:0xf0e0c0},
+  tmavy:{name:'Tmavý elegantný',wood:0x5a3a26,fab:0x3a3d42,bed:0x4a4e54,ward:0x2c2e32,kitch:0x2c2e32,table:0x5a3a26,ctable:0x5a3a26,desk:0x5a3a26,shelf:0x5a3a26,sideb:0x2c2e32,chair:0x3a3d42,sofa:0x3a3d42,armch:0x3a3d42,lounge:0x3a3d42,curtain:0x4a4a48,rug:0x2a2c30,runner:0x2a2c30,metal:0xc4a46a,metalness:.75,wall:'#d8d4ce',floor:'orech',floorTint:0x6a4e38}
+};
+const STYLE_AL={moderny:'moderny',modern:'moderny',skandi:'skandi',skandinavsky:'skandi',scandi:'skandi',tmavy:'tmavy',elegantny:'tmavy',dark:'tmavy',walnut:'tmavy',elegant:'tmavy',anthracite:'tmavy'};
+let TSTYLE=null;
+function styleNorm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');}
+export function styleId(s){const k=styleNorm(s);return STYLE_AL[k]||(TOURSTY[k]?k:null);}
+export function styleList(){return Object.keys(TOURSTY).map(id=>({id,name:TOURSTY[id].name}));}
+export function getStyle(){return TSTYLE;}
+function furnOf(o){for(let q=o;q;q=q.parent)if(q.userData&&q.userData.furn)return q.userData.furn;return '';}
+function skipStyleMat(m){if(!m||!m.color)return true;if(m.transparent&&(m.opacity??1)<.92)return true;if(m.emissive&&m.emissive.getHex&&m.emissive.getHex())return true;return false;}
+function roleOf(m,typ){
+  const sk=m.userData&&m.userData.sk;
+  if(typ==='rug'||typ==='runner')return 'rug';
+  if(typ==='curtain')return 'curtain';
+  if(sk)return sk;
+  if((m.metalness||0)>=.4)return 'metal';
+  if((m.roughness||0)>=.72)return 'fab';
+  return 'wood';
+}
+function styleHex(sk,typ,P){
+  if(sk==='metal')return P.metal;
+  if(sk==='rug'||typ==='rug'||typ==='runner')return P[typ]||P.rug;
+  if(sk==='curtain'||typ==='curtain')return P.curtain;
+  if(typ==='bed'&&sk!=='wood'&&sk!=='metal')return P.bed;
+  if((typ==='ward'||typ==='kitch'||typ==='sideb')&&sk!=='metal')return P[typ]||P.ward;
+  if(P[typ]&&(sk==='fab'||sk==='leather'||typ==='sofa'||typ==='armch'||typ==='lounge'||typ==='chair'))return P[typ];
+  if(sk==='fab'||sk==='leather'||sk==='velvet')return P.fab;
+  if(typ==='table'||typ==='ctable'||typ==='desk'||typ==='shelf')return P[typ]||P.wood;
+  return P.wood;
+}
+function ownMat(m){if(!m||(m.userData&&m.userData.tourOwn))return m;const c=m.clone();c.userData=Object.assign({},m.userData||{},{tourOwn:1});return c;}
+function applyStyle(id){
+  const P=TOURSTY[id];if(!P||!world)return;
+  const skipT=/^(plant|tree|shrub|car)$/;
+  world.traverse(o=>{
+    if(!o.isMesh||!o.material)return;
+    const typ=furnOf(o);if(!typ||skipT.test(typ))return;
+    const arr=Array.isArray(o.material)?o.material:[o.material];
+    const out=arr.map(m=>{
+      if(skipStyleMat(m))return m;
+      const n=ownMat(m),sk=roleOf(n,typ),hex=styleHex(sk,typ,P);
+      if(hex!=null)n.color.setHex(hex);
+      if(sk==='metal'){n.metalness=P.metalness!=null?P.metalness:Math.max(n.metalness||0,.55);n.roughness=Math.min(n.roughness??.4,.45);}
+      n.needsUpdate=true;return n;
+    });
+    o.material=Array.isArray(o.material)?out:out[0];
+  });
+  if(H){H.mat=H.mat||{};H.mat.wall=P.wall;H.mat.floor=P.floor;}
+  const o={wall:P.wall,floor:P.floor,fac:(H&&H.mat&&H.mat.fac)||'#f7f5f0',roof:(H&&H.mat&&H.mat.roof)||'#3e444c'};
+  if(H&&H.mat&&H.mat.fasada)o.fasada=H.mat.fasada;
+  setMat(o);
+  if(P.floorTint!=null&&M&&M.floor){M.floor.color.setHex(P.floorTint);lmSync();}
+  DIRTY=Math.max(DIRTY,60);
+}
+export function setStyle(s){
+  if((globalThis.__PF||{}).noStyleSwitch)return null;
+  if(s==null||s===''){TSTYLE=null;return null;}
+  const id=styleId(s);if(!id)return TSTYLE;
+  TSTYLE=id;applyStyle(id);
+  try{window.__vkDirty&&window.__vkDirty();}catch(e){}
+  return TSTYLE;
+}
+export function styleSample(){
+  const out={id:TSTYLE,floor:null,wall:null,roles:{},types:{}};
+  if(M&&M.floor&&M.floor.color)out.floor='#'+M.floor.color.getHexString();
+  if(M&&M.wall&&M.wall.color)out.wall='#'+M.wall.color.getHexString();
+  if(!world)return out;
+  world.traverse(o=>{
+    if(!o.isMesh||!o.material)return;
+    const typ=furnOf(o);if(!typ||typ==='plant')return;
+    [].concat(o.material).forEach(m=>{
+      if(skipStyleMat(m))return;
+      const hex='#'+m.color.getHexString(),sk=(m.userData&&m.userData.sk)||roleOf(m,typ);
+      (out.roles[sk]||(out.roles[sk]=[]));if(out.roles[sk].length<4&&!out.roles[sk].includes(hex))out.roles[sk].push(hex);
+      (out.types[typ]||(out.types[typ]=[]));if(out.types[typ].length<3&&!out.types[typ].includes(hex))out.types[typ].push(hex);
+    });
+  });
+  return out;
+}
 let SUNK=1,roofFillL=null,hemiL=null,fillL=null,skyDay=null,ATM={t:'day',w:'sun'},wxObj=null,nightG=null;
 let sunH=16.5,lastFp=null,doorMode='open',doorPivs=[],mktGlass=false;
 export function checkClearances(){
