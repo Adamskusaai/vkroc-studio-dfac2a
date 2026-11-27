@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 const Q=new URLSearchParams(location.search);
 const $=id=>document.getElementById(id);
-export const AR_V='20261126d';
+export const AR_V='20261127t';
 const LOD_T=+(Q.get('arlodt')||1500),LOD_C=+(Q.get('arlodc')||0.02); // usdz: dense glTF decor (> LOD_T triangles) simplified by 2 cm vertex clustering (?arlod=0 = off)
 const SKIP=['lawn','drive','site','outdoor','sky','wx','helper'];           // real ground / surroundings: the real world replaces them
 const TOP=['roof','lroof','ceil','gutter','hopper','dpipe','flash','cope','cap']; // toggled by "Strecha" (dollhouse view in AR)
@@ -150,7 +150,7 @@ const CSS=`#arov{position:fixed;inset:0;z-index:90;pointer-events:none;font:500 
 #ardlg h3{margin:0 0 8px;font:800 18px Archivo,Inter,sans-serif}#ardlg p{margin:6px 0;color:#3a3a3a}#ardlg ol{margin:6px 0;padding-left:20px;color:#3a3a3a}
 #ardlg .r{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}#ardlg button,#ardlg a.b{height:44px;padding:0 16px;border-radius:11px;border:1px solid #E3DFD8;background:#fff;font:600 14px inherit;display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#0b0b0b;cursor:pointer}
 #ardlg .ck{display:flex;gap:8px;align-items:center;margin:6px 0}#ardlg .ck input{width:18px;height:18px;accent-color:#E2552D;flex:none}#ardlg .ln{display:flex;gap:8px;align-items:center;margin:6px 0}#ardlg .ln select,#ardlg .ln input{flex:1;min-width:0;height:36px;border-radius:9px;border:1px solid #E3DFD8;padding:0 8px;font:inherit}#ardlg .ln input{max-width:90px}#ardlg .an{background:#F3F1ED;border-radius:12px;padding:6px 10px;margin:4px 0}#ardlg .an button{height:36px;margin:4px 0}#ardlg a{color:#E2552D}#ardlg .c{max-height:92vh;overflow:auto}
-#ardlg .go,#ardlg a.b{background:#E2552D;border-color:#E2552D;color:#fff}#ardlg a.b img{width:26px;height:26px}#ardlg small{color:#6b6b6b}`;
+#ardlg .go,#ardlg a.b{background:#E2552D;border-color:#E2552D;color:#fff}#ardlg a.b img{width:26px;height:26px}#ardlg small{color:#6b6b6b}#ardlg .share{background:#F3F1ED;border-radius:12px;padding:10px;margin:8px 0}#ardlg .share .url{width:100%;height:36px;border-radius:9px;border:1px solid #E3DFD8;padding:0 8px;font:12px/36px ui-monospace,monospace;box-sizing:border-box}#ardlg .share .row{display:flex;gap:10px;align-items:flex-start;margin-top:8px;flex-wrap:wrap}#ardlg .share img.qr{width:120px;height:120px;background:#fff;border-radius:8px;border:1px solid #E3DFD8}#ardlg .share button.sb{height:36px;padding:0 12px}`;
 function css(){if($('arcss'))return;const s=document.createElement('style');s.id='arcss';s.textContent=CSS;document.head.appendChild(s);}
 const fm=v=>(Math.round(v*100)/100).toFixed(2).replace('.',',')+' m';
 
@@ -257,8 +257,30 @@ async function onAR(){if(busy)return;const V=window.__vk&&window.__vk.m,world=V&
    const sl=q('#arside');sl.value=O.side;sl.onchange=e=>{O.side=+e.target.value;re();};
    const rd=k=>{const e=q(k);if(!e)return null;const v=parseFloat(String(e.value).replace(',','.'));return isFinite(v)?Math.max(-50,Math.min(50,v)):0;};
    if(q('#armode')){q('#armode').value=O.mode;q('#armode').onchange=e=>{O.mode=e.target.value;re();};q('#arapply').onclick=()=>{const h=rd('#arh');if(h!=null)O.h=Math.max(0,h);O.along=rd('#aralong');O.front=rd('#arfront');re();};}
-   if(q('#arpdf'))q('#arpdf').onclick=async e=>{e.preventDefault();const a=e.target;a.textContent='Pripravujem leták…';try{const pb=await QRm.flyerPDF(world,{S:Sf,floor:O.floor,furn:O.furn,side:O.side,title:document.title&&!/Vkro/.test(document.title)?document.title:'Váš dom'});const u=URL.createObjectURL(pb);window.__vkARpdf={size:pb.size,url:u};const d=document.createElement('a');d.href=u;d.download='letak_dom_AR.pdf';document.body.appendChild(d);d.click();d.remove();a.textContent='Leták stiahnutý (znova)';}catch(err){console.warn('[ar] pdf',err);a.textContent='Leták sa nepodarilo vytvoriť';}};
-   if(q('#arxr'))q('#arxr').onclick=async()=>{D.close();try{const G=buildModel(world,vo);if(O.rods)addRods(G);await startXR(G,{onEnd:()=>{busy=false;}});}catch(e){busy=false;console.warn('[ar]',e);toast('AR sa nepodarilo spustiť: '+(e&&e.message||e),'err');}};};
+   if(q('#arpdf'))q('#arpdf').onclick=async e=>{e.preventDefault();const a=e.target;a.textContent='Pripravujem leták…';try{const sh=window.__vkARshare;const pb=await QRm.flyerPDF(world,{S:Sf,floor:O.floor,furn:O.furn,side:O.side,title:document.title&&!/Vkro/.test(document.title)?document.title:'Váš dom',qrPNG:sh&&sh.qr||null});const u=URL.createObjectURL(pb);window.__vkARpdf={size:pb.size,url:u};const d=document.createElement('a');d.href=u;d.download='letak_dom_AR.pdf';document.body.appendChild(d);d.click();d.remove();a.textContent='Leták stiahnutý (znova)';}catch(err){console.warn('[ar] pdf',err);a.textContent='Leták sa nepodarilo vytvoriť';}};
+   if(q('#arxr'))q('#arxr').onclick=async()=>{D.close();try{const G=buildModel(world,vo);if(O.rods)addRods(G);await startXR(G,{onEnd:()=>{busy=false;}});}catch(e){busy=false;console.warn('[ar]',e);toast('AR sa nepodarilo spustiť: '+(e&&e.message||e),'err');}};
+   if(!(globalThis.__PF||{}).noR2Upload){import('./ar-r2.js?v='+AR_V).then(R2=>{
+     if(!R2.enabled()||!c.querySelector('.r')||c.querySelector('#arshare'))return;
+     const box=document.createElement('div');box.className='share';box.id='arshare';
+     box.innerHTML='<b>Odkaz a QR pre telefón</b><p class="s" style="margin:4px 0">Vyrobí krátky odkaz (90 dní, bez verejného zoznamu). Kým ho nevytvoríte, nič sa neodosiela.</p><button type="button" class="sb" id="arsharebtn">Vytvoriť odkaz a QR</button>';
+     const sm=c.querySelector('small');(sm||c.querySelector('.r')).parentNode.insertBefore(box,sm||c.querySelector('.r'));
+     box.querySelector('#arsharebtn').onclick=async ev=>{const b=ev.currentTarget;b.disabled=true;b.textContent='Nahrávam model…';
+      try{const vo={top:O.top,side:O.side,floor:O.floor,furn:O.furn};let usdz,glb;
+        if(table){usdz=await QRm.tableUSDZ(world,{S,...vo});glb=await QRm.tableGLB(world,{S,...vo});}
+        else{const G=buildModel(world,{usdz:true,...vo});if(O.rods)addRods(G);usdz=await toUSDZ(G,{anchor:O.anc?{mode:O.mode,h:O.h,along:O.along,front:O.front}:null});
+          const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');
+          const gb=await new GLTFExporter().parseAsync(G,{binary:true,maxTextureSize:512});glb=new Blob([gb],{type:'model/gltf-binary'});}
+        const title=document.title&&!/Vkro/.test(document.title)?document.title:'Váš dom';
+        const r=await R2.upload({glb,usdz,meta:{title,width:F.width,depth:F.depth,scale:table?S:1}});
+        if(!r.ok){b.disabled=false;b.textContent='Vytvoriť odkaz a QR';toast('Odkaz sa nepodarilo vytvoriť. Ostáva doterajší postup, nič sa neuložilo.','warn');return;}
+        window.__vkARshare=r;
+        const exp=r.expiresAt?new Date(r.expiresAt):null;const expTxt=exp?exp.getDate()+'. '+(exp.getMonth()+1)+'. '+exp.getFullYear():'90 dní';
+        box.innerHTML='<b>Odkaz je pripravený</b><div class="row"><img class="qr" alt="QR" src="'+r.qr+'"><div style="flex:1;min-width:160px"><input class="url" id="arshareurl" readonly value="'+r.url+'"><div class="row"><button type="button" class="sb" id="arsharecopy">Kopírovať</button><button type="button" class="sb" id="arsharedel">Zmazať odkaz</button></div><small>Platí do '+expTxt+'. Ktokoľvek s odkazom alebo QR ho otvorí; vo verejnom zozname nie je.</small></div></div>';
+        box.querySelector('#arsharecopy').onclick=()=>{const i=box.querySelector('#arshareurl');i.select();navigator.clipboard&&navigator.clipboard.writeText(r.url).catch(()=>{});toast('Odkaz skopírovaný.');};
+        box.querySelector('#arsharedel').onclick=async()=>{if(!confirm('Zmazať tento odkaz? QR potom prestane fungovať.'))return;const d=await R2.remove(r.id,r.deleteToken);if(d.ok){window.__vkARshare=null;box.innerHTML='<b>Odkaz bol zmazaný.</b> <button type="button" class="sb" id="arsharebtn">Vytvoriť odkaz a QR</button>';}else toast('Odkaz sa nepodarilo zmazať.','warn');};
+      }catch(err){console.warn('[ar] r2',err);b.disabled=false;b.textContent='Vytvoriť odkaz a QR';toast('Odkaz sa nepodarilo vytvoriť. Ostáva doterajší postup, nič sa neuložilo.','warn');}};
+   }).catch(()=>{});}
+};
   const fail=e=>{busy=false;console.warn('[ar]',e);toast('AR model sa nepodarilo pripraviť.','err');const d=$('ardlg');if(d)d.remove();};
   await make();
  }catch(e){busy=false;console.warn('[ar]',e);toast('AR model sa nepodarilo pripraviť.','err');const d=$('ardlg');if(d)d.remove();}

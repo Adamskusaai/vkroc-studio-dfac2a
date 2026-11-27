@@ -4,8 +4,8 @@
    Image anchor frame (ARKit): X = image right, Y = out of the paper (up when flat), Z = image bottom (towards the reader). Units: metres.
    Layout numbers (mm on the A4 page, origin top-left) are shared with the flyer builder (/workspace/vk_ar_qa/qr_build.py) via LAYOUT. */
 import * as THREE from 'three';
-import {buildModel,toUSDZ,cluster,levelsOf} from '../ar.js?v=20261126d';
-export const QR_V='20261126c';
+import {buildModel,toUSDZ,cluster,levelsOf} from '../ar.js?v=20261127t';
+export const QR_V='20261127t';
 export const LAYOUT={markerMM:80,marker:[57,240],plan:[105,118],planBox:[186,120]}; // centres in mm; plan box = max printed plan size
 export const MARKER_PNG='assets/ar/marker_ref_20261125b.png';
 /* model -> image-anchor matrix for scale 1:S: facade (street side, model -z) faces the reader (image +Z), house centred over the plan centre. */
@@ -53,7 +53,7 @@ export async function flyerPDF(world,{S=100,floor=-1,furn=true,side=0,title='Vá
  const fm=v=>v.toFixed(2).replace('.',',');T(title,12,20,26,'700');T('Šírka '+fm(P.F.width)+' m · hĺbka '+fm(P.F.depth)+' m · Vkroč',12,27,13,'400','#555');
  T('Pôdorys 1:'+S+(floor>=0?' ('+(floor?floor+'. poschodie':'prízemie')+')':'')+' · ulica / vstup je dole',12,L.plan[1]+L.planBox[1]/2+4,12,'400','#555');
  let tx=110;if(qrPNG){const q=await img(qrPNG);x.drawImage(q,110*k,(L.marker[1]-L.markerMM/2)*k,38*k,38*k);tx=152;}
- const lines=['Dom v 3D na tomto papieri','1. Vo Vkroči ťuknite na AR,','   zvoľte „Na pláne 1:'+S+'“.','2. Ťuknite na Otvoriť v AR.','3. Namierte mobil na obrázok','   vľavo z 30–40 cm, dom sa','   postaví na pôdorys.'];
+ const lines=qrPNG?['Dom v 3D na tomto papieri','1. Naskenujte QR kód fotoaparátom.','2. Ťuknite na Otvoriť v AR.','3. Namierte mobil na obrázok','   vľavo z 30–40 cm, dom sa','   postaví na pôdorys.']:['Dom v 3D na tomto papieri','1. Vo Vkroči ťuknite na AR,','   zvoľte „Na pláne 1:'+S+'“.','2. Ťuknite na Otvoriť v AR.','3. Namierte mobil na obrázok','   vľavo z 30–40 cm, dom sa','   postaví na pôdorys.'];
  lines.forEach((s,i)=>T(s,tx,L.marker[1]-L.markerMM/2+5+i*6,i?12:14,i?'400':'700'));
  T('Tlačte v mierke 100 % (bez prispôsobenia).',110,L.marker[1]+28,10,'400','#555');T('Kontrola: čiara má mať 50 mm.',110,L.marker[1]+33,10,'400','#555');x.fillStyle='#000';x.fillRect(110*k,(L.marker[1]+35)*k,50*k,2*k);
  const {jsPDF}=await jspdf(),d=new jsPDF({unit:'mm',format:'a4',orientation:'portrait',compress:true});d.addImage(c.toDataURL('image/jpeg',.92),'JPEG',0,0,210,297);return d.output('blob');}
