@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 const Q=new URLSearchParams(location.search);
 const $=id=>document.getElementById(id);
-export const AR_V='20261127t';
+export const AR_V='20261127v';
 const LOD_T=+(Q.get('arlodt')||1500),LOD_C=+(Q.get('arlodc')||0.02); // usdz: dense glTF decor (> LOD_T triangles) simplified by 2 cm vertex clustering (?arlod=0 = off)
 const SKIP=['lawn','drive','site','outdoor','sky','wx','helper'];           // real ground / surroundings: the real world replaces them
 const TOP=['roof','lroof','ceil','gutter','hopper','dpipe','flash','cope','cap']; // toggled by "Strecha" (dollhouse view in AR)

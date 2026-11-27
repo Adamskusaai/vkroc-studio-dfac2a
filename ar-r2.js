@@ -1,8 +1,8 @@
-/* v20261127t R2 QR hosting client.
+/* v20261127v R2 QR hosting client.
    Off-switch: PF.noR2Upload (or ?r2=0). When the Worker origin is not configured,
    or the switch is on, nothing is uploaded and the studio keeps today's behaviour
    (local USDZ/GLB only, flyer without a QR for user projects). */
-export const R2_V = '20261127t';
+export const R2_V = '20261127v';
 export const MAX_FILE = 24 * 1024 * 1024; // 1 MiB under the KV 25 MiB value cap
 export const MAX_TOTAL = 48 * 1024 * 1024;
 
